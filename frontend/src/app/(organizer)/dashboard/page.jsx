@@ -1,3 +1,5 @@
+import OrganizerDashboardPage from "@/components/pages/OrganizerDashboardPage.jsx";
+
 export default function DashboardPage() {
-  return <h1>Dashboard Page</h1>;
+  return <OrganizerDashboardPage />;
 }
