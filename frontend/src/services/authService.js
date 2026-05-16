@@ -1,62 +1,57 @@
-const MOCK_SESSION_KEY = "remember_mock_auth_session";
-const MOCK_DELAY_MS = 500;
+import { getSupabaseClient } from "../lib/supabaseClient.js";
 
-const waitForMockRequest = () =>
-  new Promise((resolve) => {
-    window.setTimeout(resolve, MOCK_DELAY_MS);
-  });
-
-const persistUser = (user) => {
-  localStorage.setItem(MOCK_SESSION_KEY, JSON.stringify(user));
-  return user;
-};
-
-export async function login({ email }) {
-  // TODO: Replace this local mock with Supabase Auth sign-in when backend auth is ready.
-  await waitForMockRequest();
-
-  return persistUser({
-    id: "mock-organizer-1",
-    fullName: "Mock Organizer",
+export async function login({ email, password }) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
-    role: "organizer",
+    password,
   });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
 }
 
-export async function signup({ fullName, email }) {
-  // TODO: Replace this local mock with Supabase Auth sign-up when backend auth is ready.
-  await waitForMockRequest();
-
-  const user = persistUser({
-    id: "mock-organizer-1",
-    fullName,
+export async function signup({ fullName, email, password }) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.auth.signUp({
     email,
-    role: "organizer",
+    password,
+    options: {
+      data: {
+        full_name: fullName,
+      },
+    },
   });
 
+  if (error) {
+    throw error;
+  }
+
   return {
-    user,
-    redirectTo: "/memorial/create",
+    ...data,
+    needsEmailConfirmation: Boolean(data.user && !data.session),
   };
 }
 
-export function logout() {
-  // TODO: Replace this local mock with Supabase Auth sign-out when backend auth is ready.
-  localStorage.removeItem(MOCK_SESSION_KEY);
+export async function logout() {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.auth.signOut();
+
+  if (error) {
+    throw error;
+  }
 }
 
-export function getCurrentUser() {
-  // TODO: Replace this local mock with Supabase Auth session lookup when backend auth is ready.
-  const session = localStorage.getItem(MOCK_SESSION_KEY);
+export async function getCurrentUser() {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.auth.getUser();
 
-  if (!session) {
-    return null;
+  if (error) {
+    throw error;
   }
 
-  try {
-    return JSON.parse(session);
-  } catch {
-    localStorage.removeItem(MOCK_SESSION_KEY);
-    return null;
-  }
+  return data.user;
 }
