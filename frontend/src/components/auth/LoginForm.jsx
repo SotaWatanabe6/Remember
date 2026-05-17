@@ -13,11 +13,13 @@ export default function LoginForm() {
   const [values, setValues] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const updateField = (event) => {
     const { name, value } = event.target;
     setValues((current) => ({ ...current, [name]: value }));
     setErrors((current) => ({ ...current, [name]: "" }));
+    setSubmitError("");
   };
 
   const validate = () => {
@@ -45,10 +47,13 @@ export default function LoginForm() {
     }
 
     setIsLoading(true);
+    setSubmitError("");
 
     try {
       await login({ email: values.email.trim(), password: values.password });
       router.push("/dashboard");
+    } catch (error) {
+      setSubmitError(error.message || "Unable to log in. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -56,7 +61,7 @@ export default function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex w-full flex-col gap-[30px]">
-      <div className="flex w-full flex-col gap-[30px] rounded-[20px] border border-slate-200 bg-white px-[29px] py-[41px] shadow-auth sm:px-[41px]">
+      <div className="flex w-full flex-col gap-[30px]">
         <AuthInput
           id="login-email"
           name="email"
@@ -80,7 +85,12 @@ export default function LoginForm() {
           error={errors.password}
         />
       </div>
-      <AuthButton isLoading={isLoading}>Log In</AuthButton>
+      <AuthButton isLoading={isLoading}>Log in</AuthButton>
+      {submitError ? (
+        <p className="text-center text-sm leading-5 text-red-600" role="alert">
+          {submitError}
+        </p>
+      ) : null}
     </form>
   );
 }

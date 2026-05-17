@@ -27,7 +27,7 @@ export async function createMemorial(memorialInput) {
   // TODO: Replace this local mock with POST /memorials or a Supabase insert when the backend is ready.
   await waitForMockRequest();
 
-  const currentUser = getCurrentUser();
+  const currentUser = await getCurrentUser();
   const now = new Date().toISOString();
   const id = `mock-memorial-${Date.now()}`;
 

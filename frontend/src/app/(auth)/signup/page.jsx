@@ -5,13 +5,8 @@ import SignupForm from "@/components/auth/SignupForm.jsx";
 export default function SignupPage() {
   return (
     <AuthLayout
-      variant="signup"
-      title="Create Your Account"
-      subtitle={
-        <>
-          Begin creating a space to <span className="italic">Remember</span> your loved one.
-        </>
-      }
+      title="Create your account"
+      subtitle="Create a space to Remember your loved one."
       footer={
         <p>
           Already have an account?{" "}

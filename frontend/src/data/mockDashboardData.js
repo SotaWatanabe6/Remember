@@ -1,9 +1,9 @@
 export const mockDashboardData = {
   memorial: {
     id: "mock-memorial-1",
-    fullName: "Eleanor Hart",
-    lifespan: "1942-2026",
-    shortBiography: "Teacher, gardener, and the steady heart of every family table.",
+    fullName: "Full Name",
+    lifespan: "Year-Year",
+    shortBiography: "Short Biography",
     status: "Collecting memories",
     privacy: "Invite only",
     organizerName: "Maya Hart",
@@ -16,7 +16,7 @@ export const mockDashboardData = {
     },
   },
   invite: {
-    link: "https://remember.local/invite/eleanor-hart",
+    link: "https.uniquelink.com",
     pendingCount: 5,
     acceptedCount: 7,
     suggestedMessage:

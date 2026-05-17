@@ -13,11 +13,15 @@ export default function SignupForm() {
   const [values, setValues] = useState({ fullName: "", email: "", password: "" });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const updateField = (event) => {
     const { name, value } = event.target;
     setValues((current) => ({ ...current, [name]: value }));
     setErrors((current) => ({ ...current, [name]: "" }));
+    setSubmitError("");
+    setSuccessMessage("");
   };
 
   const validate = () => {
@@ -49,6 +53,8 @@ export default function SignupForm() {
     }
 
     setIsLoading(true);
+    setSubmitError("");
+    setSuccessMessage("");
 
     try {
       const result = await signup({
@@ -56,7 +62,15 @@ export default function SignupForm() {
         email: values.email.trim(),
         password: values.password,
       });
-      router.replace(result.redirectTo);
+
+      if (result.needsEmailConfirmation) {
+        setSuccessMessage("Account created. Check your email to confirm your address before logging in.");
+      } else {
+        setSuccessMessage("Account created. Taking you to your dashboard...");
+        router.replace("/dashboard");
+      }
+    } catch (error) {
+      setSubmitError(error.message || "Unable to create your account. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -64,7 +78,7 @@ export default function SignupForm() {
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex w-full flex-col gap-[30px]">
-      <div className="flex w-full flex-col gap-[30px] rounded-[20px] border border-slate-200 bg-white px-[29px] py-[31px] shadow-auth sm:px-[41px] sm:py-[41px]">
+      <div className="flex w-full flex-col gap-[30px]">
         <AuthInput
           id="signup-full-name"
           name="fullName"
@@ -100,6 +114,16 @@ export default function SignupForm() {
         />
       </div>
       <AuthButton isLoading={isLoading}>Sign Up</AuthButton>
+      {submitError ? (
+        <p className="text-center text-sm leading-5 text-red-600" role="alert">
+          {submitError}
+        </p>
+      ) : null}
+      {successMessage ? (
+        <p className="text-center text-sm leading-5 text-emerald-700" role="status">
+          {successMessage}
+        </p>
+      ) : null}
     </form>
   );
 }
