@@ -44,7 +44,7 @@ export default function ViewOutputsTab() {
         aria-label={outputPanelLabels[activeOutputTab]}
         className="mt-[34px] rounded-[10px] border border-[#90a1b9] bg-[rgba(144,161,185,0.12)] p-6 sm:p-10"
       >
-        <EmptyOutputPlaceholder />
+        <EmptyOutputPlaceholder activeOutputTab={activeOutputTab} />
       </div>
     </section>
   );

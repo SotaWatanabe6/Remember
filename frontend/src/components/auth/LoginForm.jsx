@@ -61,7 +61,7 @@ export default function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex w-full flex-col gap-[30px]">
-      <div className="flex w-full flex-col gap-[30px] rounded-[20px] border border-slate-200 bg-white px-[29px] py-[41px] shadow-auth sm:px-[41px]">
+      <div className="flex w-full flex-col gap-[30px]">
         <AuthInput
           id="login-email"
           name="email"
@@ -85,7 +85,7 @@ export default function LoginForm() {
           error={errors.password}
         />
       </div>
-      <AuthButton isLoading={isLoading}>Log In</AuthButton>
+      <AuthButton isLoading={isLoading}>Log in</AuthButton>
       {submitError ? (
         <p className="text-center text-sm leading-5 text-red-600" role="alert">
           {submitError}

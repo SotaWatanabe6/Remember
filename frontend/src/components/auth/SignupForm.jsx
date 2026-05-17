@@ -78,7 +78,7 @@ export default function SignupForm() {
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex w-full flex-col gap-[30px]">
-      <div className="flex w-full flex-col gap-[30px] rounded-[20px] border border-slate-200 bg-white px-[29px] py-[31px] shadow-auth sm:px-[41px] sm:py-[41px]">
+      <div className="flex w-full flex-col gap-[30px]">
         <AuthInput
           id="signup-full-name"
           name="fullName"

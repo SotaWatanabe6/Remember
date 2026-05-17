@@ -70,23 +70,6 @@ export default function InviteCollaboratorsTab({ invite }) {
             </article>
           ))}
         </div>
-
-        <div className="mt-2 grid gap-3 sm:grid-cols-2">
-          <button
-            type="button"
-            disabled
-            className="h-12 rounded-[10px] border border-slate-200 bg-white px-5 text-base font-medium text-slate-500 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            Send invite
-          </button>
-          <button
-            type="button"
-            disabled
-            className="h-12 rounded-[10px] border border-slate-200 bg-white px-5 text-base font-medium text-slate-500 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            Add collaborator
-          </button>
-        </div>
       </div>
     </section>
   );

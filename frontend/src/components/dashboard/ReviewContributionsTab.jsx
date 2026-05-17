@@ -1,16 +1,6 @@
-"use client";
-
-import { useState } from "react";
 import ContributionCard from "./ContributionCard.jsx";
 
 export default function ReviewContributionsTab({ contributions }) {
-  const [mockActions, setMockActions] = useState({});
-
-  const handleMockAction = (contributionId, message) => {
-    // TODO: Replace this mock-only action with contribution review API calls when backend exists.
-    setMockActions((current) => ({ ...current, [contributionId]: message }));
-  };
-
   return (
     <section
       role="tabpanel"
@@ -24,13 +14,8 @@ export default function ReviewContributionsTab({ contributions }) {
 
       {contributions.length > 0 ? (
         <div className="mt-[34px] grid gap-6">
-          {contributions.map((contribution) => (
-            <ContributionCard
-              key={contribution.id}
-              contribution={contribution}
-              mockAction={mockActions[contribution.id]}
-              onMockAction={handleMockAction}
-            />
+          {contributions.slice(0, 2).map((contribution) => (
+            <ContributionCard key={contribution.id} />
           ))}
         </div>
       ) : (
