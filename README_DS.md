@@ -88,7 +88,7 @@ people, emotional patterns, identity, and interpersonal meaning.
 
 <tr>
 <td>Documents</td>
-<td>PDF, TXT</td>
+<td>PDF, TXT,DOC/DOCX</td>
 </tr>
 
 <tr>
