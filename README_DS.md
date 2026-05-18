@@ -7,7 +7,6 @@
 <p>
 An AI-powered multimodal storytelling and semantic memory pipeline that processes PDFs, text, audio, video, and images to generate emotional intelligence, narrative synthesis, vector embeddings, and memory relationship analysis.
 </p>
-
 <img src="https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge" />
 <img src="https://img.shields.io/badge/Gemini-AI-orange?style=for-the-badge" />
 <img src="https://img.shields.io/badge/Supabase-Backend-green?style=for-the-badge" />
@@ -18,6 +17,17 @@ An AI-powered multimodal storytelling and semantic memory pipeline that processe
 
 ---
 
+# ❤️ Vision
+
+<p>
+This project is designed to preserve human stories, relationships,
+voices, emotions, and memories through AI-powered semantic understanding.
+
+Rather than simply storing files, the system attempts to understand
+people, emotional patterns, identity, and interpersonal meaning.
+</p>
+
+---
 # ✨ Features
 
 <ul>
@@ -327,20 +337,6 @@ docker run -p 8000:8000 multimodal-ai-pipeline
 <li>Azure Container Apps</li>
 <li>Kubernetes Clusters</li>
 </ul>
-
----
-
-# ❤️ Vision
-
-<p>
-This project is designed to preserve human stories, relationships,
-voices, emotions, and memories through AI-powered semantic understanding.
-
-Rather than simply storing files, the system attempts to understand
-people, emotional patterns, identity, and interpersonal meaning.
-</p>
-
----
 
 ---
 
