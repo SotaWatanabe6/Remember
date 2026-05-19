@@ -1,16 +1,16 @@
-import ButtonDark from "../components/ui-components/buttons/button-dark";
-import BoxSelectionLarge from "../components/ui-components/box-selection/box-selection-large";
-import BoxSelectionSmall from "../components/ui-components/box-selection/box-selection-small";
-import CopyLink from "../components/ui-components/links/copy-link";
-import LinkCopied from "../components/ui-components/links/link-copied";
-import DropDownMenu from "../components/ui-components/drop-down/drop-down-menu";
-import Header1 from "../components/navs/header-1";
-import Header2 from "../components/navs/header2";
-import Header3 from "../components/navs/header3";
-import TextInput from "../components/input-fields/text-input";
-import UploadArea from "../components/ui-components/upload-area/upload-area";
+import BoxSelectionLarge from "@/components/ui-components/box-selection/box-selection-large";
+import BoxSelectionSmall from "@/components/ui-components/box-selection/box-selection-small";
+import Header1 from "@/components/ui-components/navs/header-1";
+import Header2 from "@/components/ui-components/navs/header2";
+import Header3 from "@/components/ui-components/navs/header3";
+import ButtonDark from "@/components/ui-components/buttons/button-dark";
+import TextInput from "@/components/ui-components/buttons/input-fields/text-input";
+import DropDownMenu from "@/components/ui-components/drop-down/drop-down-menu";
+import CopyLink from "@/components/ui-components/links/copy-link";
+import LinkCopied from "@/components/ui-components/links/link-copied";
+import UploadArea from "@/components/ui-components/upload-area/upload-area";
 
-export default function uiComponents() {
+export default function UiComponentsPage() {
   return (
     <section>
       <h1 className="text-h2 mt-12 mb-12">UI Components</h1>
