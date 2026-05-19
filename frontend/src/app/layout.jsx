@@ -1,4 +1,5 @@
 import "./globals.css";
+import Header1 from "./components/navs/header-1";
 
 export const metadata = {
   title: "Remember",
