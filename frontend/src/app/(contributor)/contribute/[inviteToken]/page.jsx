@@ -1,3 +1,7 @@
-export default function ContributePage() {
-  return <h1>Contribute Page</h1>;
+import ContributorInviteLanding from "@/components/contributor/ContributorInviteLanding.jsx";
+
+export default async function ContributePage({ params }) {
+  const { inviteToken } = await params;
+
+  return <ContributorInviteLanding inviteToken={inviteToken} />;
 }

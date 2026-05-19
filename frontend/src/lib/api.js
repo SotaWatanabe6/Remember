@@ -5,6 +5,8 @@
 // On Day 9, swap mock return values for real fetch() calls — nothing else changes.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { mockMemorials } from "@/data/mockMemorials.js";
+
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 const MOCK_DELAY = 500;
 
@@ -16,22 +18,32 @@ const MOCK_DELAY = 500;
  */
 export async function getInviteToken(token) {
   await delay(MOCK_DELAY);
-  if (token === 'invalid') throw new Error('Invalid or expired invite link');
+
+  if (token === 'invalid') {
+    throw new Error('Invalid invite link');
+  }
+
+  const memorial = mockMemorials[0];
+  const now = new Date();
+  const expiredAt = new Date(now);
+  expiredAt.setDate(expiredAt.getDate() - 1);
+
   return {
     memorial: {
-      id: 'a1b2c3d4-0000-0000-0000-000000000001',
-      subject_name: 'John Smith',
-      cover_photo_url: null,
-      date_of_birth: '1943-03-15',
-      date_of_passing: '2024-01-10',
-      status: 'active',
+      id: memorial.id,
+      deceased_name: memorial.deceased_name,
+      profile_photo_url: memorial.profile_photo_url,
+      date_of_birth: memorial.birth_date,
+      date_of_passing: memorial.death_date,
+      status: token === 'closed' ? 'closed' : 'active',
+      contributions_open: token !== 'closed',
     },
     link: {
       id: 'a1b2c3d4-0000-0000-0000-000000000002',
-      is_active: true,
+      is_active: token !== 'closed',
       use_count: 3,
       max_uses: null,
-      expires_at: null,
+      expires_at: token === 'expired' ? expiredAt.toISOString() : null,
     },
   };
 }
@@ -43,11 +55,15 @@ export async function getInviteToken(token) {
  */
 export async function startContribution(token, name) {
   await delay(MOCK_DELAY);
+  const now = new Date().toISOString();
+
   return {
     contributor: {
       id: 'c1b2c3d4-0000-0000-0000-000000000001',
       name,
       status: 'in_progress',
+      created_at: now,
+      updated_at: now,
     },
     contributor_token: 'mock-contributor-session-token',
   };
