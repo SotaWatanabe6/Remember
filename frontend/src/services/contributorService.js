@@ -1,4 +1,10 @@
-import { getInviteToken, saveRelationship, startContribution } from "@/lib/api.js";
+import {
+  getInviteToken,
+  getResponses,
+  saveRelationship,
+  saveResponses,
+  startContribution,
+} from "@/lib/api.js";
 import {
   CONTRIBUTOR_RELATIONSHIP_OPTIONS,
   CONTRIBUTOR_RELATIONSHIP_OTHER,
@@ -159,6 +165,18 @@ function hasValidContributorSession(session, invite) {
   );
 }
 
+function hasCompletedRelationship(session) {
+  if (!session?.relationship_type) {
+    return false;
+  }
+
+  if (session.relationship_type === CONTRIBUTOR_RELATIONSHIP_OTHER) {
+    return Boolean(session.relationship_custom_label);
+  }
+
+  return true;
+}
+
 export async function getContributorRelationshipDraft(inviteToken) {
   const invite = await validateContributorInvite(inviteToken);
 
@@ -230,4 +248,82 @@ export async function saveContributorRelationship(
 
   storeContributorSession(inviteToken, updatedSession);
   return updatedSession;
+}
+
+export async function getContributorQuestionnaireDraft(inviteToken) {
+  const invite = await validateContributorInvite(inviteToken);
+
+  if (invite.status !== "valid") {
+    return {
+      status: invite.status,
+      invite,
+      session: null,
+    };
+  }
+
+  const session = getStoredContributorSession(inviteToken);
+
+  if (!hasValidContributorSession(session, invite)) {
+    return {
+      status: "missing",
+      invite,
+      session: null,
+    };
+  }
+
+  if (!hasCompletedRelationship(session)) {
+    return {
+      status: "relationship_missing",
+      invite,
+      session,
+    };
+  }
+
+  return {
+    status: "ready",
+    invite,
+    session,
+    relationship_type: session.relationship_type,
+    relationship_custom_label: session.relationship_custom_label ?? null,
+  };
+}
+
+export async function getQuestionnaireResponses(inviteToken) {
+  const draft = await getContributorQuestionnaireDraft(inviteToken);
+
+  if (draft.status !== "ready") {
+    throw new Error("Your contribution could not be found.");
+  }
+
+  const result = await getResponses(inviteToken, {
+    contributor_id: draft.session.contributorId,
+    contributor_token: draft.session.contributorToken,
+  });
+
+  return result.responses ?? [];
+}
+
+export async function saveQuestionnaireResponse(inviteToken, response) {
+  const draft = await getContributorQuestionnaireDraft(inviteToken);
+
+  if (draft.status !== "ready") {
+    throw new Error("Your contribution could not be found.");
+  }
+
+  const inputMode =
+    response.inputMode === "speech" || response.input_mode === "speech" ? "speech" : "text";
+  const now = new Date().toISOString();
+  const responsePayload = {
+    contributor_id: draft.session.contributorId,
+    memorial_id: draft.session.memorialId,
+    invite_token: inviteToken,
+    question_id: response.questionId ?? response.question_id,
+    question_order: response.questionOrder ?? response.question_order,
+    answer_text: response.answerText ?? response.answer_text ?? "",
+    input_mode: inputMode,
+    saved_at: now,
+  };
+
+  const result = await saveResponses(inviteToken, [responsePayload]);
+  return result.responses?.[0] ?? responsePayload;
 }
