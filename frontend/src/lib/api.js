@@ -747,3 +747,34 @@ export async function getShareToken(shareToken) {
   if (shareToken === 'invalid') throw new Error('This share link is invalid or has expired');
   return getMemorialOutput('mock-memorial-id');
 }
+// ─── Upload Functions ─────────────────────────────────────────────────────────
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"
+
+export const uploadFiles = async (
+  files,
+  fileCategory,
+  memorialId,
+  contributorId,
+  contributorTitle = null,
+  caption = null
+) => {
+  const formData = new FormData()
+
+  for (const file of files) {
+    formData.append("files", file, file.name)
+  }
+
+  formData.append("memorial_id", memorialId)
+  formData.append("contributor_id", contributorId)
+  formData.append("file_category", fileCategory)
+
+  if (contributorTitle) formData.append("contributor_title", contributorTitle)
+  if (caption) formData.append("caption", caption)
+
+  const response = await fetch(`${BACKEND_URL}/api/media/upload`, {
+    method: "POST",
+    body: formData
+  })
+
+  return response.json()
+}
