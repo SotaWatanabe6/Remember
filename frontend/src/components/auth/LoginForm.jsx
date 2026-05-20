@@ -60,7 +60,11 @@ export default function LoginForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="flex w-full flex-col gap-[30px]">
+    <form
+      onSubmit={handleSubmit}
+      noValidate
+      className="flex w-full flex-col gap-[30px]"
+    >
       <div className="flex w-full flex-col gap-[30px]">
         <AuthInput
           id="login-email"

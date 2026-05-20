@@ -7,8 +7,421 @@
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 const MOCK_DELAY = 500;
+const now = () => new Date().toISOString();
+const fakeToken = () => 'mock_jwt_' + Math.random().toString(36).slice(2);
+const makeId = (prefix) => `${prefix}_${Math.random().toString(36).slice(2)}`;
+const isBrowser = () => typeof window !== 'undefined';
 
-// ─── CONTRIBUTE FLOW ────────
+const AUTH_STORAGE_KEY = 'remember.mock.auth';
+const MEMORIALS_STORAGE_KEY = 'remember.mock.memorials';
+const USERS_STORAGE_KEY = 'remember.mock.users';
+
+// ─── SEED DATA ───────────────────────────────────────────────────────────────
+// Fixed, realistic-looking data. IDs and timestamps are live.
+
+const MOCK_USER = {
+  id: 'user-uuid-0000-0000-000000000001',
+  email: 'organizer@example.com',
+};
+
+const MOCK_MEMORIALS = [
+  {
+    id: 'memorial_001',
+    user_id: MOCK_USER.id,
+    subject_name: 'John Smith',
+    date_of_birth: '1943-03-15',
+    date_of_passing: '2024-01-10',
+    cover_photo_url: null,
+    status: 'collecting',
+    created_at: '2026-05-18T16:00:00.000Z',
+    updated_at: '2026-05-18T16:00:00.000Z',
+  },
+  {
+    id: 'memorial_002',
+    user_id: MOCK_USER.id,
+    subject_name: 'Margaret Collins',
+    date_of_birth: '1938-04-12',
+    date_of_passing: '2024-01-05',
+    cover_photo_url: null,
+    status: 'generating',
+    created_at: '2026-05-14T17:30:00.000Z',
+    updated_at: '2026-05-19T10:15:00.000Z',
+  },
+  {
+    id: 'memorial_003',
+    user_id: MOCK_USER.id,
+    subject_name: 'Eleanor Hart',
+    date_of_birth: '1942-11-07',
+    date_of_passing: '2026-03-28',
+    cover_photo_url: null,
+    status: 'complete',
+    created_at: '2026-05-10T12:00:00.000Z',
+    updated_at: '2026-05-17T15:45:00.000Z',
+  },
+];
+
+const MOCK_USERS = [
+  {
+    ...MOCK_USER,
+    full_name: 'Maya Hart',
+    password: null,
+  },
+];
+
+const readStoredValue = (key, fallbackValue) => {
+  if (!isBrowser()) {
+    return fallbackValue;
+  }
+
+  const storedValue = window.localStorage.getItem(key);
+
+  if (!storedValue) {
+    return fallbackValue;
+  }
+
+  try {
+    return JSON.parse(storedValue);
+  } catch {
+    window.localStorage.removeItem(key);
+    return fallbackValue;
+  }
+};
+
+const writeStoredValue = (key, value) => {
+  if (!isBrowser()) {
+    return;
+  }
+
+  window.localStorage.setItem(key, JSON.stringify(value));
+};
+
+const clearStoredValue = (key) => {
+  if (!isBrowser()) {
+    return;
+  }
+
+  window.localStorage.removeItem(key);
+};
+
+const ensureMockState = () => {
+  if (!isBrowser()) {
+    return;
+  }
+
+  if (!readStoredValue(USERS_STORAGE_KEY, null)) {
+    writeStoredValue(USERS_STORAGE_KEY, MOCK_USERS);
+  }
+
+  if (!readStoredValue(MEMORIALS_STORAGE_KEY, null)) {
+    writeStoredValue(MEMORIALS_STORAGE_KEY, MOCK_MEMORIALS);
+  }
+};
+
+const getStoredUsers = () => {
+  ensureMockState();
+  return readStoredValue(USERS_STORAGE_KEY, MOCK_USERS);
+};
+
+const getStoredMemorials = () => {
+  ensureMockState();
+  return readStoredValue(MEMORIALS_STORAGE_KEY, MOCK_MEMORIALS);
+};
+
+const getStoredSession = () => readStoredValue(AUTH_STORAGE_KEY, null);
+
+const setStoredSession = ({ user, token }) => {
+  writeStoredValue(AUTH_STORAGE_KEY, { user, token });
+};
+
+const getActiveUser = () => getStoredSession()?.user ?? MOCK_USER;
+
+const MOCK_CONTRIBUTORS = [
+  {
+    id: 'contributor-uuid-000000000001',
+    name: 'Sarah',
+    relationship_type: 'friend',
+    status: 'submitted',
+    submitted_at: now(),
+  },
+  {
+    id: 'contributor-uuid-000000000002',
+    name: 'Michael',
+    relationship_type: 'family',
+    status: 'submitted',
+    submitted_at: now(),
+  },
+  {
+    id: 'contributor-uuid-000000000003',
+    name: 'Tom Harris',
+    relationship_type: 'colleague',
+    status: 'in_progress',
+    submitted_at: null,
+  },
+];
+
+const MOCK_INVITE_LINK = {
+  id: 'invite-uuid-00-0000-000000000001',
+  token: 'mock_invite_abc123',
+  url: 'http://localhost:3000/contribute/mock_invite_abc123',
+  is_active: true,
+  expires_at: '2026-06-01',
+  max_uses: 50,
+  use_count: 3,
+  created_at: now(),
+};
+
+// ─── AUTH ────────────────────────────────────────────────────────────────────
+
+/**
+ * POST /auth/register
+ * Creates a new organizer account.
+ * Body: { email: string, password: string, full_name?: string }
+ */
+export async function register({ email, password, full_name }) {
+  await delay(MOCK_DELAY);
+  const trimmedEmail = email.trim();
+  const users = getStoredUsers();
+  const emailAlreadyExists = users.some(
+    (user) => user.email.toLowerCase() === trimmedEmail.toLowerCase(),
+  );
+
+  if (emailAlreadyExists) {
+    throw new Error('An account with this email already exists.');
+  }
+
+  const user = {
+    id: makeId('user-uuid'),
+    email: trimmedEmail,
+    full_name: full_name ?? '',
+  };
+  const token = fakeToken();
+
+  writeStoredValue(USERS_STORAGE_KEY, [...users, { ...user, password }]);
+  setStoredSession({ user, token });
+
+  return {
+    user,
+    token,
+  };
+}
+
+/**
+ * POST /auth/login
+ * Logs in to an existing organizer account.
+ * Body: { email: string, password: string }
+ */
+export async function login({ email, password }) {
+  await delay(MOCK_DELAY);
+  const trimmedEmail = email.trim();
+  const users = getStoredUsers();
+  const matchingUser = users.find(
+    (user) => user.email.toLowerCase() === trimmedEmail.toLowerCase(),
+  );
+
+  if (matchingUser?.password && matchingUser.password !== password) {
+    throw new Error('Invalid email or password.');
+  }
+
+  const user = matchingUser
+    ? {
+        id: matchingUser.id,
+        email: matchingUser.email,
+        full_name: matchingUser.full_name ?? '',
+      }
+    : {
+        ...MOCK_USER,
+        email: trimmedEmail || MOCK_USER.email,
+      };
+  const token = fakeToken();
+
+  setStoredSession({ user, token });
+
+  return {
+    user,
+    token,
+  };
+}
+
+export async function logout() {
+  await delay(MOCK_DELAY / 2);
+  clearStoredValue(AUTH_STORAGE_KEY);
+  return { success: true };
+}
+
+export async function getCurrentUser() {
+  await delay(MOCK_DELAY / 2);
+  return getActiveUser();
+}
+
+// ─── MEMORIALS ───────────────────────────────────────────────────────────────
+
+/**
+ * POST /memorials
+ * Creates a new memorial. Protected.
+ * Body: { subject_name, date_of_birth, date_of_passing, cover_photo_url }
+ */
+export async function createMemorial({ subject_name, date_of_birth, date_of_passing, cover_photo_url }) {
+  await delay(MOCK_DELAY);
+  const currentUser = getActiveUser();
+  const createdAt = now();
+  const memorial = {
+    id: makeId('memorial'),
+    user_id: currentUser.id,
+    subject_name: subject_name.trim(),
+    date_of_birth: date_of_birth ?? null,
+    date_of_passing: date_of_passing ?? null,
+    cover_photo_url: cover_photo_url ?? null,
+    status: 'collecting',
+    created_at: createdAt,
+    updated_at: createdAt,
+  };
+
+  writeStoredValue(MEMORIALS_STORAGE_KEY, [memorial, ...getStoredMemorials()]);
+
+  return {
+    memorial,
+  };
+}
+
+/**
+ * GET /memorials
+ * Returns all memorials for the logged in organizer. Protected.
+ */
+export async function getMemorials() {
+  await delay(MOCK_DELAY);
+  const currentUser = getActiveUser();
+  return {
+    memorials: getStoredMemorials()
+      .filter((memorial) => memorial.user_id === currentUser.id)
+      .sort(
+        (left, right) =>
+          new Date(right.updated_at ?? right.created_at).getTime() -
+          new Date(left.updated_at ?? left.created_at).getTime(),
+      ),
+  };
+}
+
+/**
+ * GET /memorials/:id
+ * Returns a single memorial by ID. Protected.
+ */
+export async function getMemorial(id) {
+  await delay(MOCK_DELAY);
+  const memorial = getStoredMemorials().find((m) => m.id === id) ?? null;
+  return { memorial };
+}
+
+// ─── INVITE LINK ─────────────────────────────────────────────────────────────
+
+/**
+ * POST /memorials/:id/invite-link
+ * Generates a contributor invite link. Protected.
+ * Body: { expires_at: string, max_uses: number }
+ */
+export async function createInviteLink(memorialId, { expires_at, max_uses }) {
+  await delay(MOCK_DELAY);
+  return {
+    invite_link: {
+      ...MOCK_INVITE_LINK,
+      id: 'invite-uuid-' + Math.random().toString(36).slice(2),
+      expires_at,
+      max_uses,
+      created_at: now(),
+    },
+  };
+}
+
+/**
+ * PATCH /memorials/:id/invite-link
+ * Deactivates or reactivates the invite link. Protected.
+ * Body: { is_active: boolean }
+ */
+export async function updateInviteLink(memorialId, { is_active }) {
+  await delay(MOCK_DELAY);
+  return {
+    invite_link: {
+      id: MOCK_INVITE_LINK.id,
+      is_active,
+    },
+  };
+}
+
+// ─── CONTRIBUTORS ────────────────────────────────────────────────────────────
+
+/**
+ * GET /memorials/:id/contributors
+ * Returns all contributors for a memorial. Protected.
+ */
+export async function getContributors(memorialId) {
+  await delay(MOCK_DELAY);
+  return { contributors: MOCK_CONTRIBUTORS };
+}
+
+// ─── SHARE ───────────────────────────────────────────────────────────────────
+
+/**
+ * POST /memorials/:id/share
+ * Generates a viewer share link. Protected.
+ */
+export async function createShareLink(memorialId) {
+  await delay(MOCK_DELAY);
+  const token = 'mock_share_' + Math.random().toString(36).slice(2);
+  return {
+    share_link: {
+      token,
+      url: `http://localhost:3000/share/${token}`,
+    },
+  };
+}
+
+// ─── AI ──────────────────────────────────────────────────────────────────────
+
+/**
+ * POST /ai/memorials/:id/generate
+ * Triggers AI generation for a memorial. Protected.
+ */
+export async function triggerGeneration(memorialId) {
+  await delay(MOCK_DELAY);
+  return {
+    job: {
+      id: 'job-uuid-' + Math.random().toString(36).slice(2),
+      status: 'queued',
+      progress: 0,
+      current_step: 'Starting...',
+      error_message: null,
+    },
+  };
+}
+
+/**
+ * GET /ai/jobs/:id/status
+ * Polls job status. Protected.
+ * Call on an interval — progress increments each call until complete.
+ */
+let _mockProgress = 0;
+export async function getJobStatus(jobId) {
+  await delay(MOCK_DELAY);
+  _mockProgress = Math.min(_mockProgress + 20, 100);
+  const steps = [
+    'Starting...',
+    'Reading contributor responses...',
+    'Finding recurring themes...',
+    'Matching photos to themes...',
+    'Building the story arc...',
+  ];
+  const stepIndex = Math.floor((_mockProgress / 100) * steps.length);
+  return {
+    job: {
+      id: jobId,
+      status: _mockProgress < 100 ? 'processing' : 'complete',
+      progress: _mockProgress,
+      current_step: steps[Math.min(stepIndex, steps.length - 1)],
+      error_message: null,
+    },
+  };
+}
+
+// ─── CONTRIBUTE FLOW ─────────────────────────────────────────────────────────
 
 /**
  * GET /contribute/:token
@@ -19,7 +432,7 @@ export async function getInviteToken(token) {
   if (token === 'invalid') throw new Error('Invalid or expired invite link');
   return {
     memorial: {
-      id: 'a1b2c3d4-0000-0000-0000-000000000001',
+      id: 'memorial_001',
       subject_name: 'John Smith',
       cover_photo_url: null,
       date_of_birth: '1943-03-15',
@@ -96,7 +509,7 @@ export async function uploadPhotos(token, files) {
       file_size_bytes: file.size,
       storage_path: `memorials/a1b2c3d4/contributions/c1b2c3d4/photos/${file.name}`,
       storage_bucket: 'memorial-assets',
-      taken_at: null,        // populated from EXIF metadata on backend
+      taken_at: null,
       caption: null,
     })),
   };
@@ -128,7 +541,7 @@ export async function uploadVoice(token, file, contributorTitle) {
       file_size_bytes: file.size,
       storage_path: `memorials/a1b2c3d4/contributions/c1b2c3d4/voice/${file.name}`,
       storage_bucket: 'memorial-assets',
-      duration_seconds: 47.3,   // populated by backend after upload
+      duration_seconds: 47.3,
     },
   };
 }
@@ -193,16 +606,15 @@ export async function submitContribution(token) {
   await delay(MOCK_DELAY);
   return {
     success: true,
-    submitted_at: new Date().toISOString(),
+    submitted_at: now(),
   };
 }
 
-// ─── OUTPUT TABS (viewer experience) ────────
+// ─── OUTPUT TABS (viewer experience) ─────────────────────────────────────────
 
 /**
  * GET /memorials/:id/output
  * Returns complete four-tab JSON for the memorial output page.
- * Rebecca owns: All Photos tab + output page shell
  */
 export async function getMemorialOutput(memorialId) {
   await delay(MOCK_DELAY);
@@ -333,6 +745,5 @@ export async function getMemorialOutput(memorialId) {
 export async function getShareToken(shareToken) {
   await delay(MOCK_DELAY);
   if (shareToken === 'invalid') throw new Error('This share link is invalid or has expired');
-  // Returns same shape as getMemorialOutput — viewer just can't edit anything
   return getMemorialOutput('mock-memorial-id');
 }

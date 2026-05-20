@@ -1,57 +1,31 @@
-import { getSupabaseClient } from "../lib/supabaseClient.js";
+import {
+  getCurrentUser as getCurrentUserFromApi,
+  login as loginWithApi,
+  logout as logoutWithApi,
+  register,
+} from "../lib/api.js";
 
 export async function login({ email, password }) {
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-
-  if (error) {
-    throw error;
-  }
-
-  return data;
+  return loginWithApi({ email, password });
 }
 
 export async function signup({ fullName, email, password }) {
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase.auth.signUp({
+  const data = await register({
     email,
     password,
-    options: {
-      data: {
-        full_name: fullName,
-      },
-    },
+    full_name: fullName,
   });
-
-  if (error) {
-    throw error;
-  }
 
   return {
     ...data,
-    needsEmailConfirmation: Boolean(data.user && !data.session),
+    needsEmailConfirmation: false,
   };
 }
 
 export async function logout() {
-  const supabase = getSupabaseClient();
-  const { error } = await supabase.auth.signOut();
-
-  if (error) {
-    throw error;
-  }
+  return logoutWithApi();
 }
 
 export async function getCurrentUser() {
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase.auth.getUser();
-
-  if (error) {
-    throw error;
-  }
-
-  return data.user;
+  return getCurrentUserFromApi();
 }
