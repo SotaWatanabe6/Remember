@@ -72,11 +72,20 @@ export async function startContribution(token, name) {
 /**
  * POST /contribute/:token/relationship
  * Saves relationship type to contributors table.
- * Body: { relationship_type: 'family'|'friend'|'colleague'|'partner'|'sibling'|'parent'|'community'|'other', relationship_label?: string }
+ * Body: { contributor_id: string, contributor_token: string, relationship_type: string, relationship_custom_label?: string | null }
  */
-export async function saveRelationship(token, relationshipType, relationshipLabel = null) {
+export async function saveRelationship(token, relationshipInput) {
   await delay(MOCK_DELAY);
-  return { success: true };
+
+  return {
+    success: true,
+    contributor: {
+      id: relationshipInput.contributor_id,
+      relationship_type: relationshipInput.relationship_type,
+      relationship_custom_label: relationshipInput.relationship_custom_label ?? null,
+      updated_at: new Date().toISOString(),
+    },
+  };
 }
 
 /**

@@ -1,4 +1,8 @@
-import { getInviteToken, startContribution } from "@/lib/api.js";
+import { getInviteToken, saveRelationship, startContribution } from "@/lib/api.js";
+import {
+  CONTRIBUTOR_RELATIONSHIP_OPTIONS,
+  CONTRIBUTOR_RELATIONSHIP_OTHER,
+} from "@/lib/contribute/relationshipOptions.js";
 
 const CONTRIBUTOR_SESSION_STORAGE_PREFIX = "remember_contributor_session";
 
@@ -144,4 +148,86 @@ export async function beginContributorDraft(inviteToken, contributorName) {
 
   storeContributorSession(inviteToken, session);
   return session;
+}
+
+function hasValidContributorSession(session, invite) {
+  return Boolean(
+    session?.contributorId &&
+      session?.contributorToken &&
+      session?.memorialId &&
+      session.memorialId === invite.memorialId,
+  );
+}
+
+export async function getContributorRelationshipDraft(inviteToken) {
+  const invite = await validateContributorInvite(inviteToken);
+
+  if (invite.status !== "valid") {
+    return {
+      status: invite.status,
+      invite,
+      session: null,
+    };
+  }
+
+  const session = getStoredContributorSession(inviteToken);
+
+  if (!hasValidContributorSession(session, invite)) {
+    return {
+      status: "missing",
+      invite,
+      session: null,
+    };
+  }
+
+  return {
+    status: "ready",
+    invite,
+    session,
+    relationship_type: session.relationship_type ?? "",
+    relationship_custom_label: session.relationship_custom_label ?? "",
+  };
+}
+
+export async function saveContributorRelationship(
+  inviteToken,
+  { relationshipType, relationshipCustomLabel = "" },
+) {
+  const trimmedRelationshipType = relationshipType.trim();
+  const trimmedCustomLabel = relationshipCustomLabel.trim();
+
+  if (!CONTRIBUTOR_RELATIONSHIP_OPTIONS.includes(trimmedRelationshipType)) {
+    throw new Error("Please choose a relationship.");
+  }
+
+  if (trimmedRelationshipType === CONTRIBUTOR_RELATIONSHIP_OTHER && !trimmedCustomLabel) {
+    throw new Error("Please describe your relationship.");
+  }
+
+  const draft = await getContributorRelationshipDraft(inviteToken);
+
+  if (draft.status !== "ready") {
+    throw new Error("Your contribution could not be found.");
+  }
+
+  const relationship_custom_label =
+    trimmedRelationshipType === CONTRIBUTOR_RELATIONSHIP_OTHER ? trimmedCustomLabel : null;
+
+  const savedRelationship = await saveRelationship(inviteToken, {
+    contributor_id: draft.session.contributorId,
+    contributor_token: draft.session.contributorToken,
+    relationship_type: trimmedRelationshipType,
+    relationship_custom_label,
+  });
+
+  const updatedSession = {
+    ...draft.session,
+    relationship_type: savedRelationship.contributor?.relationship_type ?? trimmedRelationshipType,
+    relationship_custom_label:
+      savedRelationship.contributor?.relationship_custom_label ?? relationship_custom_label,
+    updatedAt: savedRelationship.contributor?.updated_at ?? new Date().toISOString(),
+  };
+
+  storeContributorSession(inviteToken, updatedSession);
+  return updatedSession;
 }
