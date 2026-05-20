@@ -5,8 +5,45 @@
 // On Day 9, swap mock return values for real fetch() calls — nothing else changes.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { mockMemorials } from "@/data/mockMemorials.js";
+
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 const MOCK_DELAY = 500;
+const MOCK_RESPONSES_STORAGE_PREFIX = 'remember_mock_questionnaire_responses';
+
+function getResponsesStorageKey(token) {
+  return `${MOCK_RESPONSES_STORAGE_PREFIX}:${token}`;
+}
+
+function readStoredResponses(token) {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+
+  const storedResponses = window.localStorage.getItem(getResponsesStorageKey(token));
+
+  if (!storedResponses) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(storedResponses);
+  } catch {
+    window.localStorage.removeItem(getResponsesStorageKey(token));
+    return {};
+  }
+}
+
+function writeStoredResponses(token, responsesByContributor) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(
+    getResponsesStorageKey(token),
+    JSON.stringify(responsesByContributor),
+  );
+}
 
 // ─── CONTRIBUTE FLOW ────────
 
@@ -16,22 +53,32 @@ const MOCK_DELAY = 500;
  */
 export async function getInviteToken(token) {
   await delay(MOCK_DELAY);
-  if (token === 'invalid') throw new Error('Invalid or expired invite link');
+
+  if (token === 'invalid') {
+    throw new Error('Invalid invite link');
+  }
+
+  const memorial = mockMemorials[0];
+  const now = new Date();
+  const expiredAt = new Date(now);
+  expiredAt.setDate(expiredAt.getDate() - 1);
+
   return {
     memorial: {
-      id: 'a1b2c3d4-0000-0000-0000-000000000001',
-      subject_name: 'John Smith',
-      cover_photo_url: null,
-      date_of_birth: '1943-03-15',
-      date_of_passing: '2024-01-10',
-      status: 'active',
+      id: memorial.id,
+      deceased_name: memorial.deceased_name,
+      profile_photo_url: memorial.profile_photo_url,
+      date_of_birth: memorial.birth_date,
+      date_of_passing: memorial.death_date,
+      status: token === 'closed' ? 'closed' : 'active',
+      contributions_open: token !== 'closed',
     },
     link: {
       id: 'a1b2c3d4-0000-0000-0000-000000000002',
-      is_active: true,
+      is_active: token !== 'closed',
       use_count: 3,
       max_uses: null,
-      expires_at: null,
+      expires_at: token === 'expired' ? expiredAt.toISOString() : null,
     },
   };
 }
@@ -43,11 +90,15 @@ export async function getInviteToken(token) {
  */
 export async function startContribution(token, name) {
   await delay(MOCK_DELAY);
+  const now = new Date().toISOString();
+
   return {
     contributor: {
       id: 'c1b2c3d4-0000-0000-0000-000000000001',
       name,
       status: 'in_progress',
+      created_at: now,
+      updated_at: now,
     },
     contributor_token: 'mock-contributor-session-token',
   };
@@ -56,21 +107,71 @@ export async function startContribution(token, name) {
 /**
  * POST /contribute/:token/relationship
  * Saves relationship type to contributors table.
- * Body: { relationship_type: 'family'|'friend'|'colleague'|'partner'|'sibling'|'parent'|'community'|'other', relationship_label?: string }
+ * Body: { contributor_id: string, contributor_token: string, relationship_type: string, relationship_custom_label?: string | null }
  */
-export async function saveRelationship(token, relationshipType, relationshipLabel = null) {
+export async function saveRelationship(token, relationshipInput) {
   await delay(MOCK_DELAY);
-  return { success: true };
+
+  return {
+    success: true,
+    contributor: {
+      id: relationshipInput.contributor_id,
+      relationship_type: relationshipInput.relationship_type,
+      relationship_custom_label: relationshipInput.relationship_custom_label ?? null,
+      updated_at: new Date().toISOString(),
+    },
+  };
 }
 
 /**
  * POST /contribute/:token/responses
  * Saves questionnaire Q&A. Supports partial saves (autosave).
- * Body: { responses: [{ question_text: string, response_text: string, order_index: number }] }
+ * Body: { responses: [{ contributor_id, memorial_id, invite_token, question_id, question_order, answer_text, input_mode, saved_at }] }
  */
 export async function saveResponses(token, responses) {
   await delay(MOCK_DELAY);
-  return { success: true, saved: responses.length };
+  const now = new Date().toISOString();
+  const responsesByContributor = readStoredResponses(token);
+  const savedResponses = [];
+
+  responses.forEach((response) => {
+    if (!response?.contributor_id || !response?.question_id) {
+      return;
+    }
+
+    const contributorResponses = responsesByContributor[response.contributor_id] ?? {};
+    const savedResponse = {
+      ...response,
+      invite_token: token,
+      saved_at: response.saved_at ?? now,
+    };
+
+    contributorResponses[response.question_id] = savedResponse;
+    responsesByContributor[response.contributor_id] = contributorResponses;
+    savedResponses.push(savedResponse);
+  });
+
+  writeStoredResponses(token, responsesByContributor);
+
+  return { success: true, saved: savedResponses.length, responses: savedResponses };
+}
+
+/**
+ * GET /contribute/:token/responses
+ * Returns saved questionnaire Q&A for one contributor session.
+ * Query/body equivalent: { contributor_id: string }
+ */
+export async function getResponses(token, contributorInput) {
+  await delay(MOCK_DELAY);
+  const responsesByContributor = readStoredResponses(token);
+  const contributorResponses = responsesByContributor[contributorInput.contributor_id] ?? {};
+
+  return {
+    responses: Object.values(contributorResponses).sort(
+      (firstResponse, secondResponse) =>
+        (firstResponse.question_order ?? 0) - (secondResponse.question_order ?? 0),
+    ),
+  };
 }
 
 /**
