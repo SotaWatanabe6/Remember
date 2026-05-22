@@ -40,6 +40,21 @@ function ReviewSection({ title, children }) {
   );
 }
 
+function formatRelationship(contributor) {
+  const relationshipType = contributor?.relationship_type;
+  const relationshipLabel = contributor?.relationship_label;
+
+  if (!relationshipType && !relationshipLabel) {
+    return 'Not provided';
+  }
+
+  if (relationshipType === 'Other' && relationshipLabel) {
+    return `${relationshipType} / ${relationshipLabel}`;
+  }
+
+  return relationshipLabel || relationshipType;
+}
+
 // ─── Page ───────────
 
 export default function ReviewPage() {
@@ -128,6 +143,20 @@ export default function ReviewPage() {
           <p className="mt-2 text-base text-slate-500">Review all uploaded media.</p>
         </div>
 
+        {/* Contributor */}
+        <ReviewSection title="Contributor">
+          <div className="flex flex-col gap-3">
+            <div>
+              <p className="text-sm font-medium text-neutral-950">
+                {summary?.contributor?.name || 'Contributor'}
+              </p>
+              <p className="mt-0.5 text-sm text-slate-500">
+                {formatRelationship(summary?.contributor)}
+              </p>
+            </div>
+          </div>
+        </ReviewSection>
+
         {/* Photos */}
         {summary?.photos?.length > 0 && (
           <ReviewSection title="Uploaded photos">
@@ -154,6 +183,12 @@ export default function ReviewPage() {
                 </div>
               ))}
             </div>
+            <Link
+              href={`/contribute/${inviteToken}/photos`}
+              className="mt-4 inline-flex text-sm font-medium text-neutral-950 hover:text-slate-600 transition-colors"
+            >
+              Edit photos
+            </Link>
           </ReviewSection>
         )}
 
@@ -202,6 +237,12 @@ export default function ReviewPage() {
                 </div>
               ))}
             </div>
+            <Link
+              href={`/contribute/${inviteToken}/voice`}
+              className="mt-4 inline-flex text-sm font-medium text-neutral-950 hover:text-slate-600 transition-colors"
+            >
+              Edit voice
+            </Link>
           </ReviewSection>
         )}
 
@@ -216,6 +257,12 @@ export default function ReviewPage() {
                 </div>
               ))}
             </div>
+            <Link
+              href={`/contribute/${inviteToken}/questions`}
+              className="mt-4 inline-flex text-sm font-medium text-neutral-950 hover:text-slate-600 transition-colors"
+            >
+              Edit questionnaire
+            </Link>
           </ReviewSection>
         )}
 

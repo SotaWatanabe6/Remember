@@ -92,6 +92,11 @@ function readContributorSession(token) {
   }
 }
 
+function writeContributorSession(token, session) {
+  if (typeof window === 'undefined' || !session) return;
+  window.localStorage.setItem(getSessionStorageKey(token), JSON.stringify(session));
+}
+
 // ─── CONTRIBUTE FLOW ───────────
 
 /**
@@ -370,9 +375,21 @@ export async function getContributorSummary(token) {
  */
 export async function submitContribution(token) {
   await delay(MOCK_DELAY);
+  const now = new Date().toISOString();
+  const session = readContributorSession(token);
+
+  if (session) {
+    writeContributorSession(token, {
+      ...session,
+      status: 'submitted',
+      submittedAt: now,
+      updatedAt: now,
+    });
+  }
+
   return {
     success: true,
-    submitted_at: new Date().toISOString(),
+    submitted_at: now,
   };
 }
 
