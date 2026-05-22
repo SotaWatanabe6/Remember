@@ -1,9 +1,6 @@
-// Global error handler — catches any unhandled errors
-
-export const errorHandler = (err, req, res, next) => {
+const errorHandler = (err, req, res, next) => {
   console.error("Unhandled error:", err.message)
 
-  // Multer specific errors (file upload issues)
   if (err.code === "LIMIT_FILE_SIZE") {
     return res.status(400).json({ error: "File too large" })
   }
@@ -14,8 +11,9 @@ export const errorHandler = (err, req, res, next) => {
     return res.status(400).json({ error: "Unexpected file field" })
   }
 
-  // Default error
   res.status(500).json({
     error: "Something went wrong on our end. Please try again."
   })
 }
+
+module.exports = { errorHandler }

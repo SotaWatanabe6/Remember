@@ -78,7 +78,7 @@ export default function VoiceUpload({ onBack, memorialId, contributorId }) {
   return (
     <div className="min-h-screen bg-white font-sans">
       {/* Nav */}
-      <nav className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+      <nav className="flex items-center justify-between px-6 pt-0 pb-0 border-t-0 border-gray-200">
         <span className="text-sm font-medium text-gray-900 tracking-tight">Remember</span>
         <button
           onClick={onBack}

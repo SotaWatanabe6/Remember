@@ -1,6 +1,6 @@
-import { parseBuffer } from "music-metadata"
+const { parseBuffer } = require("music-metadata")
 
-export const extractAudioDuration = async (buffer, mimeType) => {
+const extractAudioDuration = async (buffer, mimeType) => {
   try {
     const metadata = await parseBuffer(buffer, mimeType)
     const duration = metadata?.format?.duration
@@ -13,3 +13,5 @@ export const extractAudioDuration = async (buffer, mimeType) => {
     return null
   }
 }
+
+module.exports = { extractAudioDuration }

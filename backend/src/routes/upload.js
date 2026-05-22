@@ -1,14 +1,11 @@
-import express from "express"
-import multer from "multer"
-import { PrismaClient } from "@prisma/client"
-import supabase from "../services/storage.js"
-import { validateFiles } from "../middleware/validate.js"
-import { extractImageMetadata } from "../services/exif.js"
-import { extractAudioDuration } from "../services/duration.js"
+const express = require("express")
+const multer = require("multer")
+const supabase = require("../supabase.js")
+const { validateFiles } = require("../middleware/validate.js")
+const { extractImageMetadata } = require("../services/exif.js")
+const { extractAudioDuration } = require("../services/duration.js")
 
 const router = express.Router()
-const prisma = new PrismaClient()
-
 const STORAGE_BUCKET = "memorial-assets"
 
 const upload = multer({
@@ -24,12 +21,11 @@ router.post(
   upload.array("files", 10),
   validateFiles,
   async (req, res) => {
-  
     const {
       memorial_id,
       contributor_id,
       file_category,
-      contributor_title, 
+      contributor_title,
       caption
     } = req.body
 
@@ -43,30 +39,33 @@ router.post(
         const folder = file_category === "photo" ? "photos" : "voice"
         const ext = file.originalname.split(".").pop().toLowerCase()
 
-        // ── STEP 1: Create DB row first to get the ID ──────────────────────
         if (file_category === "photo") {
-
           const exif = await extractImageMetadata(file.buffer)
 
-          dbRecord = await prisma.mediaAsset.create({
-            data: {
-              memorialId:       memorial_id,
-              contributorId:    contributor_id || null,
-              storagePath:      "pending",
-              storageBucket:    STORAGE_BUCKET,
-              fileName:         file.originalname,
-              fileType:         file.mimetype,
-              fileSizeBytes:    BigInt(file.size),
-              aiAnalysisStatus: "pending",
-              caption: caption || null,
-              width:        exif?.width        || null,
-              height:       exif?.height       || null,
-              takenAt:      exif?.takenAt      || null,
-              locationLat:  exif?.locationLat  || null,
-              locationLng:  exif?.locationLng  || null,
-              uploadDevice: exif?.uploadDevice || null,
-            }
-          })
+          const { data, error } = await supabase
+            .from("media_assets")
+            .insert({
+              memorial_id:        memorial_id,
+              contributor_id:     contributor_id || null,
+              storage_path:       "pending",
+              storage_bucket:     STORAGE_BUCKET,
+              file_name:          file.originalname,
+              file_type:          file.mimetype,
+              file_size_bytes:    file.size,
+              ai_analysis_status: "pending",
+              caption:            caption || null,
+              width:              exif?.width        || null,
+              height:             exif?.height       || null,
+              taken_at:           exif?.takenAt      || null,
+              location_lat:       exif?.locationLat  || null,
+              location_lng:       exif?.locationLng  || null,
+              upload_device:      exif?.uploadDevice || null,
+            })
+            .select()
+            .single()
+
+          if (error) throw new Error(error.message)
+          dbRecord = data
 
         } else {
           if (!contributor_title || !contributor_title.trim()) {
@@ -78,29 +77,31 @@ router.post(
             continue
           }
 
-          // Extract duration before saving)
           const durationSeconds = await extractAudioDuration(file.buffer, file.mimetype)
-          
-          dbRecord = await prisma.voiceRecording.create({
-            data: {
-              memorialId:          memorial_id,
-              contributorId:       contributor_id || null,
-              storagePath:         "pending",
-              storageBucket:       STORAGE_BUCKET,
-              fileName:            file.originalname,
-              fileType:            file.mimetype,
-              fileSizeBytes:       BigInt(file.size),
-              contributorTitle:    contributor_title.trim(),
-              transcriptionStatus: "pending",
-              durationSeconds:     durationSeconds, 
-            }
-          })
+
+          const { data, error } = await supabase
+            .from("voice_recordings")
+            .insert({
+              memorial_id:          memorial_id,
+              contributor_id:       contributor_id || null,
+              storage_path:         "pending",
+              storage_bucket:       STORAGE_BUCKET,
+              file_name:            file.originalname,
+              file_type:            file.mimetype,
+              file_size_bytes:      file.size,
+              contributor_title:    contributor_title.trim(),
+              transcription_status: "pending",
+              duration_seconds:     durationSeconds,
+            })
+            .select()
+            .single()
+
+          if (error) throw new Error(error.message)
+          dbRecord = data
         }
 
-        // ── STEP 2: Build storage path using DB record ID ──────────────────
         const storagePath = `memorials/${memorial_id}/contributions/${contributor_id}/${folder}/${dbRecord.id}.${ext}`
 
-        // ── STEP 3: Upload to Supabase Storage ─────────────────────────────
         const { error: storageError } = await supabase.storage
           .from(STORAGE_BUCKET)
           .upload(storagePath, file.buffer, {
@@ -111,11 +112,10 @@ router.post(
         if (storageError) {
           console.error("Storage upload failed:", storageError.message)
 
-          // Clean up DB row — keep DB and storage in sync
           if (file_category === "photo") {
-            await prisma.mediaAsset.delete({ where: { id: dbRecord.id } })
+            await supabase.from("media_assets").delete().eq("id", dbRecord.id)
           } else {
-            await prisma.voiceRecording.delete({ where: { id: dbRecord.id } })
+            await supabase.from("voice_recordings").delete().eq("id", dbRecord.id)
           }
 
           results.push({
@@ -126,17 +126,16 @@ router.post(
           continue
         }
 
-        // ── STEP 4: Update DB row with real storage path ───────────────────
         if (file_category === "photo") {
-          await prisma.mediaAsset.update({
-            where: { id: dbRecord.id },
-            data:  { storagePath, updatedAt: new Date() }
-          })
+          await supabase
+            .from("media_assets")
+            .update({ storage_path: storagePath })
+            .eq("id", dbRecord.id)
         } else {
-          await prisma.voiceRecording.update({
-            where: { id: dbRecord.id },
-            data:  { storagePath, updatedAt: new Date() }
-          })
+          await supabase
+            .from("voice_recordings")
+            .update({ storage_path: storagePath })
+            .eq("id", dbRecord.id)
         }
 
         results.push({
@@ -150,13 +149,12 @@ router.post(
       } catch (err) {
         console.error(`Error processing ${file.originalname}:`, err.message)
 
-        // Clean up DB row if something failed mid-way
         if (dbRecord) {
           try {
             if (file_category === "photo") {
-              await prisma.mediaAsset.delete({ where: { id: dbRecord.id } })
+              await supabase.from("media_assets").delete().eq("id", dbRecord.id)
             } else {
-              await prisma.voiceRecording.delete({ where: { id: dbRecord.id } })
+              await supabase.from("voice_recordings").delete().eq("id", dbRecord.id)
             }
           } catch (cleanupErr) {
             console.error("Cleanup failed:", cleanupErr.message)
@@ -175,4 +173,4 @@ router.post(
   }
 )
 
-export default router
+module.exports = router

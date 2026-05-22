@@ -1,8 +1,6 @@
-import exifr from "exifr"
+const exifr = require("exifr")
 
-// Extracts EXIF metadata from image buffer
-// Returns null safely if no EXIF data exists
-export const extractImageMetadata = async (buffer) => {
+const extractImageMetadata = async (buffer) => {
   try {
     const exif = await exifr.parse(buffer, {
       tiff: true,
@@ -31,3 +29,5 @@ export const extractImageMetadata = async (buffer) => {
     return null
   }
 }
+
+module.exports = { extractImageMetadata }
