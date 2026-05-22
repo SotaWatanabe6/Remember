@@ -1,151 +1,151 @@
-# 🧠 Remembrance — AI Memory Intelligence System
 
-A modular AI pipeline that extracts, analyzes, and stores “memory-like” insights from multimodal data (audio, video, documents, images).
-It supports **A/B testing between Whisper and AssemblyAI** for transcription benchmarking.
 
----
+<body>
 
-## 🚀 Key Features
+  <h1>🧠 Remembrance</h1>
+  <p><b>AI Memory Intelligence System</b></p>
 
-* 🎙️ Dual transcription system (Whisper vs AssemblyAI)
-* ⚖️ A/B testing router for model comparison
-* 🧠 GPT-4o emotional & semantic analysis
-* 📊 FAISS vector embeddings for semantic memory retrieval
-* 🗄️ Supabase storage for structured persistence
-* 🖼️ OCR support for images (Tesseract)
-* 🎥 Video → audio → transcription pipeline
-* 📄 PDF, DOCX, TXT ingestion support
-* 🔐 Secure API key management using `.env`
+  <div class="box">
+    A modular AI pipeline that extracts, analyzes, and stores memory-like insights from multimodal data (audio, video, documents, images).<br/>
+    Powered by <b>AssemblyAI (transcription)</b> + <b>Gemini (intelligence layer)</b> + FAISS + Supabase.
+  </div>
 
----
+  <h2>🚀 Key Features</h2>
+  <ul>
+    <li>🎙️ AssemblyAI-powered transcription system</li>
+    <li>🧠 Gemini-powered semantic & emotional analysis</li>
+    <li>📊 FAISS vector embeddings for memory retrieval</li>
+    <li>🗄️ Supabase storage for persistence</li>
+    <li>🖼️ OCR support for images (Tesseract)</li>
+    <li>🎥 Video → audio → transcription pipeline</li>
+    <li>📄 PDF, DOCX, TXT ingestion support</li>
+    <li>⚡ Modular AI pipeline architecture</li>
+  </ul>
 
-## 🏗️ System Architecture
-
-```
-Input File (audio/video/doc/image)
+  <h2>🏗️ System Architecture</h2>
+  <pre>
+Input File (audio / video / document / image)
         ↓
 Preprocessing Layer
         ↓
-A/B Transcription Layer
-   ├── Whisper
-   └── AssemblyAI
+AssemblyAI Transcription Layer
         ↓
 Text Output
         ↓
-GPT-4o Analysis Engine
+Gemini Intelligence Engine
         ↓
-Embedding (FAISS)
+Embedding Generation (FAISS)
         ↓
 Supabase Storage
-```
+  </pre>
 
----
+  <h2>⚖️ Transcription System</h2>
 
-## ⚖️ A/B Testing System
+  <table>
+    <tr>
+      <th>Model</th>
+      <th>Type</th>
+      <th>Strength</th>
+    </tr>
+    <tr>
+      <td>AssemblyAI</td>
+      <td>API</td>
+      <td>High accuracy, scalable cloud transcription</td>
+    </tr>
+  </table>
 
-This project compares two transcription models:
+  <h2>🧠 Gemini Intelligence Layer</h2>
+  <ul>
+    <li>🧾 Summarization of transcripts</li>
+    <li>😊 Emotion detection</li>
+    <li>🧠 Insight extraction</li>
+    <li>🏷️ Memory tagging</li>
+    <li>📌 Structured context generation</li>
+  </ul>
 
-| Model      | Type     | Strength                     |
-| ---------- | -------- | ---------------------------- |
-| Whisper    | Local ML | Fast, offline, lightweight   |
-| AssemblyAI | API      | High accuracy, cloud-powered |
+  <h2>📦 Installation</h2>
 
-### How A/B works:
-
-* Random or controlled routing between models
-* Outputs stored with metadata
-* Enables performance comparison over time
-
----
-
-## 📦 Installation
-
-```bash
+  <pre>
 git clone https://github.com/NATASHASAINI/Remembrance.git
 cd Remembrance
 
 pip install -r requirements.txt
-```
+  </pre>
 
----
+  <h2>🔐 Environment Variables</h2>
 
-## 🔐 Environment Variables
-
-Create a `.env` file:
-
-```env
+  <pre>
 SUPABASE_URL=your_supabase_url
 SUPABASE_KEY=your_supabase_key
-OPENAI_API_KEY=your_openai_key
-ASSEMBLYAI_API_KEY=your_assemblyai_key
-```
+OPENAI_API_KEY=your_openai_api_key
+ASSEMBLYAI_API_KEY=your_assemblyai_api_key
+GEMINI_API_KEY=your_gemini_api_key
+  </pre>
 
----
+  <h2>▶️ Usage</h2>
 
-## ▶️ Usage
-
-### Run pipelines:
-
-```python
+  <pre>
 from pipeline_ab_test import transcribe
 
 model, text = transcribe("sample.mp3")
 
 print(model)
 print(text)
-```
+  </pre>
 
----
+  <p><b>Output:</b> assemblyai</p>
 
-## 📁 Project Structure
+  <pre>
+from gemini_analysis import analyze_with_gemini
 
-```
+analysis = analyze_with_gemini(text)
+print(analysis)
+  </pre>
+
+  <h2>📁 Project Structure</h2>
+
+  <pre>
 Remembrance/
 │
-├── whisper_pipeline.py
 ├── assembly_pipeline.py
+├── gemini_analysis.py
 ├── pipeline_ab_test.py
 │
 ├── .env
 ├── .gitignore
-├── README_DS.md
-```
+├── README.html
+  </pre>
 
----
+  <h2>📊 Output Storage</h2>
+  <ul>
+    <li>Transcribed text (AssemblyAI)</li>
+    <li>Gemini analysis (summary, emotions, insights)</li>
+    <li>Scene classification</li>
+    <li>Memory tags</li>
+    <li>FAISS embeddings</li>
+  </ul>
 
-## 📊 Output Stored In Supabase
+  <h2>🧠 Use Cases</h2>
+  <ul>
+    <li>AI memory assistants</li>
+    <li>Meeting transcription intelligence</li>
+    <li>Multimodal AI pipelines</li>
+    <li>Long-term memory systems</li>
+    <li>Personal AI knowledge systems</li>
+  </ul>
 
-Each run stores:
+  <h2>🔮 Future Improvements</h2>
+  <ul>
+    <li>Real-time streaming transcription</li>
+    <li>Graph-based memory system</li>
+    <li>Smart routing memory engine</li>
+    <li>Latency dashboard</li>
+    <li>Web UI memory explorer</li>
+  </ul>
 
-* Transcribed text
-* Model used (Whisper / AssemblyAI)
-* GPT-4o analysis
-* Scene type
-* Embeddings (FAISS-ready)
+  <footer>
+    <p>👩‍💻 Built by <b>Natasha Saini</b> | AI / ML Engineer | Data Systems</p>
+  </footer>
 
----
-
-## 🧠 Use Cases
-
-* AI memory assistants
-* Meeting transcription intelligence
-* Research audio analysis
-* Multimodal AI pipelines
-* Model benchmarking (A/B testing)
-
----
-
-## 🔮 Future Improvements
-
-* Latency tracking dashboard
-* Accuracy scoring system
-* Auto model selection (smart routing)
-* Real-time streaming transcription
-* Web UI for memory exploration
-
----
-
-## 👩‍💻 Author
-
-Natasha Saini
-AI / ML Engineer | Data Systems | Applied AI Pipelines
+</body>
+</html>
