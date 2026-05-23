@@ -1,18 +1,7 @@
 # =========================================================
-# INSTALL
+# IMPORTS(GPT4O+GEMINI+SUPABASE+FAISS+ASSEMBLYAI)
 # =========================================================
-
-!pip -q install assemblyai sentence-transformers faiss-cpu \
-pymupdf moviepy pytesseract pillow opencv-python supabase \
-openai python-docx textract google-generativeai
-
-!apt-get -qq install tesseract-ocr ffmpeg
-
-
-# =========================================================
-# IMPORTS
-# =========================================================
-
+import os
 import fitz
 import faiss
 import numpy as np
@@ -24,7 +13,6 @@ from docx import Document
 from moviepy.editor import VideoFileClip
 from sentence_transformers import SentenceTransformer
 from supabase import create_client
-from google.colab import files
 from openai import OpenAI
 import google.generativeai as genai
 
@@ -32,6 +20,7 @@ import google.generativeai as genai
 # =========================================================
 # CONFIG
 # =========================================================
+
 
 SUPABASE_URL = "https://tbpdhybqbjucoxdizlgw.supabase.co"
 SUPABASE_KEY = "YOUR_SUPABASE_KEY"
@@ -41,16 +30,29 @@ GEMINI_API_KEY = "YOUR_GEMINI_KEY"
 
 
 # =========================================================
-# INIT
+# VALIDATION 
+# =========================================================
+if not SUPABASE_KEY:
+    raise ValueError("Missing SUPABASE_KEY")
+if not OPENAI_API_KEY:
+    raise ValueError("Missing OPENAI_API_KEY")
+if not GEMINI_API_KEY:
+    raise ValueError("Missing GEMINI_API_KEY")
+if not ASSEMBLYAI_API_KEY:
+    raise ValueError("Missing ASSEMBLYAI_API_KEY")
+
+
+# =========================================================
+# INIT CLIENTS
 # =========================================================
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 aai.settings.api_key = ASSEMBLYAI_API_KEY
-client = OpenAI(api_key=OPENAI_API_KEY)
+
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 genai.configure(api_key=GEMINI_API_KEY)
-gemini_model = genai.GenerativeModel("gemini-1.5-flash")
 
 embed_model = SentenceTransformer("all-MiniLM-L6-v2")
 index = faiss.IndexFlatL2(384)
@@ -68,33 +70,21 @@ SCENES = {
 
 
 # =========================================================
-# LOGS (ONLY GPT OUTPUT)
+# LOGGING
 # =========================================================
 
-def log_processing(f):
-    print(f"\nProcessing: {f}\n")
-
-def log_ai_start():
-    print("\nRunning GPT-4o analysis...\n")
-
-def log_ai_output(x):
-    print("\nGPT-4o OUTPUT:\n", str(x)[:1200], "\n")
-
-def log_done(f):
-    print(f"\nDONE: {f}\n")
+def log(msg):
+    print(f"\n{msg}\n")
 
 
 # =========================================================
-# TRANSCRIPTION (FIXED)
+# TRANSCRIPTION
 # =========================================================
 
 def transcribe_audio(path):
-
-    aai.settings.api_key = ASSEMBLYAI_API_KEY
-
-    transcriber = aai.Transcriber()
-
     try:
+        transcriber = aai.Transcriber()
+
         config = aai.TranscriptionConfig(
             speech_models=["universal-3-pro"],
             punctuate=True,
@@ -103,10 +93,13 @@ def transcribe_audio(path):
 
         result = transcriber.transcribe(path, config=config)
 
-        return result.text if result.text else None
+        if not result.text:
+            raise ValueError("Empty transcription")
 
-    except Exception:
-        return None
+        return result.text
+
+    except Exception as e:
+        raise RuntimeError(f"AssemblyAI error: {e}")
 
 
 # =========================================================
@@ -114,39 +107,71 @@ def transcribe_audio(path):
 # =========================================================
 
 def process_pdf(path):
-    pdf = fitz.open(path)
-    return "\n".join(page.get_text() for page in pdf)
+    doc = fitz.open(path)
+    return "\n".join(page.get_text() for page in doc)
 
 def process_docx(path):
     doc = Document(path)
     return "\n".join(p.text for p in doc.paragraphs)
 
 def process_txt(path):
-    return open(path, encoding="utf-8").read()
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
 
 def process_image(path):
     return pytesseract.image_to_string(Image.open(path))
 
 def process_video(path):
-    temp_audio = "temp.wav"
     clip = VideoFileClip(path)
 
     if clip.audio is None:
-        return None
+        raise ValueError("Video has no audio")
 
+    temp_audio = "temp.wav"
     clip.audio.write_audiofile(temp_audio)
+
     return transcribe_audio(temp_audio)
 
 
 # =========================================================
-# GPT-4o ANALYSIS 
+# GPT-4o ANALYSIS (PRIMARY)
 # =========================================================
 
 def analyze_gpt4o(text, scene):
-
     prompt = f"""
 Scene:
-{SCENES.get(scene,"")}
+{SCENES.get(scene, "")}
+
+Analyze deeply:
+- emotions
+- relationships
+- personality
+- narrative structure
+- meaning
+
+CONTENT:
+{text[:8000]}
+"""
+
+    response = openai_client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "You are a deep emotional intelligence system."},
+            {"role": "user", "content": prompt}
+        ]
+    )
+
+    return response.choices[0].message.content
+
+
+# =========================================================
+# GEMINI ANALYSIS 
+# =========================================================
+
+def analyze_gemini(text, scene):
+    prompt = f"""
+Scene:
+{SCENES.get(scene, "")}
 
 Analyze:
 - emotions
@@ -159,31 +184,52 @@ CONTENT:
 {text[:8000]}
 """
 
+    model = genai.GenerativeModel("gemini-1.5-pro")
+    response = model.generate_content(prompt)
+
+    if not response or not response.text:
+        raise ValueError("Empty Gemini response")
+
+    return response.text
+
+
+# =========================================================
+# ANALYSIS ROUTER (GPT-4o ALWAYS INCLUDED IN OUTPUT)
+# =========================================================
+
+def analyze(text, scene):
+
+    log("Running GPT-4o analysis...")
+
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a deep emotional memory system."},
-                {"role": "user", "content": prompt}
-            ]
-        )
-
-        return response.choices[0].message.content
-
+        gpt4o_result = analyze_gpt4o(text, scene)
     except Exception as e:
-        return f"GPT-4o error: {e}"
+        gpt4o_result = f"GPT-4o error: {e}"
 
+    print("\nGPT-4o OUTPUT:\n")
+    print(gpt4o_result[:1500])
 
-# =========================================================
-# GEMINI 
-# =========================================================
+    gemini_result = ""
 
-def analyze_gemini_hidden(text, scene):
-    try:
-        prompt = f"{SCENES.get(scene,'')}\n{text[:8000]}"
-        gemini_model.generate_content(prompt)
-    except:
-        pass
+    # fallback only if needed
+    if "error" in gpt4o_result.lower():
+        log("Switching to Gemini Pro...")
+        try:
+            gemini_result = analyze_gemini(text, scene)
+        except Exception as e:
+            gemini_result = f"Gemini error: {e}"
+
+    final_output = f"""
+================ GPT-4o OUTPUT ================
+{gpt4o_result}
+
+================ GEMINI OUTPUT ================
+{gemini_result if gemini_result else "Not used / not required"}
+
+===============================================
+"""
+
+    return final_output
 
 
 # =========================================================
@@ -192,81 +238,79 @@ def analyze_gemini_hidden(text, scene):
 
 def save_to_supabase(text, analysis, scene):
     try:
-        supabase.table("documents").insert({
+        response = supabase.table("documents").insert({
             "type_name": "memory_pipeline",
             "content": text,
             "mini_analysis": analysis,
             "question_set": scene
         }).execute()
-    except:
-        pass
+
+        log("Supabase insert successful")
+        return response.data
+
+    except Exception as e:
+        log(f"Supabase error: {e}")
+        return None
 
 
 # =========================================================
-# MAIN PIPELINE 
+# MAIN PIPELINE
 # =========================================================
 
 def run(file_path, scene="scene_first"):
 
-    log_processing(file_path)
+    log(f"Processing: {file_path}")
 
     ext = file_path.split(".")[-1].lower()
 
-    if ext in ["mp3", "wav", "m4a"]:
-        text = transcribe_audio(file_path)
-
-    elif ext == "pdf":
-        text = process_pdf(file_path)
-
-    elif ext == "docx":
-        text = process_docx(file_path)
-
-    elif ext == "txt":
-        text = process_txt(file_path)
-
-    elif ext in ["jpg", "jpeg", "png"]:
-        text = process_image(file_path)
-
-    elif ext in ["mp4", "mov"]:
-        text = process_video(file_path)
-
-    else:
-        text = None
-
-    # ❌ NO TEXT PREVIEW PRINTED
-
-    if not text:
-        print("⚠️ No valid content extracted, skipping GPT-4o")
-        return
-
-    log_ai_start()
-    result = analyze_gpt4o(text, scene)
-    log_ai_output(result)
-
-    analyze_gemini_hidden(text, scene)
-
     try:
+        if ext in ["mp3", "wav", "m4a"]:
+            text = transcribe_audio(file_path)
+
+        elif ext == "pdf":
+            text = process_pdf(file_path)
+
+        elif ext == "docx":
+            text = process_docx(file_path)
+
+        elif ext == "txt":
+            text = process_txt(file_path)
+
+        elif ext in ["jpg", "jpeg", "png"]:
+            text = process_image(file_path)
+
+        elif ext in ["mp4", "mov"]:
+            text = process_video(file_path)
+
+        else:
+            raise ValueError("Unsupported file type")
+
+        if not text:
+            raise ValueError("No extracted text")
+
+        result = analyze(text, scene)
+
         vec = np.array([embed_model.encode(text)]).astype("float32")
         index.add(vec)
-    except:
-        pass
 
-    save_to_supabase(text, result, scene)
+        save_to_supabase(text, result, scene)
 
-    log_done(file_path)
+        log(f"DONE: {file_path}")
+
+    except Exception as e:
+        log(f"PIPELINE ERROR: {e}")
 
 
 # =========================================================
-# UPLOAD
+# COLAB RUNNER
 # =========================================================
+
+from google.colab import files
 
 print("\nUPLOAD FILES\n")
 uploaded = files.upload()
 
-print("\nSELECT SCENE\n")
-print("1 → Warm to Deep")
-print("2 → Scene First")
-print("3 → Relational Lens")
+print("\nSelect Scene:\n1 warm_to_deep\n2 scene_first\n3 relational_lens")
 
 choice = input("Enter choice: ")
 
@@ -278,7 +322,7 @@ scene_map = {
 
 ACTIVE_SCENE = scene_map.get(choice, "scene_first")
 
-print("\nSelected:", ACTIVE_SCENE)
+log(f"Selected: {ACTIVE_SCENE}")
 
 for f in uploaded.keys():
     run(f, ACTIVE_SCENE)
