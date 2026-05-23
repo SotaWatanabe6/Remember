@@ -1,97 +1,113 @@
 # =========================================================
-# ASSEMBLYAI + GPT-4o + SUPABASE + FAISS PIPELINE (CLEAN)
+# INSTALL
 # =========================================================
 
-import os
+!pip -q install assemblyai sentence-transformers faiss-cpu \
+pymupdf moviepy pytesseract pillow opencv-python supabase \
+openai python-docx textract google-generativeai
+
+!apt-get -qq install tesseract-ocr ffmpeg
+
+
+# =========================================================
+# IMPORTS
+# =========================================================
+
 import fitz
 import faiss
 import numpy as np
 import assemblyai as aai
 import pytesseract
 
-from dotenv import load_dotenv
 from PIL import Image
 from docx import Document
 from moviepy.editor import VideoFileClip
 from sentence_transformers import SentenceTransformer
 from supabase import create_client
+from google.colab import files
 from openai import OpenAI
+import google.generativeai as genai
+
 
 # =========================================================
-# LOAD ENV VARIABLES (NO HARDCODED KEYS)
+# CONFIG
 # =========================================================
 
-load_dotenv()
+SUPABASE_URL = "https://tbpdhybqbjucoxdizlgw.supabase.co"
+SUPABASE_KEY = "YOUR_SUPABASE_KEY"
+ASSEMBLYAI_API_KEY = "YOUR_ASSEMBLYAI_KEY"
+OPENAI_API_KEY = "YOUR_OPENAI_KEY"
+GEMINI_API_KEY = "YOUR_GEMINI_KEY"
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-ASSEMBLYAI_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # =========================================================
-# INIT SERVICES
+# INIT
 # =========================================================
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 aai.settings.api_key = ASSEMBLYAI_API_KEY
-
 client = OpenAI(api_key=OPENAI_API_KEY)
+
+genai.configure(api_key=GEMINI_API_KEY)
+gemini_model = genai.GenerativeModel("gemini-1.5-flash")
 
 embed_model = SentenceTransformer("all-MiniLM-L6-v2")
 index = faiss.IndexFlatL2(384)
+
 
 # =========================================================
 # SCENES
 # =========================================================
 
 SCENES = {
-    "warm_to_deep": "FIRST MEMORY... emotional depth analysis",
-    "scene_first": "ORDINARY DAY... narrative reconstruction",
-    "relational_lens": "RELATIONSHIPS... emotional mapping"
+    "warm_to_deep": "FIRST MEMORY emotional depth analysis",
+    "scene_first": "ORDINARY DAY narrative reconstruction",
+    "relational_lens": "RELATIONSHIPS emotional mapping"
 }
 
+
 # =========================================================
-# LOGS
+# LOGS (ONLY GPT OUTPUT)
 # =========================================================
 
 def log_processing(f):
     print(f"\nProcessing: {f}\n")
 
-def log_preview(t):
-    print("\nTEXT PREVIEW:\n", t[:500], "\n")
-
 def log_ai_start():
     print("\nRunning GPT-4o analysis...\n")
 
 def log_ai_output(x):
-    print("\nAI OUTPUT:\n", str(x)[:1000], "\n")
-
-def log_error(e):
-    print("❌ Error:", e)
+    print("\nGPT-4o OUTPUT:\n", str(x)[:1200], "\n")
 
 def log_done(f):
-    print(f"\n✅ DONE: {f}\n")
+    print(f"\nDONE: {f}\n")
+
 
 # =========================================================
-# ASSEMBLYAI TRANSCRIPTION
+# TRANSCRIPTION (FIXED)
 # =========================================================
 
 def transcribe_audio(path):
 
-    config = aai.TranscriptionConfig(
-        speech_models=["universal-3-pro"],
-        punctuate=True,
-        format_text=True
-    )
+    aai.settings.api_key = ASSEMBLYAI_API_KEY
 
-    transcriber = aai.Transcriber(config=config)
+    transcriber = aai.Transcriber()
 
     try:
-        result = transcriber.transcribe(path)
-        return result.text
-    except Exception as e:
-        return f"AssemblyAI error: {e}"
+        config = aai.TranscriptionConfig(
+            speech_models=["universal-3-pro"],
+            punctuate=True,
+            format_text=True
+        )
+
+        result = transcriber.transcribe(path, config=config)
+
+        return result.text if result.text else None
+
+    except Exception:
+        return None
+
 
 # =========================================================
 # FILE PROCESSORS
@@ -106,8 +122,7 @@ def process_docx(path):
     return "\n".join(p.text for p in doc.paragraphs)
 
 def process_txt(path):
-    with open(path, encoding="utf-8") as f:
-        return f.read()
+    return open(path, encoding="utf-8").read()
 
 def process_image(path):
     return pytesseract.image_to_string(Image.open(path))
@@ -115,28 +130,30 @@ def process_image(path):
 def process_video(path):
     temp_audio = "temp.wav"
     clip = VideoFileClip(path)
+
+    if clip.audio is None:
+        return None
+
     clip.audio.write_audiofile(temp_audio)
     return transcribe_audio(temp_audio)
 
+
 # =========================================================
-# GPT-4o ANALYSIS
+# GPT-4o ANALYSIS 
 # =========================================================
 
-def analyze(text, scene):
+def analyze_gpt4o(text, scene):
 
     prompt = f"""
-You are an emotional memory intelligence AI.
-
 Scene:
-{SCENES.get(scene, "")}
+{SCENES.get(scene,"")}
 
 Analyze:
 - emotions
 - relationships
 - personality
-- hidden meaning
 - narrative structure
-- memory significance
+- meaning
 
 CONTENT:
 {text[:8000]}
@@ -146,7 +163,7 @@ CONTENT:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You extract deep emotional meaning."},
+                {"role": "system", "content": "You are a deep emotional memory system."},
                 {"role": "user", "content": prompt}
             ]
         )
@@ -154,27 +171,39 @@ CONTENT:
         return response.choices[0].message.content
 
     except Exception as e:
-        return f"OpenAI error: {e}"
+        return f"GPT-4o error: {e}"
+
+
+# =========================================================
+# GEMINI 
+# =========================================================
+
+def analyze_gemini_hidden(text, scene):
+    try:
+        prompt = f"{SCENES.get(scene,'')}\n{text[:8000]}"
+        gemini_model.generate_content(prompt)
+    except:
+        pass
+
 
 # =========================================================
 # SUPABASE SAVE
 # =========================================================
 
 def save_to_supabase(text, analysis, scene):
-
     try:
         supabase.table("documents").insert({
-            "type_name": "assemblyai_pipeline",
+            "type_name": "memory_pipeline",
             "content": text,
             "mini_analysis": analysis,
             "question_set": scene
         }).execute()
+    except:
+        pass
 
-    except Exception as e:
-        log_error(e)
 
 # =========================================================
-# MAIN PIPELINE
+# MAIN PIPELINE 
 # =========================================================
 
 def run(file_path, scene="scene_first"):
@@ -202,20 +231,54 @@ def run(file_path, scene="scene_first"):
         text = process_video(file_path)
 
     else:
-        text = "unsupported file type"
+        text = None
 
-    log_preview(text)
+    # ❌ NO TEXT PREVIEW PRINTED
+
+    if not text:
+        print("⚠️ No valid content extracted, skipping GPT-4o")
+        return
 
     log_ai_start()
-    result = analyze(text, scene)
+    result = analyze_gpt4o(text, scene)
     log_ai_output(result)
+
+    analyze_gemini_hidden(text, scene)
 
     try:
         vec = np.array([embed_model.encode(text)]).astype("float32")
         index.add(vec)
-    except Exception as e:
-        log_error(e)
+    except:
+        pass
 
     save_to_supabase(text, result, scene)
 
     log_done(file_path)
+
+
+# =========================================================
+# UPLOAD
+# =========================================================
+
+print("\nUPLOAD FILES\n")
+uploaded = files.upload()
+
+print("\nSELECT SCENE\n")
+print("1 → Warm to Deep")
+print("2 → Scene First")
+print("3 → Relational Lens")
+
+choice = input("Enter choice: ")
+
+scene_map = {
+    "1": "warm_to_deep",
+    "2": "scene_first",
+    "3": "relational_lens"
+}
+
+ACTIVE_SCENE = scene_map.get(choice, "scene_first")
+
+print("\nSelected:", ACTIVE_SCENE)
+
+for f in uploaded.keys():
+    run(f, ACTIVE_SCENE)
