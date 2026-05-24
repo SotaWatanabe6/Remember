@@ -12,7 +12,6 @@ router.post('/', authMiddleware, async (req, res) => {
     if (!subject_name) {
       return res.status(400).json({ error: 'subject_name is required' })
     }
-
     const { data, error } = await supabase
       .from('memorials')
       .insert({
@@ -25,7 +24,6 @@ router.post('/', authMiddleware, async (req, res) => {
       })
       .select()
       .single()
-
     if (error) return res.status(400).json({ error: error.message })
     res.status(201).json({ memorial: data })
   } catch (err) {
@@ -41,7 +39,6 @@ router.get('/', authMiddleware, async (req, res) => {
       .select('*')
       .eq('user_id', req.user.sub)
       .order('created_at', { ascending: false })
-
     if (error) return res.status(400).json({ error: error.message })
     res.json({ memorials: data })
   } catch (err) {
@@ -58,7 +55,6 @@ router.get('/:id', authMiddleware, async (req, res) => {
       .eq('id', req.params.id)
       .eq('user_id', req.user.sub)
       .single()
-
     if (error) return res.status(404).json({ error: 'Memorial not found' })
     res.json({ memorial: data })
   } catch (err) {
@@ -69,26 +65,21 @@ router.get('/:id', authMiddleware, async (req, res) => {
 // POST /memorials/:id/invite-link — generate invite link
 router.post('/:id/invite-link', authMiddleware, async (req, res) => {
   try {
-    // verify organizer owns this memorial
     const { data: memorial, error: memError } = await supabase
       .from('memorials')
       .select('id')
       .eq('id', req.params.id)
       .eq('user_id', req.user.sub)
       .single()
-
     if (memError || !memorial) {
       return res.status(403).json({ error: 'Not authorized' })
     }
-
-    // check if active invite link already exists
     const { data: existing } = await supabase
       .from('invite_links')
       .select('*')
       .eq('memorial_id', req.params.id)
       .eq('is_active', true)
       .single()
-
     if (existing) {
       return res.json({
         invite_link: {
@@ -97,11 +88,8 @@ router.post('/:id/invite-link', authMiddleware, async (req, res) => {
         }
       })
     }
-
-    // generate new token
     const token = crypto.randomBytes(8).toString('hex')
     const { expires_at, max_uses } = req.body
-
     const { data, error } = await supabase
       .from('invite_links')
       .insert({
@@ -115,9 +103,7 @@ router.post('/:id/invite-link', authMiddleware, async (req, res) => {
       })
       .select()
       .single()
-
     if (error) return res.status(400).json({ error: error.message })
-
     res.status(201).json({
       invite_link: {
         ...data,
@@ -133,14 +119,12 @@ router.post('/:id/invite-link', authMiddleware, async (req, res) => {
 router.patch('/:id/invite-link', authMiddleware, async (req, res) => {
   try {
     const { is_active } = req.body
-
     const { data, error } = await supabase
       .from('invite_links')
       .update({ is_active })
       .eq('memorial_id', req.params.id)
       .select()
       .single()
-
     if (error) return res.status(400).json({ error: error.message })
     res.json({ invite_link: data })
   } catch (err) {
@@ -156,9 +140,62 @@ router.get('/:id/contributors', authMiddleware, async (req, res) => {
       .select('id, name, relationship_type, status, submitted_at, created_at')
       .eq('memorial_id', req.params.id)
       .order('created_at', { ascending: false })
-
     if (error) return res.status(400).json({ error: error.message })
     res.json({ contributors: data })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// GET /memorials/:id/output — return full four-tab output
+router.get('/:id/output', authMiddleware, async (req, res) => {
+  try {
+    const { data: output, error } = await supabase
+      .from('ai_outputs')
+      .select('*')
+      .eq('memorial_id', req.params.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+    if (error || !output) {
+      return res.status(404).json({ error: 'Output not found. Generation may not be complete yet.' })
+    }
+    res.json(output.output_json)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// POST /memorials/:id/share — generate viewer share token
+router.post('/:id/share', authMiddleware, async (req, res) => {
+  try {
+    const { data: memorial, error: memError } = await supabase
+      .from('memorials')
+      .select('id')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.sub)
+      .single()
+    if (memError || !memorial) {
+      return res.status(403).json({ error: 'Not authorized' })
+    }
+    const token = crypto.randomBytes(12).toString('hex')
+    const { data, error } = await supabase
+      .from('invite_links')
+      .insert({
+        memorial_id: req.params.id,
+        token,
+        created_by: req.user.sub,
+        is_active: true,
+      })
+      .select()
+      .single()
+    if (error) return res.status(400).json({ error: error.message })
+    res.status(201).json({
+      share_link: {
+        token: data.token,
+        url: `${process.env.FRONTEND_URL}/share/${data.token}`
+      }
+    })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
