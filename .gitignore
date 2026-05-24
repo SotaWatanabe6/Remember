@@ -1,3 +1,12 @@
+<<<<<<< HEAD
+.env
+__pycache__/
+.ipynb_checkpoints/
+*.wav
+*.mp3
+*.mp4
+temp.wav
+=======
 # =====================
 # ENV FILES
 # =====================
@@ -83,3 +92,4 @@ Thumbs.db
 # =====================
 coverage/
 *.lcov
+>>>>>>> e1775685af0ef3e72c137a16a0afd65ca569e20e

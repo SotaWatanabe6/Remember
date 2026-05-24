@@ -10,7 +10,7 @@ export default function MemorialCreateHeader() {
         Remember
       </Link>
       <Link
-        href="/signup"
+        href="/dashboard"
         className="flex items-center gap-2 text-base font-medium leading-6 text-slate-700 transition hover:text-neutral-950 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-400"
       >
         <span aria-hidden="true">←</span>
