@@ -1,6 +1,6 @@
 export default function Header3() {
   return (
-    <header className="flex justify-between items-center max-w-[1340px]">
+    <header className="flex justify-between items-center  w-full max-w-[1340px] mx-auto">
       <div className="logo">
         <p className="text-[24px] text-(--text-color-1) font-normal">
           Remember

@@ -23,6 +23,35 @@ const readStoredMemorial = () => {
   }
 };
 
+const normalizeMemorial = (memorial) => {
+  if (!memorial) {
+    return null;
+  }
+
+  const subjectName = memorial.subject_name || memorial.deceased_name || "";
+  const dateOfBirth = memorial.date_of_birth || memorial.birth_date || null;
+  const dateOfPassing = memorial.date_of_passing || memorial.death_date || null;
+  const description =
+    memorial.description ||
+    memorial.short_description ||
+    memorial.brief_biography ||
+    "";
+
+  return {
+    ...memorial,
+    subject_name: subjectName,
+    deceased_name: memorial.deceased_name || subjectName,
+    date_of_birth: dateOfBirth,
+    date_of_passing: dateOfPassing,
+    birth_date: memorial.birth_date || dateOfBirth,
+    death_date: memorial.death_date || dateOfPassing,
+    description,
+    short_description: memorial.short_description || description,
+    cover_photo_url: memorial.cover_photo_url || memorial.profile_photo_url || null,
+    profile_photo_url: memorial.profile_photo_url || memorial.cover_photo_url || null,
+  };
+};
+
 export async function createMemorial(memorialInput) {
   // TODO: Replace this local mock with POST /memorials or a Supabase insert when the backend is ready.
   await waitForMockRequest();
@@ -30,35 +59,67 @@ export async function createMemorial(memorialInput) {
   const currentUser = await getCurrentUser();
   const now = new Date().toISOString();
   const id = `mock-memorial-${Date.now()}`;
+  const subjectName =
+    memorialInput.subject_name || memorialInput.deceased_name || "";
+  const dateOfBirth =
+    memorialInput.date_of_birth || memorialInput.birth_date || null;
+  const dateOfPassing =
+    memorialInput.date_of_passing || memorialInput.death_date || null;
+  const description =
+    memorialInput.description ||
+    memorialInput.short_description ||
+    memorialInput.brief_biography ||
+    "";
+  const coverPhotoUrl =
+    memorialInput.cover_photo_url || memorialInput.profile_photo_url || null;
 
-  const memorial = {
+  const memorial = normalizeMemorial({
     id,
     organizer_id: currentUser?.id ?? "mock-organizer-1",
-    deceased_name: memorialInput.deceased_name,
+    subject_name: subjectName,
+    deceased_name: subjectName,
     email_address: memorialInput.email_address || "",
     relationship_to_organizer: memorialInput.relationship_to_organizer || null,
     year_of_birth: memorialInput.year_of_birth || "",
     year_of_passing: memorialInput.year_of_passing || "",
     family_names: memorialInput.family_names || "",
-    brief_biography: memorialInput.brief_biography || "",
-    birth_date: memorialInput.birth_date || null,
-    death_date: memorialInput.death_date || null,
-    short_description: memorialInput.short_description || "",
-    profile_photo_url: memorialInput.profile_photo_url || null,
+    brief_biography: description,
+    birth_date: dateOfBirth,
+    death_date: dateOfPassing,
+    date_of_birth: dateOfBirth,
+    date_of_passing: dateOfPassing,
+    description,
+    short_description: description,
+    cover_photo_url: coverPhotoUrl,
+    profile_photo_url: coverPhotoUrl,
     privacy: memorialInput.privacy || "private",
-    status: "draft",
+    status: memorialInput.status || "draft",
     invite_link: `https://remember.local/invite/${id}`,
     created_at: now,
     updated_at: now,
-  };
+  });
 
   localStorage.setItem(MOCK_MEMORIALS_STORAGE_KEY, JSON.stringify(memorial));
   return memorial;
 }
 
+export async function getMemorials() {
+  await waitForMockRequest();
+  const storedMemorial = readStoredMemorial();
+  return [storedMemorial, ...mockMemorials]
+    .filter(Boolean)
+    .map(normalizeMemorial);
+}
+
+export async function getMemorial(id) {
+  await waitForMockRequest();
+  const memorials = await getMemorials();
+  return memorials.find((memorial) => memorial.id === id) ?? null;
+}
+
 export function getCurrentMemorial() {
   // TODO: Replace this local lookup with a memorial query scoped to the signed-in organizer.
-  return readStoredMemorial() ?? mockMemorials[0] ?? null;
+  return normalizeMemorial(readStoredMemorial() ?? mockMemorials[0] ?? null);
 }
 
 export function clearCurrentMemorial() {

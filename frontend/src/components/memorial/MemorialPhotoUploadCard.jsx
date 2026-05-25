@@ -1,6 +1,10 @@
 import Image from "next/image";
 
-export default function MemorialPhotoUploadCard({ previewUrl, onPhotoChange }) {
+export default function MemorialPhotoUploadCard({
+  previewUrl,
+  fileName,
+  onPhotoChange,
+}) {
   return (
     <div className="w-full">
       <label className="group flex min-h-[343px] w-full cursor-pointer flex-col items-center justify-center gap-[15px] rounded-[20px] border border-dashed border-black/70 bg-white px-8 py-16 text-center transition hover:border-black focus-within:outline focus-within:outline-2 focus-within:outline-offset-4 focus-within:outline-slate-400">
@@ -33,13 +37,16 @@ export default function MemorialPhotoUploadCard({ previewUrl, onPhotoChange }) {
             </svg>
           )}
         </span>
+        <span className="text-xl font-medium leading-none text-neutral-950">
+          Upload cover photo
+        </span>
         <span className="text-[18px] leading-none text-slate-600 sm:text-[20px]">
           Click to upload or drag and drop
         </span>
         <input type="file" accept="image/*" onChange={onPhotoChange} className="sr-only" />
       </label>
-      {previewUrl ? (
-        <p className="text-sm leading-5 text-slate-500">This preview stays on this device for now.</p>
+      {fileName ? (
+        <p className="text-sm leading-5 text-slate-500">{fileName}</p>
       ) : null}
     </div>
   );

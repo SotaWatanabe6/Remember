@@ -1,216 +1,254 @@
 "use client";
 
-import Image from "next/image";
-import { ArrowLeft, Sparkles, Play } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
+import Header2 from "@/components/ui-components/navs/header2";
+import DashboardButton from "@/components/ui-components/buttons/dashboard-button";
+import DashboardTab from "../_components/dashboard-tab";
+import { getMemorial } from "@/services/memorialService.js";
 
+const tabs = ["Archive", "Contributions", "Outputs"];
+
+const tabItems = {
+  Archive: [
+    {
+      id: "archive-1",
+      title: "Family picnic",
+      meta: "Photo collection",
+      accent: "bg-[#D9D9D9]",
+    },
+    {
+      id: "archive-2",
+      title: "Birthday voice note",
+      meta: "Audio recording",
+      accent: "bg-[#D3D6DB]",
+    },
+    {
+      id: "archive-3",
+      title: "Wedding album",
+      meta: "Photo archive",
+      accent: "bg-[#E1E4E8]",
+    },
+  ],
+  Contributions: [
+    {
+      id: "contribution-1",
+      title: "Jane's memories",
+      meta: "Questionnaire response",
+      accent: "bg-[#D9D9D9]",
+    },
+    {
+      id: "contribution-2",
+      title: "Family voicemail",
+      meta: "Voice upload",
+      accent: "bg-[#D3D6DB]",
+    },
+    {
+      id: "contribution-3",
+      title: "Summer photos",
+      meta: "Image contribution",
+      accent: "bg-[#E1E4E8]",
+    },
+  ],
+  Outputs: [
+    {
+      id: "output-1",
+      title: "Story sequence",
+      meta: "AI-generated output",
+      accent: "bg-[#D9D9D9]",
+    },
+    {
+      id: "output-2",
+      title: "Constellation themes",
+      meta: "AI-generated output",
+      accent: "bg-[#D3D6DB]",
+    },
+    {
+      id: "output-3",
+      title: "Voices page",
+      meta: "AI-generated output",
+      accent: "bg-[#E1E4E8]",
+    },
+  ],
+};
+
+function SparkleIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="size-[44px] text-[#0A0A0A]"
+      fill="currentColor"
+    >
+      <path d="M12 1.5c.4 4.9 1.2 7.5 2.7 9.1 1.6 1.5 4.2 2.3 9.1 2.7-4.9.4-7.5 1.2-9.1 2.7-1.5 1.6-2.3 4.2-2.7 9.1-.4-4.9-1.2-7.5-2.7-9.1C7.7 13.5 5.1 12.7.2 12.3c4.9-.4 7.5-1.2 9.1-2.7C10.8 8 11.6 5.4 12 1.5Z" />
+      <path d="M20.2 2.5c.2 1.7.5 2.7 1.1 3.3.6.5 1.6.9 3.3 1.1-1.7.2-2.7.5-3.3 1.1-.6.6-.9 1.6-1.1 3.3-.2-1.7-.5-2.7-1.1-3.3-.6-.6-1.6-.9-3.3-1.1 1.7-.2 2.7-.5 3.3-1.1.6-.6.9-1.6 1.1-3.3Z" />
+    </svg>
+  );
+}
+
+function MediaCard({ item }) {
+  return (
+    <article className="flex flex-col gap-4">
+      <div className={`h-[318px] w-full rounded-[2px] ${item.accent}`} />
+      <div className="flex flex-col gap-1">
+        <h2 className="text-h3 text-[#0A0A0A]">{item.title}</h2>
+        <p className="text-body-2 text-(--text-color-2)">{item.meta}</p>
+      </div>
+    </article>
+  );
+}
+
+function getYearFromDate(dateString) {
+  if (!dateString) return null;
+  return new Date(dateString).getFullYear();
+}
 
 export default function ManageMemorialPage() {
-  const [activeTab, setActiveTab] = useState("home");
-  return (
-    <main className="min-h-screen bg-[#f5f5f5] px-8 py-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-10">
-        <h1 className="text-xl font-medium">Remember</h1>
+  const params = useParams();
+  const memorialId = params?.id;
 
-        <button className="flex items-center gap-2 text-sm text-gray-600 hover:text-black">
-          <ArrowLeft size={16} />
-          Back
-        </button>
-      </div>
+  const [memorial, setMemorial] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState("Archive");
 
-      {/* Hero Section */}
-      <section className="flex justify-between gap-10 mb-14">
-        {/* Left */}
-        <div className="flex gap-10">
-          {/* Avatar */}
-          <div className="w-[170px] h-[170px] rounded-full bg-slate-600" />
+  useEffect(() => {
+    if (!memorialId) return;
 
-          {/* Info */}
-          <div className="pt-5">
-            <h2 className="text-4xl font-semibold mb-2">John Smith</h2>
+    let isCancelled = false;
 
-            <p className="text-gray-500 mb-4">1983 - 2026</p>
+    const loadMemorial = async () => {
+      try {
+        const data = await getMemorial(memorialId);
+        if (!isCancelled) {
+          setMemorial(data);
+          setError("");
+        }
+      } catch (err) {
+        if (!isCancelled) {
+          setError(err.message || "Failed to load memorial");
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
 
-            <p className="max-w-md text-gray-600 leading-relaxed mb-5">
-              This paragraph can be an example of explaining who John is.
-              It&apos;s intended to be a part of John&apos;s profile.
-            </p>
+    loadMemorial();
 
-            <div className="inline-flex items-center rounded-lg bg-gray-200 px-6 py-2 text-sm">
-              Status tag
-            </div>
+    return () => {
+      isCancelled = true;
+    };
+  }, [memorialId]);
+
+  if (isLoading) {
+    return (
+      <>
+        <Header2 backHref="/dashboard" />
+        <main className="mx-auto flex w-full max-w-[1340px] flex-col pb-16 pt-[88px] sm:pb-24 sm:pt-[96px]">
+          <div className="text-center">Loading memorial...</div>
+        </main>
+      </>
+    );
+  }
+
+  if (error || !memorial) {
+    return (
+      <>
+        <Header2 backHref="/dashboard" />
+        <main className="mx-auto flex w-full max-w-[1340px] flex-col pb-16 pt-[88px] sm:pb-24 sm:pt-[96px]">
+          <div className="text-center text-red-600">
+            {error || "Memorial not found"}
           </div>
-        </div>
+        </main>
+      </>
+    );
+  }
 
-        {/* Right Buttons */}
-        <div className="flex flex-col gap-4 pt-4">
-          <button className="rounded-full bg-black text-white px-8 py-4 font-medium hover:opacity-90">
-            View page
-          </button>
+  const activeItems = tabItems[activeTab];
+  const birthYear = getYearFromDate(memorial.date_of_birth);
+  const passingYear = getYearFromDate(memorial.date_of_passing);
+  const dateRange =
+    birthYear || passingYear
+      ? `${birthYear ?? "Unknown"} - ${passingYear ?? "Unknown"}`
+      : "";
 
-          <button className="rounded-full bg-black text-white px-8 py-4 font-medium hover:opacity-90">
-            Share
-          </button>
+  return (
+    <>
+      <Header2 backHref="/dashboard" />
 
-          <button className="rounded-full bg-black text-white px-8 py-4 font-medium hover:opacity-90">
-            Settings
-          </button>
-        </div>
-      </section>
+      <main className="mx-auto flex w-full max-w-[1340px] flex-col pb-16 pt-[88px] sm:pb-24 sm:pt-[96px]">
+        <section className="grid grid-cols-1 gap-10 xl:grid-cols-[420px_1fr_240px] xl:items-center">
+          <div className="flex justify-center xl:justify-start">
+            {memorial.cover_photo_url ? (
+              <img
+                src={memorial.cover_photo_url}
+                alt={memorial.subject_name}
+                className="size-[330px] rounded-full object-cover"
+              />
+            ) : (
+              <div className="size-[330px] rounded-full bg-[#4F627D]" />
+            )}
+          </div>
 
-      {/* Tabs */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
-        <button
-          style={{ cursor: "pointer" }}
-          className={`border-b-2 pb-2 font-semibold ${activeTab === "home" ? "border-black" : "border-gray-400 text-gray-700"}`}
-          onClick={() => setActiveTab("home")}
-        >
-          Archive
-        </button>
+          <div className="max-w-[470px]">
+            <h1 className="text-h1 text-[#0A0A0A]">{memorial.subject_name}</h1>
+            {dateRange && (
+              <p className="mt-3 text-h3 text-(--text-color-2)">{dateRange}</p>
+            )}
+            {memorial.description && (
+              <p className="mt-5 text-body-1 text-(--text-color-2)">
+                {memorial.description}
+              </p>
+            )}
+          </div>
 
-        <button
-          style={{ cursor: "pointer" }}        
-          className={`border-b-2 pb-2 font-semibold ${activeTab === "contributions" ? "border-black" : "border-gray-400 text-gray-700"}`}
-          onClick={() => setActiveTab("contributions")}
-        >
-          Contributions
-        </button>
+          <div className="flex flex-col items-center gap-6 xl:items-end">
+            <DashboardButton text="View page" />
+            <DashboardButton text="Share" />
+            <DashboardButton text="Settings" />
+          </div>
+        </section>
 
-        <button
-          style={{ cursor: "pointer" }}        
-          className={`border-b-2 pb-2 font-semibold ${activeTab === "outputs" ? "border-black" : "border-gray-400 text-gray-700"}`}
-          onClick={() => setActiveTab("outputs")}
-        >
-          Outputs
-        </button>
-      </div>
+        <section className="mt-[88px]" aria-label="Dashboard tabs">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-3 md:gap-6">
+            {tabs.map((tab) => (
+              <DashboardTab
+                key={tab}
+                text={tab}
+                isActive={activeTab === tab}
+                onClick={() => setActiveTab(tab)}
+              />
+            ))}
+          </div>
+        </section>
 
-      {/* Search + Actions */}
-      <div className="flex items-center gap-4 mb-8">
-        {/* Search */}
-        <div className="flex flex-1 items-center gap-3 rounded-xl border bg-white px-4 py-3">
-          <Sparkles size={18} />
-
-          <input
-            type="text"
-            placeholder="Show me happy memories"
-            className="w-full bg-transparent outline-none placeholder:text-gray-400"
-          />
-        </div>
-
-        <button 
-          style={{ cursor: "pointer" }}        
-          className="rounded-full bg-black px-10 py-4 text-white font-medium"
-        >
-          Filter
-        </button>
-
-        <button 
-          style={{ cursor: "pointer" }}        
-          className="rounded-full bg-black px-10 py-4 text-white font-medium"
-        >
-          Sort
-        </button>
-      </div>
-
-      {/* Cards */}
-      {activeTab === "home" && 
-        <section className="grid grid-cols-3 gap-4">
-          {/* Image Card */}
-          <div className="overflow-hidden rounded-xl border bg-white">
-            <Image
-              src="/images/image.png"
-              alt="Person"
-              width={500}
-              height={500}
-              className="h-[260px] w-full object-cover"
+        <section className="mt-[54px] flex flex-col gap-5 xl:flex-row xl:items-center">
+          <div className="flex items-center gap-6 xl:flex-1">
+            <SparkleIcon />
+            <input
+              type="text"
+              placeholder="Show me happy memories"
+              className="h-[67px] w-full rounded-[16px] border border-[#CAD5E2] bg-white px-6 text-body-1 text-[#0A0A0A] outline-none transition placeholder:text-[#0A0A0A80] focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
             />
           </div>
 
-          {/* Audio Card */}
-          <div className="flex flex-col items-center justify-center rounded-xl border bg-white p-10 text-center">
-            <h3 className="mb-6 text-xl font-medium">
-              AI or user title of input
-            </h3>
-
-            <div className="flex items-center gap-4">
-              <button className="flex h-12 w-12 items-center justify-center rounded-full bg-black text-white">
-                <Play size={18} fill="white" />
-              </button>
-
-              <div className="flex items-center gap-1">
-                {Array.from({ length: 18 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="w-1 rounded-full bg-black"
-                    style={{
-                      height: `${10 + (i % 5) * 6}px`,
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Text Card */}
-          <div className="flex flex-col items-center justify-center rounded-xl border bg-white p-10 text-center">
-            <h3 className="mb-2 text-xl font-medium">
-              AI or user title of input
-            </h3>
-
-            <p className="text-sm text-gray-500">
-              Submitted by Jane Smith
-            </p>
+          <div className="flex flex-col gap-4 sm:flex-row">
+            <DashboardButton text="Filter" />
+            <DashboardButton text="Sort" />
           </div>
         </section>
-      }
-      {activeTab === "outputs" && 
-        <section>
-          <section className="mt-6">
-            <div className="relative w-60">
-              <select className="w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 py-3 outline-none">
-                <option>Constellation</option>
-              </select>
-              <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2">
-                ▼
-              </span>
-            </div>
-          </section>
 
-          <section className="mt-6 rounded-xl border border-gray-300 bg-[#f3f4f6] p-6">
-            <div className="rounded-xl border border-gray-200 bg-[#d9d9d9] p-4">
-              <svg
-                viewBox="0 0 1000 420"
-                className="h-[360px] w-full rounded-lg"
-                preserveAspectRatio="none"
-              >
-                {/* Lines */}
-                <g stroke="#9ca3af" strokeWidth="3" strokeLinecap="round">
-                  <line x1="120" y1="140" x2="175" y2="270" />
-                  <line x1="180" y1="270" x2="310" y2="165" />
-                  <line x1="310" y1="165" x2="420" y2="300" />
-                  <line x1="310" y1="165" x2="520" y2="290" />
-                  <line x1="520" y1="290" x2="570" y2="130" />
-                  <line x1="570" y1="130" x2="760" y2="205" />
-                  <line x1="760" y1="205" x2="860" y2="295" />
-                </g>
-
-                {/* Nodes */}
-                <circle cx="120" cy="140" r="38" fill="#efefef" />
-                <circle cx="180" cy="270" r="48" fill="#efefef" />
-                <circle cx="310" cy="165" r="62" fill="#efefef" />
-                <circle cx="420" cy="300" r="56" fill="#efefef" />
-                <circle cx="570" cy="130" r="50" fill="#efefef" />
-                <circle cx="760" cy="205" r="78" fill="#efefef" />
-                <circle cx="860" cy="295" r="96" fill="#efefef" />
-              </svg>
-            </div>
-          </section>
-          
-        </section>      
-      }
-    </main>
+        <section
+          className="mt-[56px] grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
+          aria-label={`${activeTab} items`}
+        >
+          {activeItems.map((item) => (
+            <MediaCard key={item.id} item={item} />
+          ))}
+        </section>
+      </main>
+    </>
   );
-
 }

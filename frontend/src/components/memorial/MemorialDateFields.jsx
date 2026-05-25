@@ -1,11 +1,4 @@
-const currentYear = new Date().getFullYear();
-const earliestReasonableYear = 1850;
-const yearOptions = Array.from(
-  { length: currentYear - earliestReasonableYear + 1 },
-  (_, index) => String(currentYear - index),
-);
-
-function YearField({ id, label, error, ...selectProps }) {
+function DateField({ id, label, error, ...inputProps }) {
   const errorId = error ? `${id}-error` : undefined;
 
   return (
@@ -13,28 +6,16 @@ function YearField({ id, label, error, ...selectProps }) {
       <label htmlFor={id} className="text-xl font-medium leading-none text-neutral-950 sm:text-2xl">
         {label}
       </label>
-      <div className="relative">
-        <select
-          id={id}
-          aria-invalid={Boolean(error)}
-          aria-describedby={errorId}
-          className={`h-[63px] w-full appearance-none rounded-[13px] border bg-white px-5 pr-14 text-xl outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 ${
-            error ? "border-red-400" : "border-[#cad5e2]"
-          } ${selectProps.value ? "text-neutral-950" : "text-neutral-950/50"}`}
-          {...selectProps}
-        >
-          <option value="">Year</option>
-          {yearOptions.map((year) => (
-            <option key={year} value={year}>
-              {year}
-            </option>
-          ))}
-        </select>
-        <span
-          className="pointer-events-none absolute right-5 top-1/2 size-0 -translate-y-1/2 border-l-[10px] border-r-[10px] border-t-[17px] border-l-transparent border-r-transparent border-t-neutral-500"
-          aria-hidden="true"
-        />
-      </div>
+      <input
+        id={id}
+        type="date"
+        aria-invalid={Boolean(error)}
+        aria-describedby={errorId}
+        className={`h-[63px] w-full rounded-[13px] border bg-white px-5 text-xl outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 ${
+          error ? "border-red-400" : "border-[#cad5e2]"
+        } ${inputProps.value ? "text-neutral-950" : "text-neutral-950/50"}`}
+        {...inputProps}
+      />
       {error ? (
         <p id={errorId} className="text-sm leading-5 text-red-600">
           {error}
@@ -47,21 +28,21 @@ function YearField({ id, label, error, ...selectProps }) {
 export default function MemorialDateFields({ values, errors, onChange }) {
   return (
     <div className="grid w-full grid-cols-1 gap-5 sm:grid-cols-2">
-      <YearField
-        id="memorial-year-of-birth"
-        name="year_of_birth"
-        label="Year of Birth"
-        value={values.year_of_birth}
+      <DateField
+        id="memorial-date-of-birth"
+        name="date_of_birth"
+        label="Date of Birth"
+        value={values.date_of_birth}
         onChange={onChange}
-        error={errors.year_of_birth}
+        error={errors.date_of_birth}
       />
-      <YearField
-        id="memorial-year-of-passing"
-        name="year_of_passing"
-        label="Year of Passing"
-        value={values.year_of_passing}
+      <DateField
+        id="memorial-date-of-passing"
+        name="date_of_passing"
+        label="Date of Passing"
+        value={values.date_of_passing}
         onChange={onChange}
-        error={errors.year_of_passing}
+        error={errors.date_of_passing}
       />
     </div>
   );
