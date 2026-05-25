@@ -1,3 +1,21 @@
 node_modules
 .env
+__pycache__/
+.ipynb_checkpoints/
+*.wav
+*.mp3
+*.mp4
+temp.wav
+# =====================
+# ENV FILES
+# =====================
+.env
 .DS_Store
+Thumbs.db
+
+# =====================
+# TEST / COVERAGE
+# =====================
+coverage/
+*.lcov
+

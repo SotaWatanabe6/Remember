@@ -1,13 +1,30 @@
-export default function Header2() {
+"use client";
+
+import { useRouter } from "next/navigation";
+
+export default function Header2({ backHref }) {
+  const router = useRouter();
+
+  const handleBack = () => {
+    if (backHref) {
+      router.push(backHref);
+      return;
+    }
+
+    router.back();
+  };
+
   return (
-    <header className="flex justify-between items-center max-w-[1340px]">
+    <header className="mx-auto flex w-full max-w-[1340px] items-center justify-between">
       <div className="logo">
-        <p className="text-[24px] text-(--text-color-1) font-normal">
-          Remember
-        </p>
+        <p className="text-[24px] font-normal text-(--text-color-1)">Remember</p>
       </div>
       <div>
-        <button className="flex gap-2 text-[16px] leading-[24px] font-medium line">
+        <button
+          type="button"
+          onClick={handleBack}
+          className="flex items-center gap-2 text-[16px] font-medium leading-[24px] text-(--text-color-2) transition hover:text-[#0A0A0A] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-400"
+        >
           <span>
             <svg
               width="24"
