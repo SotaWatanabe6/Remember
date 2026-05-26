@@ -411,7 +411,17 @@ const mockVoiceAudioUrl = 'https://interactive-examples.mdn.mozilla.net/media/cc
  */
 export async function getMemorialOutput(memorialId) {
   await delay(MOCK_DELAY);
+  const memorial = mockMemorials.find((item) => item.id === memorialId) || mockMemorials[0];
+
   return {
+    memorial: {
+      id: memorial.id,
+      subject_name: memorial.deceased_name,
+      cover_photo_url: memorial.profile_photo_url,
+      date_of_birth: memorial.birth_date,
+      date_of_passing: memorial.death_date,
+      bio: memorial.brief_biography || memorial.short_description,
+    },
     story: [
       {
         order_index: 1,

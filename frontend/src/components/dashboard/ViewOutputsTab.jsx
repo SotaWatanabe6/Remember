@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getMemorialOutput } from "@/lib/api";
+import StorySlideshow from "@/components/output/StorySlideshow";
 import VoicesTab from "@/components/output/VoicesTab";
 import EmptyOutputPlaceholder from "./EmptyOutputPlaceholder.jsx";
 import OutputSubTabs from "./OutputSubTabs.jsx";
@@ -77,7 +78,9 @@ export default function ViewOutputsTab({ memorialId }) {
         aria-label={outputPanelLabels[activeOutputTab]}
         className="mt-[34px] rounded-[10px] border border-[#90a1b9] bg-[rgba(144,161,185,0.12)] p-6 sm:p-10"
       >
-        {activeOutputTab === "voices" ? (
+        {activeOutputTab === "story" ? (
+          <StorySlideshow output={output} story={output?.story} loading={loading} error={error} />
+        ) : activeOutputTab === "voices" ? (
           <VoicesTab output={output} voices={output?.voices} loading={loading} error={error} />
         ) : (
           <EmptyOutputPlaceholder activeOutputTab={activeOutputTab} />

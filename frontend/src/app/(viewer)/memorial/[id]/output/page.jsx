@@ -9,29 +9,34 @@ import { getMemorialOutput } from '@/lib/api';
 import StorySlideshow from '@/components/output/StorySlideshow';
 import VoicesTab from '@/components/output/VoicesTab';
 
-function MemorialHeader({ memorial, onShare }) {
+function MemorialHeader({ memorial, memorialId, onShare }) {
+  const subjectName = memorial?.subject_name || memorial?.deceased_name || 'Memorial';
+  const coverPhotoUrl = memorial?.cover_photo_url || memorial?.profile_photo_url;
+  const birthDate = memorial?.date_of_birth || memorial?.birth_date;
+  const passingDate = memorial?.date_of_passing || memorial?.death_date;
+  const bio = memorial?.bio || memorial?.brief_biography || memorial?.short_description;
+  const pageId = memorial?.id || memorialId;
+
   return (
     <div className="flex items-start gap-8">
       <div className="h-36 w-36 shrink-0 overflow-hidden rounded-full bg-[#4a5568]">
-        {memorial?.cover_photo_url ? (
-          <img src={memorial.cover_photo_url} alt={memorial.subject_name} className="h-full w-full object-cover" />
+        {coverPhotoUrl ? (
+          <img src={coverPhotoUrl} alt={subjectName} className="h-full w-full object-cover" />
         ) : (
           <div className="h-full w-full bg-[#4a5568]" />
         )}
       </div>
       <div className="flex-1 min-w-0 pt-2">
-        <h1 className="text-[32px] font-medium text-neutral-950 leading-tight">{memorial?.subject_name || 'John Smith'}</h1>
+        <h1 className="text-[32px] font-medium text-neutral-950 leading-tight">{subjectName}</h1>
         <p className="mt-1 text-sm text-slate-400">
-          {memorial?.date_of_birth && new Date(memorial.date_of_birth).getFullYear()}
-          {memorial?.date_of_birth && memorial?.date_of_passing && ' - '}
-          {memorial?.date_of_passing && new Date(memorial.date_of_passing).getFullYear()}
+          {birthDate && new Date(birthDate).getFullYear()}
+          {birthDate && passingDate && ' - '}
+          {passingDate && new Date(passingDate).getFullYear()}
         </p>
-        <p className="mt-2 text-sm text-slate-500 leading-relaxed max-w-md">
-          {memorial?.bio || "This paragraph can be an example of explaining who John is. It's intended to be a part of John's profile."}
-        </p>
+        {bio && <p className="mt-2 text-sm text-slate-500 leading-relaxed max-w-md">{bio}</p>}
       </div>
       <div className="flex shrink-0 flex-col gap-2 pt-2">
-        <Link href={`/memorial/${memorial?.id}/output`} className="rounded-full bg-neutral-950 px-6 py-2.5 text-sm font-semibold text-white text-center hover:opacity-80 transition-opacity">View page</Link>
+        <Link href={`/memorial/${pageId}/output`} className="rounded-full bg-neutral-950 px-6 py-2.5 text-sm font-semibold text-white text-center hover:opacity-80 transition-opacity">View page</Link>
         <button onClick={onShare} className="rounded-full bg-neutral-950 px-6 py-2.5 text-sm font-semibold text-white hover:opacity-80 transition-opacity">Share</button>
         <button className="rounded-full bg-neutral-950 px-6 py-2.5 text-sm font-semibold text-white hover:opacity-80 transition-opacity">Settings</button>
       </div>
@@ -240,15 +245,6 @@ export default function MemorialOutputPage() {
   const [outputError, setOutputError] = useState(null);
   const [showShare, setShowShare] = useState(false);
 
-  const memorial = {
-    id,
-    subject_name: 'John Smith',
-    cover_photo_url: null,
-    date_of_birth: '1943-03-15',
-    date_of_passing: '2024-01-10',
-    bio: "This paragraph can be an example of explaining who John is. It's intended to be a part of John's profile.",
-  };
-
   useEffect(() => {
     async function load() {
       try {
@@ -274,7 +270,7 @@ export default function MemorialOutputPage() {
             Back
           </Link>
         </nav>
-        <MemorialHeader memorial={memorial} onShare={() => setShowShare(true)} />
+        <MemorialHeader memorial={output?.memorial} memorialId={id} onShare={() => setShowShare(true)} />
         <TabBar active={activeTab} onChange={setActiveTab} />
         <div>
           {loading ? (
