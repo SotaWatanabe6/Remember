@@ -234,9 +234,12 @@ export async function getResponses(token, contributorInput) {
 
 /**
  * POST /contribute/:token/photos
- * Uploads photos. Saves to localStorage so review page can read real uploads.
- * CHANGED: now persists to localStorage instead of returning one-off fake data.
- * TODO: Replace with real fetch() + FormData on Day 9.
+ * TODO Day 9: Ashwini needs to build this endpoint first.
+ * Request: multipart/form-data
+ *   - contributor_token: string
+ *   - files[]: image files
+ * Expected response:
+ *   { uploaded: number, files: [{ id, storage_path, file_name }] }
  */
 export async function uploadPhotos(token, files) {
   await delay(MOCK_DELAY * 2);
@@ -267,10 +270,13 @@ export async function uploadPhotos(token, files) {
 
 /**
  * POST /contribute/:token/voice
- * Uploads voice recording. Saves to localStorage so review page can read real uploads.
- * CHANGED: now persists to localStorage instead of returning one-off fake data.
- * contributor_title is required — throws if missing.
- * TODO: Replace with real fetch() + FormData on Day 9.
+ * TODO Day 9: Ashwini needs to build this endpoint first.
+ * Request: multipart/form-data
+ *   - contributor_token: string
+ *   - file: audio file
+ *   - contributor_title: string (required)
+ * Expected response:
+ *   { recording: { id, contributor_title, storage_path } }
  */
 export async function uploadVoice(token, file, contributorTitle) {
   await delay(MOCK_DELAY * 2);
@@ -579,17 +585,26 @@ export async function getMemorialOutput(memorialId) {
   };
 }
 
+
 /**
  * GET /share/:shareToken
- * Viewer-only access — same four-tab output, no organizer controls.
- * Returns identical shape to getMemorialOutput().
- * TODO: Replace with real fetch() on Day 9.
+ * TODO Day 9: Ashwini needs to build share.js endpoint first.
+ * Expected response: same shape as GET /memorials/:id/output
+ *   plus { memorial: { subject_name, cover_photo_url, date_of_birth, date_of_passing } }
  */
 export async function getShareToken(shareToken) {
   await delay(MOCK_DELAY);
-  if (shareToken === "invalid")
-    throw new Error("This share link is invalid or has expired");
-  return getMemorialOutput("mock-memorial-id");
+  if (shareToken === 'invalid') throw new Error('This share link is invalid or has expired');
+  const output = await getMemorialOutput('mock-memorial-id');
+  return {
+    memorial: {
+      subject_name: 'John Smith',
+      cover_photo_url: null,
+      date_of_birth: '1943-03-15',
+      date_of_passing: '2024-01-10',
+    },
+    ...output,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -680,10 +695,10 @@ const readStoredValue = (key, fallbackValue) => {
   try {
     return JSON.parse(storedValue);
   } catch {
-    window.localStorage.removeItem(getResponsesStorageKey(token));
-    return {};
+    window.localStorage.removeItem(key); 
+    return fallbackValue;
   }
-}
+};
 
 const writeStoredValue = (key, value) => {
   if (!isBrowser()) return;
