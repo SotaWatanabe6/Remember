@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { getShareToken } from '@/lib/api';
 import StorySlideshow from '@/components/output/StorySlideshow';
+import VoicesTab from '@/components/output/VoicesTab';
 
 // ─── Tab bar (same as output page) ────────
 
@@ -35,14 +36,6 @@ function ConstellationTab() {
   return (
     <div className="flex flex-col items-center justify-center py-24">
       <p className="text-slate-400 text-sm">Constellation tab — built by Mendrika</p>
-    </div>
-  );
-}
-
-function VoicesTab() {
-  return (
-    <div className="flex flex-col items-center justify-center py-24">
-      <p className="text-slate-400 text-sm">Voices tab — built by Sungjun</p>
     </div>
   );
 }
@@ -332,7 +325,7 @@ export default function SharePage() {
           ) : (
             <>
               {activeTab === 'Constellation' && <ConstellationTab data={output?.constellation} />}
-              {activeTab === 'Voices' && <VoicesTab data={output?.voices} />}
+              {activeTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} />}
               {activeTab === 'All Photos' && <AllPhotosTab albums={output?.photos} />}
             </>
           )}

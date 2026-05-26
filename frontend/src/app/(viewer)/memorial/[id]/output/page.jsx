@@ -7,6 +7,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getMemorialOutput } from '@/lib/api';
 import StorySlideshow from '@/components/output/StorySlideshow';
+import VoicesTab from '@/components/output/VoicesTab';
 
 function MemorialHeader({ memorial, onShare }) {
   return (
@@ -181,7 +182,7 @@ function OutputsTab({ output, error }) {
     <div className="flex flex-col divide-y divide-neutral-100 pt-4">
       <CollapsibleSection title="Story" defaultOpen={true}><StorySlideshow output={output} story={output?.story} error={error} /></CollapsibleSection>
       <CollapsibleSection title="Constellation"><div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6 aspect-video flex items-center justify-center"><p className="text-sm text-slate-400">Constellation — built by Mendrika</p></div></CollapsibleSection>
-      <CollapsibleSection title="Voices"><div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6"><p className="text-sm text-slate-400">Voices — built by Sungjun</p></div></CollapsibleSection>
+      <CollapsibleSection title="Voices"><VoicesTab output={output} voices={output?.voices} error={error} /></CollapsibleSection>
       <CollapsibleSection title="All Photos" defaultOpen={true}><AllPhotosSection albums={output?.photos} /></CollapsibleSection>
     </div>
   );

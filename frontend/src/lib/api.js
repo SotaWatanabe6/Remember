@@ -401,6 +401,8 @@ const mockStoryPhotoUrls = {
   everydayJoy: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1800&q=80',
 };
 
+const mockVoiceAudioUrl = 'https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3';
+
 /**
  * GET /memorials/:id/output
  * Returns complete four-tab JSON for the memorial output page.
@@ -488,8 +490,15 @@ export async function getMemorialOutput(memorialId) {
         key_quote: 'I just called to say I love you all. Merry Christmas.',
         ai_category: 'Everyday Love',
         ai_tags: ['holiday', 'love', 'family'],
+        contributor_name: 'Sarah',
+        relationship_type: 'family',
         transcript_text: "Hey it's dad, just calling to say Merry Christmas. Hope you're all having a good one. I just called to say I love you all. Merry Christmas. See you for dinner.",
-        audio_url: null,
+        transcript_segments: [
+          { start: 0, end: 12, text: "Hey it's dad, just calling to say Merry Christmas." },
+          { start: 12, end: 29, text: "Hope you're all having a good one. I just called to say I love you all." },
+          { start: 29, end: 47.3, text: 'Merry Christmas. See you for dinner.' },
+        ],
+        audio_url: mockVoiceAudioUrl,
         duration_seconds: 47.3,
       },
       {
@@ -498,8 +507,10 @@ export async function getMemorialOutput(memorialId) {
         key_quote: "The tomatoes are finally coming in. I've been waiting all summer for these.",
         ai_category: 'Everyday Joy',
         ai_tags: ['garden', 'summer', 'patience'],
+        contributor_name: 'Tom',
+        relationship_type: 'friend',
         transcript_text: "Just wanted to record this. The tomatoes are finally coming in. I've been waiting all summer for these. Beautiful. Your grandmother would have loved them.",
-        audio_url: null,
+        audio_url: mockVoiceAudioUrl,
         duration_seconds: 28.1,
       },
     ],

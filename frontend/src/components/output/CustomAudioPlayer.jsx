@@ -45,6 +45,7 @@ export default function CustomAudioPlayer({
   onEnded,
   className = '',
   durationSeconds,
+  resetOnInactive = false,
 }) {
   const audioRef = useRef(null);
   const isControlled = typeof isActive === 'boolean';
@@ -152,8 +153,15 @@ export default function CustomAudioPlayer({
   useEffect(() => {
     if (!isControlled || isActive) return;
 
-    audioRef.current?.pause();
-  }, [isActive, isControlled]);
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    audio.pause();
+
+    if (resetOnInactive) {
+      audio.currentTime = 0;
+    }
+  }, [isActive, isControlled, resetOnInactive]);
 
   async function playAudio() {
     const audio = audioRef.current;
