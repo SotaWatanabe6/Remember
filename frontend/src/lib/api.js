@@ -1,6 +1,6 @@
-// src/lib/api.js
+// frontend/src/lib/api.js
 // ─────────────────────────────────────────────────────────────────────────────
-// MOCK API LAYER — Phase 1
+// MOCK API LAYER
 // Every API call in the app goes through this file.
 // On Day 9, swap mock return values for real fetch() calls — nothing else changes.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -9,6 +9,9 @@ import { mockMemorials } from "@/data/mockMemorials.js";
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 const MOCK_DELAY = 500;
+
+// ─── Questionnaire responses localStorage ───────────
+
 const MOCK_RESPONSES_STORAGE_PREFIX = 'remember_mock_questionnaire_responses';
 
 function getResponsesStorageKey(token) {
@@ -16,16 +19,9 @@ function getResponsesStorageKey(token) {
 }
 
 function readStoredResponses(token) {
-  if (typeof window === 'undefined') {
-    return {};
-  }
-
+  if (typeof window === 'undefined') return {};
   const storedResponses = window.localStorage.getItem(getResponsesStorageKey(token));
-
-  if (!storedResponses) {
-    return {};
-  }
-
+  if (!storedResponses) return {};
   try {
     return JSON.parse(storedResponses);
   } catch {
@@ -35,21 +31,78 @@ function readStoredResponses(token) {
 }
 
 function writeStoredResponses(token, responsesByContributor) {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.localStorage.setItem(
-    getResponsesStorageKey(token),
-    JSON.stringify(responsesByContributor),
-  );
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(getResponsesStorageKey(token), JSON.stringify(responsesByContributor));
 }
 
-// ─── CONTRIBUTE FLOW ────────
+// ─── Photos localStorage ───────────
+
+// NEW: localStorage helpers for photos
+function getPhotosStorageKey(token) {
+  return `remember_photos:${token}`;
+}
+
+function readStoredPhotos(token) {
+  if (typeof window === 'undefined') return [];
+  try {
+    return JSON.parse(window.localStorage.getItem(getPhotosStorageKey(token)) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredPhotos(token, photos) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(getPhotosStorageKey(token), JSON.stringify(photos));
+}
+
+// ─── Voice localStorage ───────────
+
+// NEW: localStorage helpers for voice recordings
+function getVoiceStorageKey(token) {
+  return `remember_voice:${token}`;
+}
+
+function readStoredVoice(token) {
+  if (typeof window === 'undefined') return [];
+  try {
+    return JSON.parse(window.localStorage.getItem(getVoiceStorageKey(token)) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredVoice(token, recordings) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(getVoiceStorageKey(token), JSON.stringify(recordings));
+}
+
+// ─── Session localStorage (read-only — Sungjun writes this) ───────────
+
+function getSessionStorageKey(token) {
+  return `remember_contributor_session:${token}`;
+}
+
+function readContributorSession(token) {
+  if (typeof window === 'undefined') return null;
+  try {
+    return JSON.parse(window.localStorage.getItem(getSessionStorageKey(token)) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+function writeContributorSession(token, session) {
+  if (typeof window === 'undefined' || !session) return;
+  window.localStorage.setItem(getSessionStorageKey(token), JSON.stringify(session));
+}
+
+// ─── CONTRIBUTE FLOW ───────────
 
 /**
  * GET /contribute/:token
  * Validates invite token, returns memorial details for landing page.
+ * TODO: Replace with real fetch() on Day 9.
  */
 export async function getInviteToken(token) {
   await delay(MOCK_DELAY);
@@ -87,6 +140,7 @@ export async function getInviteToken(token) {
  * POST /contribute/:token/start
  * Creates contributor row, returns contributor session token.
  * Body: { name: string }
+ * TODO: Replace with real fetch() on Day 9.
  */
 export async function startContribution(token, name) {
   await delay(MOCK_DELAY);
@@ -107,7 +161,8 @@ export async function startContribution(token, name) {
 /**
  * POST /contribute/:token/relationship
  * Saves relationship type to contributors table.
- * Body: { contributor_id: string, contributor_token: string, relationship_type: string, relationship_custom_label?: string | null }
+ * Body: { contributor_id, contributor_token, relationship_type, relationship_custom_label? }
+ * TODO: Replace with real fetch() on Day 9.
  */
 export async function saveRelationship(token, relationshipInput) {
   await delay(MOCK_DELAY);
@@ -126,7 +181,8 @@ export async function saveRelationship(token, relationshipInput) {
 /**
  * POST /contribute/:token/responses
  * Saves questionnaire Q&A. Supports partial saves (autosave).
- * Body: { responses: [{ contributor_id, memorial_id, invite_token, question_id, question_order, answer_text, input_mode, saved_at }] }
+ * Saves to localStorage so review page can read real answers.
+ * TODO: Replace with real fetch() on Day 9.
  */
 export async function saveResponses(token, responses) {
   await delay(MOCK_DELAY);
@@ -135,9 +191,7 @@ export async function saveResponses(token, responses) {
   const savedResponses = [];
 
   responses.forEach((response) => {
-    if (!response?.contributor_id || !response?.question_id) {
-      return;
-    }
+    if (!response?.contributor_id || !response?.question_id) return;
 
     const contributorResponses = responsesByContributor[response.contributor_id] ?? {};
     const savedResponse = {
@@ -158,8 +212,9 @@ export async function saveResponses(token, responses) {
 
 /**
  * GET /contribute/:token/responses
- * Returns saved questionnaire Q&A for one contributor session.
- * Query/body equivalent: { contributor_id: string }
+ * Returns saved questionnaire responses for one contributor session.
+ * Reads from localStorage — matches what saveResponses() wrote.
+ * TODO: Replace with real fetch() on Day 9.
  */
 export async function getResponses(token, contributorInput) {
   await delay(MOCK_DELAY);
@@ -168,137 +223,177 @@ export async function getResponses(token, contributorInput) {
 
   return {
     responses: Object.values(contributorResponses).sort(
-      (firstResponse, secondResponse) =>
-        (firstResponse.question_order ?? 0) - (secondResponse.question_order ?? 0),
+      (a, b) => (a.question_order ?? 0) - (b.question_order ?? 0),
     ),
   };
 }
 
 /**
  * POST /contribute/:token/photos
- * Uploads photos to Supabase Storage, writes media_assets rows.
- * Body: FormData — files[] (images only: jpg, png, heic, webp)
- *
- * Response shape Rebecca's UI depends on:
- * - assets[].id          → used for edit/delete in review screen
- * - assets[].file_name   → shown in thumbnail label
- * - assets[].storage_path → used to build preview URL
- * - assets[].taken_at    → shown as year in All Photos tab
+ * Uploads photos. Saves to localStorage so review page can read real uploads.
+ * CHANGED: now persists to localStorage instead of returning one-off fake data.
+ * TODO: Replace with real fetch() + FormData on Day 9.
  */
 export async function uploadPhotos(token, files) {
-  await delay(MOCK_DELAY * 2); // uploads take longer
+  await delay(MOCK_DELAY * 2);
+
+  const newAssets = files.map((file, i) => ({
+    id: `photo-${Date.now()}-${i}`,
+    file_name: file.name,
+    file_type: file.type,
+    file_size_bytes: file.size,
+    storage_path: `memorials/mock/contributions/mock/photos/${file.name}`,
+    storage_bucket: 'memorial-assets',
+    taken_at: null,
+    caption: null,
+    // Store preview URL so review screen can show thumbnails
+    previewUrl: typeof URL !== 'undefined' ? URL.createObjectURL(file) : null,
+  }));
+
+  // Append to any existing photos in localStorage
+  const existing = readStoredPhotos(token);
+  writeStoredPhotos(token, [...existing, ...newAssets]);
+
   return {
     success: true,
     uploaded: files.length,
-    assets: files.map((file, i) => ({
-      id: `photo-uuid-${i + 1}`,
-      file_name: file.name,
-      file_type: file.type,
-      file_size_bytes: file.size,
-      storage_path: `memorials/a1b2c3d4/contributions/c1b2c3d4/photos/${file.name}`,
-      storage_bucket: 'memorial-assets',
-      taken_at: null,        // populated from EXIF metadata on backend
-      caption: null,
-    })),
+    assets: newAssets,
   };
 }
 
 /**
  * POST /contribute/:token/voice
- * Uploads voice recording to Supabase Storage, writes voice_recordings row.
- * Body: FormData — file (audio: mp3, m4a, wav, ogg), contributor_title (required)
- *
- * Response shape Rebecca's UI depends on:
- * - recording.id               → used for edit/delete in review screen
- * - recording.contributor_title → displayed on Voices tab card
- * - recording.file_name        → shown in review
- * - recording.duration_seconds → shown in audio player
+ * Uploads voice recording. Saves to localStorage so review page can read real uploads.
+ * CHANGED: now persists to localStorage instead of returning one-off fake data.
+ * contributor_title is required — throws if missing.
+ * TODO: Replace with real fetch() + FormData on Day 9.
  */
 export async function uploadVoice(token, file, contributorTitle) {
   await delay(MOCK_DELAY * 2);
+
   if (!contributorTitle || contributorTitle.trim() === '') {
     throw new Error('A title is required for each voice recording');
   }
-  return {
-    success: true,
-    recording: {
-      id: 'voice-uuid-1',
-      contributor_title: contributorTitle,
-      file_name: file.name,
-      file_type: file.type,
-      file_size_bytes: file.size,
-      storage_path: `memorials/a1b2c3d4/contributions/c1b2c3d4/voice/${file.name}`,
-      storage_bucket: 'memorial-assets',
-      duration_seconds: 47.3,   // populated by backend after upload
-    },
+
+  const recording = {
+    id: `voice-${Date.now()}`,
+    contributor_title: contributorTitle,
+    file_name: file.name,
+    file_type: file.type,
+    file_size_bytes: file.size,
+    storage_path: `memorials/mock/contributions/mock/voice/${file.name}`,
+    storage_bucket: 'memorial-assets',
+    duration_seconds: 0, // populated by backend after real upload
   };
+
+  // Append to any existing recordings in localStorage
+  const existing = readStoredVoice(token);
+  writeStoredVoice(token, [...existing, recording]);
+
+  return { success: true, recording };
 }
 
 /**
  * DELETE /contribute/:token/photos/:assetId
  * Removes a photo before submission.
+ * CHANGED: now also removes from localStorage.
+ * TODO: Replace with real fetch() on Day 9.
  */
 export async function deletePhoto(token, assetId) {
   await delay(MOCK_DELAY);
+
+  const existing = readStoredPhotos(token);
+  writeStoredPhotos(token, existing.filter((p) => p.id !== assetId));
+
   return { success: true };
 }
 
 /**
  * DELETE /contribute/:token/voice/:recordingId
  * Removes a voice recording before submission.
+ * CHANGED: now also removes from localStorage.
+ * TODO: Replace with real fetch() on Day 9.
  */
 export async function deleteVoice(token, recordingId) {
   await delay(MOCK_DELAY);
+
+  const existing = readStoredVoice(token);
+  writeStoredVoice(token, existing.filter((r) => r.id !== recordingId));
+
   return { success: true };
 }
 
 /**
  * GET /contribute/:token/summary
- * Returns everything the contributor has submitted so far — used on review screen.
- *
- * Response based on review screen depends on:
- * - photos[]     → thumbnail grid
- * - voice[]      → audio list with titles
- * - responses[]  → questionnaire answers for review
- * - contributor  → name + relationship shown at top
+ * Returns everything the contributor submitted — used on review screen.
+ * CHANGED: now reads from localStorage instead of returning hardcoded data.
+ * Reads session (name + relationship) from Sungjun's key.
+ * Reads photos and voice from keys written by uploadPhotos/uploadVoice.
+ * Reads questionnaire responses from keys written by saveResponses.
+ * TODO: Replace with real fetch() on Day 9.
  */
 export async function getContributorSummary(token) {
   await delay(MOCK_DELAY);
+
+  // Read contributor session — written by Sungjun's contributorService.js
+  const session = readContributorSession(token);
+
+  // Read photos uploaded in step 4
+  const photos = readStoredPhotos(token);
+
+  // Read voice recordings uploaded in step 5
+  const voice = readStoredVoice(token);
+
+  // Read questionnaire responses saved in step 3
+  const contributorId = session?.contributorId || 'c1b2c3d4-0000-0000-0000-000000000001';
+  const responsesByContributor = readStoredResponses(token);
+  const contributorResponses = responsesByContributor[contributorId] ?? {};
+  const responses = Object.values(contributorResponses)
+    .sort((a, b) => (a.question_order ?? 0) - (b.question_order ?? 0))
+    .map((r) => ({
+      question_text: r.question_id || r.question_text || 'Question',
+      response_text: r.answer_text || r.response_text || '',
+    }));
+
   return {
     contributor: {
-      id: 'c1b2c3d4-0000-0000-0000-000000000001',
-      name: 'Sarah',
-      relationship_type: 'friend',
-      relationship_label: null,
+      id: contributorId,
+      name: session?.contributorName || 'Contributor',
+      relationship_type: session?.relationship_type || '',
+      relationship_label: session?.relationship_custom_label || null,
     },
-    responses: [
-      { question_text: 'What is a memory that captures who they were?', response_text: 'He always made everyone feel welcome at his table.' },
-      { question_text: 'What would they say if they walked in right now?', response_text: 'Who wants coffee? I just made a fresh pot.' },
-    ],
-    photos: [
-      { id: 'photo-uuid-1', file_name: 'christmas_2019.jpg', storage_path: 'memorials/.../photos/christmas_2019.jpg', taken_at: '2019-12-25' },
-      { id: 'photo-uuid-2', file_name: 'birthday_2021.jpg', storage_path: 'memorials/.../photos/birthday_2021.jpg', taken_at: '2021-06-10' },
-      { id: 'photo-uuid-3', file_name: 'garden_summer.jpg', storage_path: 'memorials/.../photos/garden_summer.jpg', taken_at: null },
-    ],
-    voice: [
-      { id: 'voice-uuid-1', contributor_title: 'Voicemail from Christmas 2019', file_name: 'voicemail.m4a', duration_seconds: 47.3 },
-    ],
+    responses,
+    photos,
+    voice,
   };
 }
 
 /**
  * POST /contribute/:token/submit
- * Finalises submission — sets contributor status = submitted.
+ * Finalises the contribution — sets contributor status = submitted.
+ * TODO: Replace with real fetch() on Day 9.
  */
 export async function submitContribution(token) {
   await delay(MOCK_DELAY);
+  const now = new Date().toISOString();
+  const session = readContributorSession(token);
+
+  if (session) {
+    writeContributorSession(token, {
+      ...session,
+      status: 'submitted',
+      submittedAt: now,
+      updatedAt: now,
+    });
+  }
+
   return {
     success: true,
-    submitted_at: new Date().toISOString(),
+    submitted_at: now,
   };
 }
 
-// ─── OUTPUT TABS (viewer experience) ────────
+// ─── OUTPUT TABS (viewer experience) ─────────────────────────────────────────
 
 const mockStoryPhotoUrls = {
   kitchenTable: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?auto=format&fit=crop&w=1800&q=80',
@@ -309,7 +404,8 @@ const mockStoryPhotoUrls = {
 /**
  * GET /memorials/:id/output
  * Returns complete four-tab JSON for the memorial output page.
- * Rebecca owns: All Photos tab + output page shell
+ * Rebecca owns: All Photos tab + output page shell.
+ * TODO: Replace with real fetch() on Day 9.
  */
 export async function getMemorialOutput(memorialId) {
   await delay(MOCK_DELAY);
@@ -439,10 +535,10 @@ export async function getMemorialOutput(memorialId) {
  * GET /share/:shareToken
  * Viewer-only access — same four-tab output, no organizer controls.
  * Returns identical shape to getMemorialOutput().
+ * TODO: Replace with real fetch() on Day 9.
  */
 export async function getShareToken(shareToken) {
   await delay(MOCK_DELAY);
   if (shareToken === 'invalid') throw new Error('This share link is invalid or has expired');
-  // Returns same shape as getMemorialOutput — viewer just can't edit anything
   return getMemorialOutput('mock-memorial-id');
 }

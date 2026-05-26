@@ -21,7 +21,7 @@ export default function UiComponentsPage() {
           <p className="text-h3 mb-4">Buttons</p>
 
           <div>
-            <ButtonDark />
+            <ButtonDark text="Text" />
           </div>
         </div>
 

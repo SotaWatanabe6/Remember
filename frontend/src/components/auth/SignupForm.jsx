@@ -10,7 +10,11 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function SignupForm() {
   const router = useRouter();
-  const [values, setValues] = useState({ fullName: "", email: "", password: "" });
+  const [values, setValues] = useState({
+    fullName: "",
+    email: "",
+    password: "",
+  });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -64,20 +68,28 @@ export default function SignupForm() {
       });
 
       if (result.needsEmailConfirmation) {
-        setSuccessMessage("Account created. Check your email to confirm your address before logging in.");
+        setSuccessMessage(
+          "Account created. Check your email to confirm your address before logging in.",
+        );
       } else {
-        setSuccessMessage("Account created. Taking you to your dashboard...");
+        setSuccessMessage("Account created. Taking you to your memorials...");
         router.replace("/dashboard");
       }
     } catch (error) {
-      setSubmitError(error.message || "Unable to create your account. Please try again.");
+      setSubmitError(
+        error.message || "Unable to create your account. Please try again.",
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="flex w-full flex-col gap-[30px]">
+    <form
+      onSubmit={handleSubmit}
+      noValidate
+      className="flex w-full flex-col gap-[30px]"
+    >
       <div className="flex w-full flex-col gap-[30px]">
         <AuthInput
           id="signup-full-name"
@@ -120,7 +132,10 @@ export default function SignupForm() {
         </p>
       ) : null}
       {successMessage ? (
-        <p className="text-center text-sm leading-5 text-emerald-700" role="status">
+        <p
+          className="text-center text-sm leading-5 text-emerald-700"
+          role="status"
+        >
           {successMessage}
         </p>
       ) : null}
