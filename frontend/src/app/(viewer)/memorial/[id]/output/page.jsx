@@ -134,7 +134,6 @@ function Lightbox({ photo, onClose, onPrev, onNext }) {
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [onClose, onPrev, onNext]);
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4" onClick={onClose}>
       <div className="relative max-w-3xl w-full" onClick={(e) => e.stopPropagation()}>
@@ -491,7 +490,6 @@ export default function MemorialOutputPage() {
   return (
     <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
       <div className="mx-auto flex w-full max-w-[960px] flex-col gap-8">
-
         <nav className="flex h-10 items-center justify-between">
           <span className="text-2xl leading-8 text-neutral-950">Remember</span>
           <Link href="/dashboard" className="flex items-center gap-1.5 text-base text-neutral-950 hover:text-slate-600 transition-colors">

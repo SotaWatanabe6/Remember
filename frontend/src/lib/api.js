@@ -379,21 +379,9 @@ export async function getContributorSummary(token) {
  */
 export async function submitContribution(token) {
   await delay(MOCK_DELAY);
-  const now = new Date().toISOString();
-  const session = readContributorSession(token);
-
-  if (session) {
-    writeContributorSession(token, {
-      ...session,
-      status: 'submitted',
-      submittedAt: now,
-      updatedAt: now,
-    });
-  }
-
   return {
     success: true,
-    submitted_at: now,
+    submitted_at: new Date().toISOString(),
   };
 }
 
@@ -692,10 +680,10 @@ const readStoredValue = (key, fallbackValue) => {
   try {
     return JSON.parse(storedValue);
   } catch {
-    window.localStorage.removeItem(key);
-    return fallbackValue;
+    window.localStorage.removeItem(getResponsesStorageKey(token));
+    return {};
   }
-};
+}
 
 const writeStoredValue = (key, value) => {
   if (!isBrowser()) return;
