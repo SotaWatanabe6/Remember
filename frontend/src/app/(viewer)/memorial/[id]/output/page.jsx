@@ -5,9 +5,10 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getMemorialOutput } from '@/lib/api';
+import { getMemorialOutput, getMemorial } from '@/lib/api';
+import { mockMemorials } from '@/data/mockMemorials.js';
 
-// ─── Memorial Header ─────────
+// ─── Memorial Header ──────────────────────────────────────────────────────────
 
 function MemorialHeader({ memorial, onShare }) {
   return (
@@ -47,7 +48,7 @@ function MemorialHeader({ memorial, onShare }) {
   );
 }
 
-// ─── Tab bar ─────────
+// ─── Tab bar ──────────────────────────────────────────────────────────────────
 
 const MAIN_TABS = ['Archive', 'Contributions', 'Outputs'];
 
@@ -71,7 +72,7 @@ function TabBar({ active, onChange }) {
   );
 }
 
-// ─── Collapsible section ─────────
+// ─── Collapsible section ──────────────────────────────────────────────────────
 
 function CollapsibleSection({ title, children, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -89,7 +90,7 @@ function CollapsibleSection({ title, children, defaultOpen = false }) {
   );
 }
 
-// ─── Archive Tab ─────────
+// ─── Archive Tab ──────────────────────────────────────────────────────────────
 
 function ArchiveTab() {
   return (
@@ -110,7 +111,7 @@ function ArchiveTab() {
   );
 }
 
-// ─── Contributions Tab ─────────
+// ─── Contributions Tab ────────────────────────────────────────────────────────
 
 function ContributionsTab() {
   return (
@@ -122,7 +123,7 @@ function ContributionsTab() {
   );
 }
 
-// ─── Lightbox ─────────
+// ─── Lightbox ─────────────────────────────────────────────────────────────────
 
 function Lightbox({ photo, onClose, onPrev, onNext }) {
   useEffect(() => {
@@ -134,6 +135,7 @@ function Lightbox({ photo, onClose, onPrev, onNext }) {
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [onClose, onPrev, onNext]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4" onClick={onClose}>
       <div className="relative max-w-3xl w-full" onClick={(e) => e.stopPropagation()}>
@@ -167,7 +169,7 @@ function Lightbox({ photo, onClose, onPrev, onNext }) {
   );
 }
 
-// ─── All Photos Section ─────────
+// ─── All Photos Section ───────────────────────────────────────────────────────
 
 function AllPhotosSection({ albums }) {
   const [openAlbum, setOpenAlbum] = useState(null);
@@ -300,7 +302,7 @@ function AllPhotosSection({ albums }) {
   );
 }
 
-// ─── PRIORITY 3: Pre-generation empty state for Outputs tab ─────────
+// ─── PRIORITY 3: Pre-generation empty state for Outputs tab ──────────────────
 
 function PreGenerationEmpty() {
   return (
@@ -318,7 +320,7 @@ function PreGenerationEmpty() {
   );
 }
 
-// ─── Outputs Tab ─────────
+// ─── Outputs Tab ──────────────────────────────────────────────────────────────
 
 function OutputsTab({ output }) {
   // PRIORITY 3: Show pre-generation empty state if no output yet
@@ -334,11 +336,7 @@ function OutputsTab({ output }) {
     <div className="flex flex-col divide-y divide-neutral-100 pt-4">
       <CollapsibleSection title="Story">
         <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6">
-          {!output?.story || output.story.length === 0 ? (
-            <p className="text-sm text-neutral-950 font-medium">No story generated yet</p>
-          ) : (
-            <p className="text-sm text-slate-400">Story — built by Sungjun</p>
-          )}
+          <p className="text-sm text-slate-400">Story — built by Sungjun</p>
         </div>
       </CollapsibleSection>
       <CollapsibleSection title="Constellation">
@@ -348,11 +346,7 @@ function OutputsTab({ output }) {
       </CollapsibleSection>
       <CollapsibleSection title="Voices">
         <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6">
-          {!output?.voices || output.voices.length === 0 ? (
-            <p className="text-sm text-neutral-950 font-medium">No voice recordings were submitted for this memorial</p>
-          ) : (
-            <p className="text-sm text-slate-400">Voices — built by Sungjun</p>
-          )}
+          <p className="text-sm text-slate-400">Voices — built by Sungjun</p>
         </div>
       </CollapsibleSection>
       <CollapsibleSection title="All Photos" defaultOpen={true}>
@@ -362,7 +356,7 @@ function OutputsTab({ output }) {
   );
 }
 
-// ─── Share Modal ─────────
+// ─── Share Modal ──────────────────────────────────────────────────────────────
 
 function ShareModal({ onClose, memorialId }) {
   const [copiedContributor, setCopiedContributor] = useState(false);
@@ -431,7 +425,7 @@ function ShareModal({ onClose, memorialId }) {
   );
 }
 
-// ─── PRIORITY 4: Error state ─────────
+// ─── PRIORITY 4: Error state ──────────────────────────────────────────────────
 
 function OutputError({ onRetry }) {
   return (
@@ -453,7 +447,7 @@ function OutputError({ onRetry }) {
   );
 }
 
-// ─── Page ─────────
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function MemorialOutputPage() {
   const { id } = useParams();
@@ -463,13 +457,16 @@ export default function MemorialOutputPage() {
   const [error, setError] = useState(null);
   const [showShare, setShowShare] = useState(false);
 
+  // Read from mockMemorials.js — single source of truth for mock data
+  // Day 9: replace with real fetch from GET /memorials/:id
+  const mockData = mockMemorials.find((m) => m.id === id) ?? mockMemorials[0];
   const memorial = {
-    id,
-    subject_name: 'John Smith',
-    cover_photo_url: null,
-    date_of_birth: '1943-03-15',
-    date_of_passing: '2024-01-10',
-    bio: "This paragraph can be an example of explaining who John is. It's intended to be a part of John's profile.",
+    id: mockData.id,
+    subject_name: mockData.subject_name || mockData.deceased_name,
+    cover_photo_url: mockData.cover_photo_url || mockData.profile_photo_url || null,
+    date_of_birth: mockData.date_of_birth || mockData.birth_date || null,
+    date_of_passing: mockData.date_of_passing || mockData.death_date || null,
+    bio: mockData.brief_biography || mockData.short_description || null,
   };
 
   async function load() {
@@ -490,6 +487,7 @@ export default function MemorialOutputPage() {
   return (
     <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
       <div className="mx-auto flex w-full max-w-[960px] flex-col gap-8">
+
         <nav className="flex h-10 items-center justify-between">
           <span className="text-2xl leading-8 text-neutral-950">Remember</span>
           <Link href="/dashboard" className="flex items-center gap-1.5 text-base text-neutral-950 hover:text-slate-600 transition-colors">
