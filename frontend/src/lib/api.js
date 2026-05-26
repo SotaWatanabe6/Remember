@@ -300,6 +300,12 @@ export async function submitContribution(token) {
 
 // ─── OUTPUT TABS (viewer experience) ────────
 
+const mockStoryPhotoUrls = {
+  kitchenTable: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?auto=format&fit=crop&w=1800&q=80',
+  quietDevotion: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1800&q=80',
+  everydayJoy: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1800&q=80',
+};
+
 /**
  * GET /memorials/:id/output
  * Returns complete four-tab JSON for the memorial output page.
@@ -311,7 +317,8 @@ export async function getMemorialOutput(memorialId) {
     story: [
       {
         order_index: 1,
-        photo_url: null,
+        photo_id: 'photo-uuid-1',
+        photo_url: mockStoryPhotoUrls.kitchenTable,
         matched_quote: 'He always made everyone feel like the most important person in the room.',
         contributor_name: 'Sarah',
         relationship_type: 'friend',
@@ -319,7 +326,8 @@ export async function getMemorialOutput(memorialId) {
       },
       {
         order_index: 2,
-        photo_url: null,
+        photo_id: 'photo-uuid-2',
+        photo_url: mockStoryPhotoUrls.quietDevotion,
         matched_quote: 'Dad would wake up at 5am just to make sure everyone had a packed lunch.',
         contributor_name: 'Michael',
         relationship_type: 'family',
@@ -327,7 +335,8 @@ export async function getMemorialOutput(memorialId) {
       },
       {
         order_index: 3,
-        photo_url: null,
+        photo_id: 'photo-uuid-3',
+        photo_url: mockStoryPhotoUrls.everydayJoy,
         matched_quote: 'The way he laughed — you could hear it from three rooms away.',
         contributor_name: 'Tom',
         relationship_type: 'friend',
