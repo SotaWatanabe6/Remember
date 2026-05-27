@@ -275,57 +275,51 @@ export async function submitContribution(token) {
   const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
   // ─── PLACEHOLDERS — replace with real session values from Sungjun ───
-  const memorial_id = "00000000-0000-0000-0000-000000000001";
-  const contributor_id = "00000000-0000-0000-0000-000000000002";
+  const contributor_token = "00000000-0000-0000-0000-000000000002";
   // ────────────────────────────────────────────────────────────────────
 
   // 1. Upload photos
   if (store.photos.length > 0) {
     const photoForm = new FormData();
+    photoForm.append('contributor_token', contributor_token);
     store.photos.forEach((photo) => {
-      photoForm.append("files", photo.file, photo.file.name);
+      photoForm.append('files[]', photo.file, photo.file.name);
     });
-    photoForm.append("memorial_id", memorial_id);
-    photoForm.append("contributor_id", contributor_id);
-    photoForm.append("file_category", "photo");
-    photoForm.append("caption", store.photos[0]?.caption ?? "");
+    if (store.photos[0]?.caption) {
+      photoForm.append('caption', store.photos[0].caption);
+    }
 
-    const photoRes = await fetch(`${BACKEND_URL}/api/media/upload`, {
-      method: "POST",
+    const photoRes = await fetch(`${BACKEND_URL}/contribute/${token}/photos`, {
+      method: 'POST',
       body: photoForm,
     });
-    if (!photoRes.ok) throw new Error("Photo upload failed");
+    if (!photoRes.ok) throw new Error('Photo upload failed');
   }
 
   // 2. Upload voice
   for (const rec of store.voice) {
     const voiceForm = new FormData();
-    voiceForm.append("files", rec.file, rec.file.name);
-    voiceForm.append("memorial_id", memorial_id);
-    voiceForm.append("contributor_id", contributor_id);
-    voiceForm.append("file_category", "voice");
-    voiceForm.append("contributor_title", rec.title);
+    voiceForm.append('contributor_token', contributor_token);
+    voiceForm.append('file', rec.file, rec.file.name);
+    voiceForm.append('contributor_title', rec.title);
 
-    const voiceRes = await fetch(`${BACKEND_URL}/api/media/upload`, {
-      method: "POST",
+    const voiceRes = await fetch(`${BACKEND_URL}/contribute/${token}/voice`, {
+      method: 'POST',
       body: voiceForm,
     });
-    if (!voiceRes.ok) throw new Error("Voice upload failed");
+    if (!voiceRes.ok) throw new Error('Voice upload failed');
   }
 
-  // 3. Skip real submit — contributors table not ready yet
-  // TODO: uncomment when Supabase tables are fully set up
-  // const submitRes = await fetch(`${BACKEND_URL}/contribute/${token}/submit`, {
-  //   method: "POST",
-  //   headers: { "Content-Type": "application/json" },
-  //   body: JSON.stringify({ contributor_token: contributor_id }),
-  // });
-  // if (!submitRes.ok) throw new Error("Submission failed");
+  // 3. Mark as submitted
+  const submitRes = await fetch(`${BACKEND_URL}/contribute/${token}/submit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contributor_token }),
+  });
+  if (!submitRes.ok) throw new Error('Submission failed');
 
-  // 4. Clear in-memory store
   clearStore();
-
-  return { success: true, submitted_at: new Date().toISOString() };
+  return submitRes.json();
 }
 
 // ─── OUTPUT TABS (viewer experience) ─────────────────────────────────────────

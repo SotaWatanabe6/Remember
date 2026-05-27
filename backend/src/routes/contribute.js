@@ -2,6 +2,16 @@ require('dotenv').config()
 const express = require('express')
 const router = express.Router()
 const supabase = require('../supabase')
+const multer = require('multer');
+const { validateFiles } = require('../middleware/validate');
+const { extractImageMetadata } = require('../services/exif');
+const { extractAudioDuration } = require('../services/duration');
+
+const STORAGE_BUCKET = 'memorial-assets';
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024, files: 10 },
+});
 
 // GET /contribute/:token — validate invite token
 router.get('/:token', async (req, res) => {
@@ -180,5 +190,142 @@ router.post('/:token/submit', async (req, res) => {
     res.status(500).json({ error: err.message })
   }
 })
+
+
+// POST /contribute/:token/photos
+router.post('/:token/photos', upload.array('files', 10), validateFiles, async (req, res) => {
+  try {
+    const { contributor_token, caption } = req.body;
+    if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' });
+
+    const { data: contributor } = await supabase
+      .from('contributors')
+      .select('memorial_id')
+      .eq('id', contributor_token)
+      .single();
+
+    if (!contributor) return res.status(404).json({ error: 'Contributor not found' });
+
+    const results = [];
+
+    for (const file of req.files) {
+      const exif = await extractImageMetadata(file.buffer);
+
+      const { data: dbRecord, error } = await supabase
+        .from('media_assets')
+        .insert({
+          memorial_id: contributor.memorial_id,
+          contributor_id: contributor_token,
+          storage_path: 'pending',
+          storage_bucket: STORAGE_BUCKET,
+          file_name: file.originalname,
+          file_type: file.mimetype,
+          file_size_bytes: file.size,
+          ai_analysis_status: 'pending',
+          caption: caption || null,
+          width: exif?.width || null,
+          height: exif?.height || null,
+          taken_at: exif?.takenAt || null,
+        })
+        .select()
+        .single();
+
+      if (error) throw new Error(error.message);
+
+      const ext = file.originalname.split('.').pop().toLowerCase();
+      const storagePath = `memorials/${contributor.memorial_id}/contributions/${contributor_token}/photos/${dbRecord.id}.${ext}`;
+
+      const { error: storageError } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .upload(storagePath, file.buffer, {
+          contentType: file.mimetype,
+          upsert: false,
+        });
+
+      if (storageError) {
+        await supabase.from('media_assets').delete().eq('id', dbRecord.id);
+        continue;
+      }
+
+      await supabase.from('media_assets').update({ storage_path: storagePath }).eq('id', dbRecord.id);
+
+      results.push({
+        id: dbRecord.id,
+        storage_path: storagePath,
+        file_name: file.originalname,
+      });
+    }
+
+    res.status(201).json({ uploaded: results.length, files: results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /contribute/:token/voice
+router.post('/:token/voice', upload.single('file'), async (req, res) => {
+  try {
+    const { contributor_token, contributor_title } = req.body;
+    if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' });
+    if (!contributor_title?.trim()) return res.status(400).json({ error: 'contributor_title is required' });
+
+    const { data: contributor } = await supabase
+      .from('contributors')
+      .select('memorial_id')
+      .eq('id', contributor_token)
+      .single();
+
+    if (!contributor) return res.status(404).json({ error: 'Contributor not found' });
+
+    const file = req.file;
+    const durationSeconds = await extractAudioDuration(file.buffer, file.mimetype);
+
+    const { data: dbRecord, error } = await supabase
+      .from('voice_recordings')
+      .insert({
+        memorial_id: contributor.memorial_id,
+        contributor_id: contributor_token,
+        storage_path: 'pending',
+        storage_bucket: STORAGE_BUCKET,
+        file_name: file.originalname,
+        file_type: file.mimetype,
+        file_size_bytes: file.size,
+        contributor_title: contributor_title.trim(),
+        transcription_status: 'pending',
+        duration_seconds: durationSeconds,
+      })
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    const ext = file.originalname.split('.').pop().toLowerCase();
+    const storagePath = `memorials/${contributor.memorial_id}/contributions/${contributor_token}/voice/${dbRecord.id}.${ext}`;
+
+    const { error: storageError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(storagePath, file.buffer, {
+        contentType: file.mimetype,
+        upsert: false,
+      });
+
+    if (storageError) {
+      await supabase.from('voice_recordings').delete().eq('id', dbRecord.id);
+      return res.status(500).json({ error: 'Storage upload failed' });
+    }
+
+    await supabase.from('voice_recordings').update({ storage_path: storagePath }).eq('id', dbRecord.id);
+
+    res.status(201).json({
+      recording: {
+        id: dbRecord.id,
+        contributor_title: contributor_title.trim(),
+        storage_path: storagePath,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router
