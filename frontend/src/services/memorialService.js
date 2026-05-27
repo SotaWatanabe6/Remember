@@ -3,6 +3,8 @@ import { MOCK_MEMORIALS_STORAGE_KEY, mockMemorials } from "../data/mockMemorials
 
 const MOCK_DELAY_MS = 500;
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+
 const waitForMockRequest = () =>
   new Promise((resolve) => {
     window.setTimeout(resolve, MOCK_DELAY_MS);
@@ -52,6 +54,83 @@ const normalizeMemorial = (memorial) => {
   };
 };
 
+// services/memorialService.js
+
+
+export async function getMemorialOutput(id,token) {
+    await waitForMockRequest();
+    try {
+      console.log(token.access_token);
+      const response = await fetch(
+        `${API_BASE_URL}/memorials/${id}/output`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token.access_token}`,
+
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch memorial output: ${response.status}`
+        );
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Error fetching memorial output:", error);
+      throw error;
+    }
+}
+
+export async function createMemorialOutput(memorialInput,token) {
+    await waitForMockRequest();
+    try {
+      const subjectName =
+        memorialInput.subject_name || memorialInput.deceased_name || "";
+      const dateOfBirth =
+        memorialInput.date_of_birth || memorialInput.birth_date || null;
+      const dateOfPassing =
+        memorialInput.date_of_passing || memorialInput.death_date || null;
+      const description =
+        memorialInput.description ||
+        memorialInput.short_description ||
+        memorialInput.brief_biography ||
+        "";
+      const coverPhotoUrl =
+        memorialInput.cover_photo_url || memorialInput.profile_photo_url || null;      
+      const response = await fetch(
+        `${API_BASE_URL}/memorials`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            subject_name: subjectName,
+            date_of_birth: dateOfBirth,
+            date_of_passing: dateOfPassing,
+            cover_photo_url: coverPhotoUrl,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Failed to create memorial output: ${response.status}`
+        );
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Error creating memorial output:", error);
+      throw error;
+    }  
+}
 export async function createMemorial(memorialInput) {
   // TODO: Replace this local mock with POST /memorials or a Supabase insert when the backend is ready.
   await waitForMockRequest();
@@ -98,6 +177,7 @@ export async function createMemorial(memorialInput) {
     created_at: now,
     updated_at: now,
   });
+
 
   localStorage.setItem(MOCK_MEMORIALS_STORAGE_KEY, JSON.stringify(memorial));
   return memorial;
