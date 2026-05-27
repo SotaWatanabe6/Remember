@@ -198,8 +198,9 @@ export async function beginContributorDraft(inviteToken, contributorName) {
   const contribution = await startContribution(inviteToken, trimmedContributorName);
   const contributor = contribution?.contributor;
   const contributorId = contributor?.id;
+  const contributorToken = contribution?.contributor_token;
 
-  if (!contributorId) {
+  if (!contributorId || !contributorToken) {
     throw new Error("The Remember API did not return a contributor session.");
   }
 
@@ -207,11 +208,11 @@ export async function beginContributorDraft(inviteToken, contributorName) {
     inviteToken,
     memorialId: contributor.memorial_id ?? invite.memorialId,
     contributorId,
-    contributorToken: contribution.contributor_token ?? null,
+    contributorToken,
     contributorName: contributor.name ?? trimmedContributorName,
     status: contributor.status ?? "in_progress",
-    createdAt: contributor.created_at ?? now,
-    updatedAt: contributor.updated_at ?? now,
+    createdAt: now,
+    updatedAt: now,
   };
 
   storeContributorSession(inviteToken, session);
@@ -303,10 +304,9 @@ export async function saveContributorRelationship(
   const updatedSession = {
     ...draft.session,
     relationship_type: savedRelationship.contributor?.relationship_type ?? trimmedRelationshipType,
-    relationship_custom_label:
-      savedRelationship.contributor?.relationship_label ?? relationship_custom_label,
-    relationship_label: savedRelationship.contributor?.relationship_label ?? relationship_custom_label,
-    updatedAt: savedRelationship.contributor?.updated_at ?? new Date().toISOString(),
+    relationship_custom_label,
+    relationship_label: relationship_custom_label,
+    updatedAt: new Date().toISOString(),
   };
 
   storeContributorSession(inviteToken, updatedSession);
