@@ -135,13 +135,29 @@ router.post('/:token/responses', async (req, res) => {
 
     if (!contributor) return res.status(404).json({ error: 'Contributor not found' })
 
+    const now = new Date().toISOString()
     const rows = responses.map(r => ({
       memorial_id: contributor.memorial_id,
       contributor_id: contributor_token,
       question_text: r.question_text,
       response_text: r.response_text,
-      order_index: r.order_index
+      order_index: r.order_index,
+      updated_at: now
     }))
+
+    const orderIndexes = rows
+      .map(row => row.order_index)
+      .filter(orderIndex => Number.isInteger(orderIndex))
+
+    if (orderIndexes.length) {
+      const { error: deleteError } = await supabase
+        .from('questionnaire_responses')
+        .delete()
+        .eq('contributor_id', contributor_token)
+        .in('order_index', orderIndexes)
+
+      if (deleteError) return res.status(400).json({ error: deleteError.message })
+    }
 
     const { error } = await supabase
       .from('questionnaire_responses')
@@ -150,10 +166,10 @@ router.post('/:token/responses', async (req, res) => {
 
     await supabase
       .from('contributors')
-      .update({ questionnaire_done: true })
+      .update({ updated_at: now })
       .eq('id', contributor_token)
 
-    res.json({ saved: true })
+    res.json({ saved: true, saved_count: rows.length })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

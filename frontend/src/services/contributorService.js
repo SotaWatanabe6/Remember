@@ -10,6 +10,7 @@ import {
   CONTRIBUTOR_RELATIONSHIP_OPTIONS,
   CONTRIBUTOR_RELATIONSHIP_OTHER,
 } from "@/lib/contribute/relationshipOptions.js";
+import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS } from "@/lib/contribute/questionnaireQuestions.js";
 
 const CONTRIBUTOR_SESSION_STORAGE_PREFIX = "remember_contributor_session";
 
@@ -374,10 +375,24 @@ export async function getQuestionnaireResponses(inviteToken) {
     contributor_token: draft.session.contributorToken,
   });
 
-  return result.responses ?? [];
+  return (result.responses ?? []).map((response) => {
+    const questionIndex = Number.isFinite(Number(response.order_index))
+      ? Number(response.order_index) - 1
+      : Number(response.question_order) - 1;
+    const question = CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS[questionIndex];
+
+    return {
+      ...response,
+      question_id: response.question_id ?? question?.id ?? response.question_text,
+      question_order: response.question_order ?? response.order_index,
+      answer_text: response.answer_text ?? response.response_text ?? "",
+      input_mode: response.input_mode === "speech" ? "speech" : "text",
+      saved_at: response.saved_at ?? response.updated_at ?? response.created_at ?? null,
+    };
+  });
 }
 
-export async function saveQuestionnaireResponse(inviteToken, response) {
+export async function saveQuestionnaireResponse(inviteToken, response, options = {}) {
   const draft = await getContributorQuestionnaireDraft(inviteToken);
 
   if (draft.status !== "ready") {
@@ -387,17 +402,29 @@ export async function saveQuestionnaireResponse(inviteToken, response) {
   const inputMode =
     response.inputMode === "speech" || response.input_mode === "speech" ? "speech" : "text";
   const now = new Date().toISOString();
+  const questionId = response.questionId ?? response.question_id;
+  const questionOrder = response.questionOrder ?? response.question_order;
+  const question =
+    CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.find((item) => item.id === questionId) ??
+    CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS[Number(questionOrder) - 1];
   const responsePayload = {
+    contributor_token: draft.session.contributorToken,
     contributor_id: draft.session.contributorId,
     memorial_id: draft.session.memorialId,
     invite_token: inviteToken,
-    question_id: response.questionId ?? response.question_id,
-    question_order: response.questionOrder ?? response.question_order,
+    question_id: questionId,
+    question_text: response.questionText ?? response.question_text ?? question?.prompt ?? questionId,
+    question_order: questionOrder,
+    order_index: questionOrder,
     answer_text: response.answerText ?? response.answer_text ?? "",
+    response_text: response.answerText ?? response.answer_text ?? "",
     input_mode: inputMode,
     saved_at: now,
   };
 
-  const result = await saveResponses(inviteToken, [responsePayload]);
+  const result = await saveResponses(inviteToken, [responsePayload], {
+    contributorToken: draft.session.contributorToken,
+    signal: options.signal,
+  });
   return result.responses?.[0] ?? responsePayload;
 }

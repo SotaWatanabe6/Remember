@@ -41,7 +41,13 @@ async function requestJson(path, options = {}) {
         ...options.headers,
       },
     });
-  } catch {
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new ApiRequestError("The request was cancelled.", {
+        code: "aborted",
+      });
+    }
+
     throw new ApiRequestError("Could not reach the Remember API.", {
       code: "network_error",
     });
@@ -191,11 +197,28 @@ export async function saveRelationship(token, relationshipInput) {
 /**
  * POST /contribute/:token/responses
  * Saves questionnaire Q&A. Supports partial saves (autosave).
- * Saves to localStorage so review page can read real answers.
- * TODO: Replace with real fetch() on Day 9.
+ * Mirrors successful saves to localStorage only as a temporary resume/review
+ * fallback until the backend exposes saved questionnaire responses.
  */
-export async function saveResponses(token, responses) {
-  await delay(MOCK_DELAY);
+export async function saveResponses(token, responses, options = {}) {
+  const contributorToken =
+    options.contributorToken ?? responses?.[0]?.contributor_token ?? responses?.[0]?.contributor_id;
+
+  const apiResponses = responses.map((response) => ({
+    question_text: response.question_text ?? response.question_id,
+    response_text: response.response_text ?? response.answer_text ?? "",
+    order_index: response.order_index ?? response.question_order,
+  }));
+
+  const result = await requestJson(`/contribute/${encodeURIComponent(token)}/responses`, {
+    method: "POST",
+    signal: options.signal,
+    body: JSON.stringify({
+      contributor_token: contributorToken,
+      responses: apiResponses,
+    }),
+  });
+
   const now = new Date().toISOString();
   const responsesByContributor = readStoredResponses(token);
   const savedResponses = [];
@@ -217,17 +240,33 @@ export async function saveResponses(token, responses) {
 
   writeStoredResponses(token, responsesByContributor);
 
-  return { success: true, saved: savedResponses.length, responses: savedResponses };
+  return {
+    success: result?.saved === true || result?.success === true,
+    saved: result?.saved_count ?? savedResponses.length,
+    responses: savedResponses,
+  };
 }
 
 /**
  * GET /contribute/:token/responses
  * Returns saved questionnaire responses for one contributor session.
- * Reads from localStorage — matches what saveResponses() wrote.
- * TODO: Replace with real fetch() on Day 9.
+ * Uses the backend response-loading endpoint when it exists. The current
+ * backend branch does not expose one yet, so a 404 falls back to the local
+ * successful-save mirror used by this contributor flow.
  */
 export async function getResponses(token, contributorInput) {
-  await delay(MOCK_DELAY);
+  try {
+    return await requestJson(
+      `/contribute/${encodeURIComponent(token)}/responses?contributor_token=${encodeURIComponent(
+        contributorInput.contributor_token,
+      )}`,
+    );
+  } catch (error) {
+    if (!(error instanceof ApiRequestError) || error.status !== 404) {
+      throw error;
+    }
+  }
+
   const responsesByContributor = readStoredResponses(token);
   const contributorResponses = responsesByContributor[contributorInput.contributor_id] ?? {};
 
