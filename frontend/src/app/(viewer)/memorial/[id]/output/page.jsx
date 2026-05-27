@@ -1,123 +1,190 @@
 // frontend/src/app/(viewer)/memorial/[id]/output/page.jsx
+// Rebuilt to match new designs:
+// - Cream background (#F0EAE2)
+// - Bottom navigation bar (Slideshow | Constellations | Voices | Photo Archive)
+// - Photo Archive with Album/Contributors dropdown views
+// - Voices two-column layout placeholder
+// - Relationship colors: Family #AF5F42, Friend #45556C, Colleague #59763C
 
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getMemorialOutput, getMemorial } from '@/lib/api';
+import { getMemorialOutput } from '@/lib/api';
 import { mockMemorials } from '@/data/mockMemorials.js';
 
-// ─── Memorial Header ──────────────────────────────────────────────────────────
+// ─── Design tokens ────────────────────────────────────────────────────────────
 
-function MemorialHeader({ memorial, onShare }) {
-  return (
-    <div className="flex items-start gap-8">
-      <div className="h-36 w-36 shrink-0 overflow-hidden rounded-full bg-[#4a5568]">
-        {memorial?.cover_photo_url ? (
-          <img src={memorial.cover_photo_url} alt={memorial.subject_name} className="h-full w-full object-cover" />
-        ) : (
-          <div className="h-full w-full bg-[#4a5568]" />
-        )}
-      </div>
-      <div className="flex-1 min-w-0 pt-2">
-        <h1 className="text-[32px] font-medium text-neutral-950 leading-tight">
-          {memorial?.subject_name || 'John Smith'}
-        </h1>
-        <p className="mt-1 text-sm text-slate-400">
-          {memorial?.date_of_birth && new Date(memorial.date_of_birth).getFullYear()}
-          {memorial?.date_of_birth && memorial?.date_of_passing && ' - '}
-          {memorial?.date_of_passing && new Date(memorial.date_of_passing).getFullYear()}
-        </p>
-        <p className="mt-2 text-sm text-slate-500 leading-relaxed max-w-md">
-          {memorial?.bio || "This paragraph can be an example of explaining who John is. It's intended to be a part of John's profile."}
-        </p>
-      </div>
-      <div className="flex shrink-0 flex-col gap-2 pt-2">
-        <Link href={`/memorial/${memorial?.id}/output`} className="rounded-full bg-neutral-950 px-6 py-2.5 text-sm font-semibold text-white text-center hover:opacity-80 transition-opacity">
-          View page
-        </Link>
-        <button onClick={onShare} className="rounded-full bg-neutral-950 px-6 py-2.5 text-sm font-semibold text-white hover:opacity-80 transition-opacity">
-          Share
-        </button>
-        <button className="rounded-full bg-neutral-950 px-6 py-2.5 text-sm font-semibold text-white hover:opacity-80 transition-opacity">
-          Settings
-        </button>
-      </div>
-    </div>
-  );
+const COLORS = {
+  bg: '#F0EAE2',
+  family: '#AF5F42',
+  friend: '#45556C',
+  colleague: '#59763C',
+  text: '#1a1a1a',
+  textMuted: '#6b6b6b',
+  cardBg: '#E8E0D8',
+  border: '#D4CAC0',
+};
+
+function relationshipColor(type) {
+  const t = (type || '').toLowerCase();
+  if (t === 'family') return COLORS.family;
+  if (t === 'friend') return COLORS.friend;
+  if (t === 'colleague') return COLORS.colleague;
+  return COLORS.textMuted;
 }
 
-// ─── Tab bar ──────────────────────────────────────────────────────────────────
+// ─── Bottom Nav ───────────────────────────────────────────────────────────────
 
-const MAIN_TABS = ['Archive', 'Contributions', 'Outputs'];
+const NAV_TABS = ['Slideshow', 'Constellations', 'Voices', 'Photo Archive'];
 
-function TabBar({ active, onChange }) {
+function BottomNav({ active, onChange }) {
   return (
-    <div className="flex border-b border-neutral-200">
-      {MAIN_TABS.map((tab) => (
+    <nav className="fixed bottom-0 left-0 right-0 z-40 flex border-t border-[#D4CAC0] bg-[#F0EAE2]">
+      {NAV_TABS.map((tab) => (
         <button
           key={tab}
           onClick={() => onChange(tab)}
-          className={`px-8 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
+          className={`flex-1 py-4 text-sm transition-colors border-t-2 -mt-px ${
             active === tab
-              ? 'border-neutral-950 text-neutral-950 font-semibold'
-              : 'border-transparent text-slate-500 hover:text-neutral-950'
+              ? 'border-[#1a1a1a] text-[#1a1a1a] font-semibold'
+              : 'border-transparent text-[#6b6b6b] hover:text-[#1a1a1a]'
           }`}
         >
           {tab}
         </button>
       ))}
+    </nav>
+  );
+}
+
+// ─── Slideshow placeholder ────────────────────────────────────────────────────
+
+function SlideshowSection() {
+  return (
+    <div className="flex flex-col items-center justify-center py-32 text-center">
+      <p className="text-[#1a1a1a] text-lg font-medium">Slideshow</p>
+      <p className="text-[#6b6b6b] text-sm mt-2 max-w-xs">
+        The memorial slideshow will appear here once generated.
+      </p>
     </div>
   );
 }
 
-// ─── Collapsible section ──────────────────────────────────────────────────────
+// ─── Constellations placeholder (Mendrika) ────────────────────────────────────
 
-function CollapsibleSection({ title, children, defaultOpen = false }) {
-  const [open, setOpen] = useState(defaultOpen);
+function ConstellationsSection() {
   return (
-    <div>
-      <button onClick={() => setOpen(!open)} className="flex w-full items-center gap-3 py-3 text-left">
-        <span className="text-base font-medium text-neutral-950">{title}</span>
-        <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"
-          className={`text-neutral-950 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>
-          <path d="M7 10l5 5 5-5z" />
-        </svg>
-      </button>
-      {open && <div className="pb-6">{children}</div>}
+    <div className="flex flex-col items-center justify-center py-32 text-center">
+      <p className="text-[#1a1a1a] text-lg font-medium">Constellations</p>
+      <p className="text-[#6b6b6b] text-sm mt-2 max-w-xs">
+        Constellation — built by Mendrika
+      </p>
     </div>
   );
 }
 
-// ─── Archive Tab ──────────────────────────────────────────────────────────────
+// ─── Voices section (Sungjun fills in) ───────────────────────────────────────
 
-function ArchiveTab() {
-  return (
-    <div className="flex flex-col gap-6 pt-6">
-      <div className="flex items-center gap-3">
-        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24" className="text-neutral-950 shrink-0">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
-        </svg>
-        <input type="text" placeholder="Show me happy memories"
-          className="flex-1 rounded-xl border border-neutral-200 px-4 py-2.5 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-neutral-200" />
-        <button className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-80 transition-opacity">Filter</button>
-        <button className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-80 transition-opacity">Sort</button>
+function VoicesSection({ voices }) {
+  const [selected, setSelected] = useState(0);
+  const current = voices?.[selected];
+
+  if (!voices || voices.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 text-center">
+        <p className="text-[#1a1a1a] text-base font-medium">
+          No voice recordings were submitted for this memorial
+        </p>
+        <p className="text-[#6b6b6b] text-sm mt-1">
+          Voice recordings will appear here once contributors have submitted.
+        </p>
       </div>
-      <div className="grid grid-cols-3 gap-4">
-        {[...Array(3)].map((_, i) => <div key={i} className="aspect-[4/3] rounded-xl bg-neutral-200" />)}
-      </div>
-    </div>
-  );
-}
+    );
+  }
 
-// ─── Contributions Tab ────────────────────────────────────────────────────────
-
-function ContributionsTab() {
   return (
-    <div className="pt-6">
-      <div className="rounded-2xl border border-neutral-200 p-6 flex items-center justify-center py-16">
-        <p className="text-sm text-slate-400">Contributions tab — built by Mendrika</p>
+    <div className="flex flex-col gap-2 pt-2">
+      <h2 className="text-3xl font-serif text-[#1a1a1a] mb-6">Voices</h2>
+
+      <div className="flex gap-8">
+        {/* Left — audio list */}
+        <div className="w-48 shrink-0 flex flex-col gap-0">
+          {/* Sort dropdown */}
+          <div className="flex items-center gap-2 mb-4">
+            <select className="text-sm text-[#1a1a1a] bg-transparent border border-[#D4CAC0] rounded-lg px-3 py-1.5 pr-8 appearance-none cursor-pointer focus:outline-none">
+              <option>Sort</option>
+              <option>By date</option>
+              <option>By name</option>
+            </select>
+          </div>
+          {voices.map((v, i) => (
+            <button
+              key={v.id}
+              onClick={() => setSelected(i)}
+              className={`text-left py-3 border-b text-sm transition-colors ${
+                i === selected
+                  ? 'text-[#1a1a1a] font-medium border-[#1a1a1a]'
+                  : 'text-[#6b6b6b] border-[#D4CAC0] hover:text-[#1a1a1a]'
+              }`}
+            >
+              {v.contributor_title}
+            </button>
+          ))}
+        </div>
+
+        {/* Right — player area */}
+        <div className="flex-1 flex flex-col gap-4">
+          {/* Photo placeholder */}
+          <div className="w-full aspect-video rounded-2xl bg-[#D4CAC0] flex items-center justify-center">
+            <span className="text-[#6b6b6b] text-sm">Photo</span>
+          </div>
+
+          {/* Audio player placeholder */}
+          <div className="flex items-center gap-3">
+            <button className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
+              style={{ backgroundColor: COLORS.colleague }}>
+              <svg width="18" height="18" fill="white" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </button>
+            {/* Waveform placeholder — Day 9: replace with wavesurfer.js */}
+            <div className="flex-1 flex items-center gap-0.5 h-8">
+              {[...Array(40)].map((_, i) => (
+                <div
+                  key={i}
+                  className="flex-1 rounded-full"
+                  style={{
+                    backgroundColor: COLORS.colleague,
+                    opacity: 0.5,
+                    height: `${20 + Math.sin(i * 0.8) * 15}px`,
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Transcript */}
+          {current?.transcript_text && (
+            <p className="text-sm text-[#6b6b6b] italic leading-relaxed">
+              "{current.transcript_text}"
+            </p>
+          )}
+
+          {/* Tag + submitter */}
+          {current?.ai_category && (
+            <span className="inline-block self-start rounded-full border border-[#D4CAC0] px-4 py-1.5 text-sm text-[#6b6b6b]">
+              {current.ai_category}
+            </span>
+          )}
+
+          {current && (
+            <div className="text-sm text-[#1a1a1a] font-medium">
+              Submitted by {current.contributor_name || 'Contributor'}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -147,7 +214,6 @@ function Lightbox({ photo, onClose, onPrev, onNext }) {
               </div>
           }
         </div>
-        {/* Caption + contributor + year */}
         <div className="mt-3 px-1">
           {photo.caption && <p className="text-white text-sm font-medium">{photo.caption}</p>}
           <p className="text-neutral-400 text-xs mt-0.5">
@@ -169,118 +235,329 @@ function Lightbox({ photo, onClose, onPrev, onNext }) {
   );
 }
 
-// ─── All Photos Section ───────────────────────────────────────────────────────
+// ─── Photo Archive — Album view ───────────────────────────────────────────────
 
-function AllPhotosSection({ albums }) {
+function AlbumView({ albums }) {
   const [openAlbum, setOpenAlbum] = useState(null);
   const [lightboxPhoto, setLightboxPhoto] = useState(null);
   const [lightboxIndex, setLightboxIndex] = useState(0);
-  const currentAlbumPhotos = openAlbum?.photos || [];
+  const currentPhotos = openAlbum?.photos || [];
 
-  function openLightbox(photo, index) { setLightboxPhoto(photo); setLightboxIndex(index); }
+  function openLightbox(photo, i) { setLightboxPhoto(photo); setLightboxIndex(i); }
   function prevPhoto() {
-    const i = (lightboxIndex - 1 + currentAlbumPhotos.length) % currentAlbumPhotos.length;
-    setLightboxIndex(i); setLightboxPhoto(currentAlbumPhotos[i]);
+    const i = (lightboxIndex - 1 + currentPhotos.length) % currentPhotos.length;
+    setLightboxIndex(i); setLightboxPhoto(currentPhotos[i]);
   }
   function nextPhoto() {
-    const i = (lightboxIndex + 1) % currentAlbumPhotos.length;
-    setLightboxIndex(i); setLightboxPhoto(currentAlbumPhotos[i]);
+    const i = (lightboxIndex + 1) % currentPhotos.length;
+    setLightboxIndex(i); setLightboxPhoto(currentPhotos[i]);
   }
 
-  // ── PRIORITY 3: Empty state — no photos submitted yet ──
   if (!albums || albums.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="h-16 w-16 rounded-full bg-neutral-100 flex items-center justify-center mb-4">
-          <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" className="text-neutral-400">
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <div className="h-16 w-16 rounded-full flex items-center justify-center mb-4"
+          style={{ backgroundColor: COLORS.cardBg }}>
+          <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"
+            style={{ color: COLORS.textMuted }}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
         </div>
-        <p className="text-neutral-950 text-base font-medium">No photos yet</p>
-        <p className="text-slate-500 text-sm mt-1 max-w-xs">
+        <p className="text-base font-medium" style={{ color: COLORS.text }}>No photos yet</p>
+        <p className="text-sm mt-1 max-w-xs" style={{ color: COLORS.textMuted }}>
           Photos will appear here once contributors have submitted and the memorial has been generated.
         </p>
       </div>
     );
   }
 
-  // Album grid
-  if (!openAlbum) {
-    return (
-      <div>
-        <div className="mb-4 flex items-center justify-between">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Albums</p>
-          <div className="flex items-center gap-2 text-slate-400">
-            <button className="p-1 hover:text-neutral-950">
-              <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-            </button>
-            <span className="text-xs">1/{albums.length}</span>
-            <button className="p-1 hover:text-neutral-950">
-              <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+  return (
+    <div>
+      {/* Albums section */}
+      <p className="text-sm font-medium mb-3" style={{ color: COLORS.textMuted }}>Albums</p>
+      <div className="grid grid-cols-3 gap-4 mb-8">
+        {albums.map((album, i) => (
+          <button
+            key={i}
+            onClick={() => setOpenAlbum(openAlbum?.album_name === album.album_name ? null : album)}
+            className="group text-left rounded-2xl overflow-hidden transition-all"
+            style={{
+              border: `1px solid ${openAlbum?.album_name === album.album_name ? COLORS.text : COLORS.border}`,
+              backgroundColor: COLORS.cardBg,
+            }}
+          >
+            <div className="aspect-[4/3] overflow-hidden">
+              {album.photos?.[0]?.url ? (
+                <img src={album.photos[0].url} alt={album.album_name}
+                  className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+              ) : (
+                <div className="h-full w-full flex items-center justify-center"
+                  style={{ backgroundColor: COLORS.cardBg }}>
+                  <span className="text-xs text-center px-2" style={{ color: COLORS.textMuted }}>
+                    {album.album_name}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="p-3">
+              <p className="text-sm font-medium leading-snug" style={{ color: COLORS.text }}>
+                {album.album_name}
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: COLORS.textMuted }}>
+                {album.photos?.length || 0} photos
+              </p>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Photos section */}
+      {openAlbum && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium" style={{ color: COLORS.textMuted }}>Photos</p>
+            <button onClick={() => setOpenAlbum(null)}
+              className="text-xs hover:opacity-70" style={{ color: COLORS.textMuted }}>
+              Close
             </button>
           </div>
-        </div>
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          {albums.map((album, i) => (
-            <button
-              key={i}
-              onClick={() => setOpenAlbum(openAlbum?.album_name === album.album_name ? null : album)}
-              className={`group rounded-2xl border p-4 text-left transition-colors ${
-                openAlbum?.album_name === album.album_name
-                  ? 'border-neutral-950 bg-neutral-50'
-                  : 'border-neutral-200 bg-white hover:border-neutral-300'
-              }`}
-            >
-              <div className="aspect-square overflow-hidden rounded-xl bg-neutral-100 mb-3">
-                {album.photos?.[0]?.url ? (
-                  <img src={album.photos[0].url} alt={album.album_name} className="h-full w-full object-cover" />
-                ) : (
-                  <div className="h-full w-full bg-neutral-200 flex items-center justify-center">
-                    <span className="text-neutral-400 text-xs text-center px-2">{album.album_name}</span>
+          <div className="grid grid-cols-3 gap-3">
+            {openAlbum.photos?.map((photo, index) => (
+              <button key={photo.id} onClick={() => openLightbox(photo, index)}
+                className="group relative aspect-square overflow-hidden rounded-xl"
+                style={{ backgroundColor: COLORS.cardBg }}>
+                {photo.url
+                  ? <img src={photo.url} alt="" className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  : <div className="h-full w-full" style={{ backgroundColor: COLORS.cardBg }} />
+                }
+                {/* Hover overlay — caption + contributor + year */}
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-200 flex items-end p-2 opacity-0 group-hover:opacity-100">
+                  <div className="w-full">
+                    {photo.caption && <p className="text-white text-xs font-semibold truncate">{photo.caption}</p>}
+                    {photo.contributor_name && <p className="text-white text-xs font-medium truncate">{photo.contributor_name}</p>}
+                    {photo.taken_at && <p className="text-white/70 text-xs">{new Date(photo.taken_at).getFullYear()}</p>}
                   </div>
-                )}
-              </div>
-              <p className="text-xs font-medium text-neutral-950 leading-snug">{album.album_name}</p>
-            </button>
-          ))}
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
+      )}
+
+      {lightboxPhoto && (
+        <Lightbox photo={lightboxPhoto} onClose={() => setLightboxPhoto(null)}
+          onPrev={prevPhoto} onNext={nextPhoto} />
+      )}
+    </div>
+  );
+}
+
+// ─── Photo Archive — Contributors view ───────────────────────────────────────
+
+// Mock contributors for now — Day 9: comes from real API
+const MOCK_CONTRIBUTOR_PHOTOS = [
+  {
+    id: 'c1', name: 'Sarah', relationship: 'Friend',
+    contributions: 4, lastSubmitted: 'May 20, 2026',
+    photos: [
+      { id: 'p1', url: null, caption: null, taken_at: '2019-12-25' },
+      { id: 'p2', url: null, caption: 'Summer BBQ', taken_at: '2018-07-04' },
+    ],
+  },
+  {
+    id: 'c2', name: 'Michael', relationship: 'Family',
+    contributions: 3, lastSubmitted: 'May 18, 2026',
+    photos: [
+      { id: 'p3', url: null, caption: null, taken_at: '2022-06-15' },
+      { id: 'p4', url: null, caption: null, taken_at: '2021-09-03' },
+    ],
+  },
+  {
+    id: 'c3', name: 'Tom Harris', relationship: 'Colleague',
+    contributions: 2, lastSubmitted: 'May 15, 2026',
+    photos: [
+      { id: 'p5', url: null, caption: null, taken_at: null },
+    ],
+  },
+];
+
+function ContributorsView() {
+  const [expanded, setExpanded] = useState(null);
+  const [lightboxPhoto, setLightboxPhoto] = useState(null);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const currentPhotos = expanded ? (MOCK_CONTRIBUTOR_PHOTOS.find(c => c.id === expanded)?.photos || []) : [];
+
+  function openLightbox(photo, i) { setLightboxPhoto(photo); setLightboxIndex(i); }
+  function prevPhoto() {
+    const i = (lightboxIndex - 1 + currentPhotos.length) % currentPhotos.length;
+    setLightboxIndex(i); setLightboxPhoto(currentPhotos[i]);
+  }
+  function nextPhoto() {
+    const i = (lightboxIndex + 1) % currentPhotos.length;
+    setLightboxIndex(i); setLightboxPhoto(currentPhotos[i]);
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {MOCK_CONTRIBUTOR_PHOTOS.map((contributor) => (
+        <div key={contributor.id} className="rounded-2xl overflow-hidden"
+          style={{ border: `1px solid ${COLORS.border}` }}>
+          <div className="flex items-stretch">
+            {/* Contributor card */}
+            <div className="w-[220px] shrink-0 p-4 flex flex-col justify-between"
+              style={{ backgroundColor: COLORS.cardBg }}>
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full shrink-0"
+                  style={{ backgroundColor: COLORS.border }} />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium" style={{ color: COLORS.text }}>
+                    {contributor.name}
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: COLORS.textMuted }}>
+                    {contributor.contributions} contributions
+                  </p>
+                  <p className="text-xs" style={{ color: COLORS.textMuted }}>
+                    Last submitted {contributor.lastSubmitted}
+                  </p>
+                </div>
+              </div>
+              <span className="mt-3 self-start inline-block rounded-full px-3 py-1 text-xs border"
+                style={{
+                  borderColor: COLORS.border,
+                  color: relationshipColor(contributor.relationship),
+                  backgroundColor: COLORS.bg,
+                }}>
+                {contributor.relationship}
+              </span>
+            </div>
+
+            {/* Photos beside contributor */}
+            <div className="flex flex-1">
+              {contributor.photos.slice(0, 2).map((photo, i) => (
+                <button key={photo.id}
+                  onClick={() => openLightbox(photo, i)}
+                  className="flex-1 relative overflow-hidden group"
+                  style={{ backgroundColor: COLORS.cardBg }}>
+                  {photo.url
+                    ? <img src={photo.url} alt="" className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    : <div className="h-full w-full" style={{ backgroundColor: '#D0C8C0' }} />
+                  }
+                </button>
+              ))}
+            </div>
+
+            {/* Expand arrow */}
+            <button
+              onClick={() => setExpanded(expanded === contributor.id ? null : contributor.id)}
+              className="w-10 flex items-center justify-center shrink-0 hover:opacity-70 transition-opacity"
+              style={{ color: COLORS.text }}>
+              <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d={expanded === contributor.id ? "M18 15l-6-6-6 6" : "M6 9l6 6 6-6"} />
+              </svg>
+            </button>
+          </div>
+
+          {/* Expanded photos grid */}
+          {expanded === contributor.id && (
+            <div className="p-4 border-t grid grid-cols-3 gap-3"
+              style={{ borderColor: COLORS.border, backgroundColor: COLORS.bg }}>
+              {contributor.photos.map((photo, index) => (
+                <button key={photo.id}
+                  onClick={() => openLightbox(photo, index)}
+                  className="group relative aspect-square overflow-hidden rounded-xl"
+                  style={{ backgroundColor: COLORS.cardBg }}>
+                  {photo.url
+                    ? <img src={photo.url} alt="" className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    : <div className="h-full w-full" style={{ backgroundColor: '#D0C8C0' }} />
+                  }
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-end p-2 opacity-0 group-hover:opacity-100">
+                    <div>
+                      {photo.caption && <p className="text-white text-xs font-semibold truncate">{photo.caption}</p>}
+                      {photo.taken_at && <p className="text-white/70 text-xs">{new Date(photo.taken_at).getFullYear()}</p>}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+
+      {lightboxPhoto && (
+        <Lightbox photo={lightboxPhoto} onClose={() => setLightboxPhoto(null)}
+          onPrev={prevPhoto} onNext={nextPhoto} />
+      )}
+    </div>
+  );
+}
+
+// ─── Photo Archive — Masonry / All Photos view ───────────────────────────────
+// Pinterest-style grid preserving original photo aspect ratios
+// Uses CSS columns — no extra library needed
+// Day 9: real photos will fill actual heights; placeholders use fixed heights
+
+function MasonryView({ photos }) {
+  const [lightboxPhoto, setLightboxPhoto] = useState(null);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+
+  function openLightbox(photo, i) { setLightboxPhoto(photo); setLightboxIndex(i); }
+  function prevPhoto() {
+    const i = (lightboxIndex - 1 + photos.length) % photos.length;
+    setLightboxIndex(i); setLightboxPhoto(photos[i]);
+  }
+  function nextPhoto() {
+    const i = (lightboxIndex + 1) % photos.length;
+    setLightboxIndex(i); setLightboxPhoto(photos[i]);
+  }
+
+  if (!photos || photos.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <p className="text-base font-medium" style={{ color: COLORS.text }}>No photos yet</p>
+        <p className="text-sm mt-1 max-w-xs" style={{ color: COLORS.textMuted }}>
+          Photos will appear here once the memorial has been generated.
+        </p>
       </div>
     );
   }
 
-  // Individual album photos
+  // Varied heights to simulate different photo aspect ratios
+  // Day 9: use real image intrinsic dimensions
+  const heights = [200, 280, 180, 260, 220, 300, 190, 240, 210, 270];
+
   return (
     <div>
-      <button
-        onClick={() => setOpenAlbum(null)}
-        className="mb-6 flex items-center gap-1.5 text-sm text-slate-500 hover:text-neutral-950 transition-colors"
-      >
-        <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-        </svg>
-        All albums
-      </button>
-      <h2 className="text-xl font-medium text-neutral-950 mb-1">{openAlbum.album_name}</h2>
-      <p className="text-sm text-slate-500 mb-6">{openAlbum.photos?.length || 0} photos</p>
-      <div className="grid grid-cols-3 gap-3">
-        {openAlbum.photos?.map((photo, index) => (
+      {/* CSS columns masonry — preserves aspect ratios, Pinterest-style */}
+      <div style={{ columnCount: 3, columnGap: '12px' }}>
+        {photos.map((photo, i) => (
           <button
             key={photo.id}
-            onClick={() => openLightbox(photo, index)}
-            className="group relative aspect-square overflow-hidden rounded-xl bg-neutral-100"
+            onClick={() => openLightbox(photo, i)}
+            className="group relative w-full overflow-hidden rounded-xl mb-3 block"
+            style={{
+              breakInside: 'avoid',
+              backgroundColor: COLORS.cardBg,
+              height: `${heights[i % heights.length]}px`,
+            }}
           >
-            {photo.url
-              ? <img src={photo.url} alt="" className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
-              : <div className="h-full w-full bg-neutral-200" />
-            }
-            {/* STEP 1: Updated hover — caption + contributor name + year */}
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-200 flex items-end p-2 opacity-0 group-hover:opacity-100">
+            {photo.url ? (
+              <img
+                src={photo.url}
+                alt={photo.caption || ''}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              />
+            ) : (
+              <div className="w-full h-full" style={{ backgroundColor: COLORS.cardBg }} />
+            )}
+            {/* Hover overlay */}
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors duration-200 flex items-end p-2 opacity-0 group-hover:opacity-100">
               <div className="w-full">
                 {photo.caption && (
                   <p className="text-white text-xs font-semibold truncate">{photo.caption}</p>
                 )}
                 {photo.contributor_name && (
-                  <p className="text-white text-xs font-medium truncate">{photo.contributor_name}</p>
+                  <p className="text-white text-xs truncate">{photo.contributor_name}</p>
                 )}
                 {photo.taken_at && (
                   <p className="text-white/70 text-xs">{new Date(photo.taken_at).getFullYear()}</p>
@@ -290,6 +567,7 @@ function AllPhotosSection({ albums }) {
           </button>
         ))}
       </div>
+
       {lightboxPhoto && (
         <Lightbox
           photo={lightboxPhoto}
@@ -302,83 +580,83 @@ function AllPhotosSection({ albums }) {
   );
 }
 
-// ─── PRIORITY 3: Pre-generation empty state for Outputs tab ──────────────────
+// ─── Photo Archive section ────────────────────────────────────────────────────
 
-function PreGenerationEmpty() {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="h-16 w-16 rounded-full bg-neutral-100 flex items-center justify-center mb-4">
-        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" className="text-neutral-400">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-        </svg>
-      </div>
-      <p className="text-neutral-950 text-base font-medium">Generation hasn't run yet</p>
-      <p className="text-slate-500 text-sm mt-1 max-w-xs leading-relaxed">
-        Once you have contributions, click Generate to create the Story, Constellation, Voices, and Photos.
-      </p>
-    </div>
+function PhotoArchiveSection({ output }) {
+  const [view, setView] = useState('Album');
+
+  // Flatten all photos across all albums for masonry view
+  const allPhotos = (output?.photos || []).flatMap((album) =>
+    (album.photos || []).map((p) => ({ ...p, album_name: album.album_name }))
   );
-}
-
-// ─── Outputs Tab ──────────────────────────────────────────────────────────────
-
-function OutputsTab({ output }) {
-  // PRIORITY 3: Show pre-generation empty state if no output yet
-  if (!output) {
-    return (
-      <div className="pt-6">
-        <PreGenerationEmpty />
-      </div>
-    );
-  }
 
   return (
-    <div className="flex flex-col divide-y divide-neutral-100 pt-4">
-      <CollapsibleSection title="Story">
-        <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6">
-          <p className="text-sm text-slate-400">Story — built by Sungjun</p>
+    <div>
+      <h2 className="text-3xl font-serif mb-6" style={{ color: COLORS.text }}>Photo archive</h2>
+
+      {/* View dropdown + Tags filter */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="relative">
+          <select
+            value={view}
+            onChange={(e) => setView(e.target.value)}
+            className="appearance-none rounded-xl border px-4 py-2 pr-10 text-sm cursor-pointer focus:outline-none"
+            style={{ borderColor: COLORS.border, backgroundColor: COLORS.bg, color: COLORS.text }}
+          >
+            <option value="Album">Album</option>
+            <option value="Contributors">Contributors</option>
+            <option value="All Photos">All Photos</option>
+          </select>
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs"
+            style={{ color: COLORS.text }}>▼</span>
         </div>
-      </CollapsibleSection>
-      <CollapsibleSection title="Constellation">
-        <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6 aspect-video flex items-center justify-center">
-          <p className="text-sm text-slate-400">Constellation — built by Mendrika</p>
-        </div>
-      </CollapsibleSection>
-      <CollapsibleSection title="Voices">
-        <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6">
-          <p className="text-sm text-slate-400">Voices — built by Sungjun</p>
-        </div>
-      </CollapsibleSection>
-      <CollapsibleSection title="All Photos" defaultOpen={true}>
-        <AllPhotosSection albums={output?.photos} />
-      </CollapsibleSection>
+
+        {view === 'Contributors' && (
+          <div className="relative">
+            <select
+              className="appearance-none rounded-xl border px-4 py-2 pr-10 text-sm cursor-pointer focus:outline-none"
+              style={{ borderColor: COLORS.border, backgroundColor: COLORS.bg, color: COLORS.text }}
+            >
+              <option>Tags</option>
+              <option>Family</option>
+              <option>Friend</option>
+              <option>Colleague</option>
+            </select>
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs"
+              style={{ color: COLORS.text }}>▼</span>
+          </div>
+        )}
+      </div>
+
+      {view === 'Album' && <AlbumView albums={output?.photos} />}
+      {view === 'Contributors' && <ContributorsView />}
+      {view === 'All Photos' && <MasonryView photos={allPhotos} />}
     </div>
   );
 }
 
 // ─── Share Modal ──────────────────────────────────────────────────────────────
 
-function ShareModal({ onClose, memorialId }) {
+function ShareModal({ onClose }) {
   const [copiedContributor, setCopiedContributor] = useState(false);
   const [copiedViewer, setCopiedViewer] = useState(false);
 
   async function copyLink(url, type) {
     await navigator.clipboard.writeText(url);
-    if (type === 'contributor') {
-      setCopiedContributor(true);
-      setTimeout(() => setCopiedContributor(false), 2000);
-    } else {
-      setCopiedViewer(true);
-      setTimeout(() => setCopiedViewer(false), 2000);
-    }
+    if (type === 'contributor') { setCopiedContributor(true); setTimeout(() => setCopiedContributor(false), 2000); }
+    else { setCopiedViewer(true); setTimeout(() => setCopiedViewer(false), 2000); }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-6" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-[#dce4f0] p-8" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md rounded-2xl p-8"
+        style={{ backgroundColor: '#dce4f0' }}
+        onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-3 mb-8">
           <button onClick={onClose} className="text-[#4a5568] hover:text-neutral-950">
-            <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+            <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
           </button>
           <h2 className="text-xl font-medium text-[#2d3748]">Share</h2>
         </div>
@@ -387,12 +665,10 @@ function ShareModal({ onClose, memorialId }) {
             <p className="text-sm font-semibold text-[#2d3748]">Invite Contributors</p>
             <p className="text-xs text-[#4a5568] mt-0.5">For friends and family to share their memories:</p>
           </div>
-          <button
-            onClick={() => copyLink('mock-contributor-url', 'contributor')}
+          <button onClick={() => copyLink('mock-contributor-url', 'contributor')}
             className={`shrink-0 rounded-full px-4 py-2 text-xs font-medium transition-all ${
               copiedContributor ? 'bg-[#4a6fa5] text-white' : 'bg-white/70 text-[#2d3748] hover:bg-white'
-            }`}
-          >
+            }`}>
             {copiedContributor ? 'Copied!' : 'Copy Link 🔗'}
           </button>
         </div>
@@ -401,17 +677,15 @@ function ShareModal({ onClose, memorialId }) {
             <p className="text-sm font-semibold text-[#2d3748]">Invite Viewers</p>
             <p className="text-xs text-[#4a5568] mt-0.5">For anyone to view this memorial:</p>
           </div>
-          <button
-            onClick={() => copyLink('mock-viewer-url', 'viewer')}
+          <button onClick={() => copyLink('mock-viewer-url', 'viewer')}
             className={`shrink-0 rounded-full px-4 py-2 text-xs font-medium transition-all ${
               copiedViewer ? 'bg-[#4a6fa5] text-white' : 'bg-white/70 text-[#2d3748] hover:bg-white'
-            }`}
-          >
+            }`}>
             {copiedViewer ? 'Copied!' : 'Copy Link 🔗'}
           </button>
         </div>
         <div className="flex justify-center gap-6">
-          {[['Message', 'M'], ['Email', 'E'], ['Instagram', 'I']].map(([label]) => (
+          {['Message', 'Email', 'Instagram'].map((label) => (
             <div key={label} className="flex flex-col items-center gap-2">
               <div className="w-12 h-12 rounded-xl bg-white/50 flex items-center justify-center hover:bg-white/70 transition-colors cursor-pointer">
                 <span className="text-xs text-[#2d3748]">{label[0]}</span>
@@ -425,22 +699,24 @@ function ShareModal({ onClose, memorialId }) {
   );
 }
 
-// ─── PRIORITY 4: Error state ──────────────────────────────────────────────────
+// ─── Error state ──────────────────────────────────────────────────────────────
 
 function OutputError({ onRetry }) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="h-16 w-16 rounded-full bg-red-50 flex items-center justify-center mb-4">
-        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" className="text-red-400">
+    <div className="flex flex-col items-center justify-center py-32 text-center">
+      <div className="h-16 w-16 rounded-full flex items-center justify-center mb-4"
+        style={{ backgroundColor: '#fef2f2' }}>
+        <svg width="24" height="24" fill="none" stroke="#ef4444" strokeWidth="1.5" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
       </div>
-      <p className="text-neutral-950 text-base font-medium">Unable to load memorial</p>
-      <p className="text-slate-500 text-sm mt-1 max-w-xs">Something went wrong loading this memorial. Please try again.</p>
-      <button
-        onClick={onRetry}
-        className="mt-4 rounded-full bg-neutral-950 px-6 py-2.5 text-sm font-semibold text-white hover:opacity-80 transition-opacity"
-      >
+      <p className="text-base font-medium" style={{ color: COLORS.text }}>Unable to load memorial</p>
+      <p className="text-sm mt-1 max-w-xs" style={{ color: COLORS.textMuted }}>
+        Something went wrong. Please try again.
+      </p>
+      <button onClick={onRetry}
+        className="mt-6 rounded-full px-6 py-2.5 text-sm font-semibold text-white hover:opacity-80 transition-opacity"
+        style={{ backgroundColor: COLORS.text }}>
         Try again
       </button>
     </div>
@@ -451,14 +727,13 @@ function OutputError({ onRetry }) {
 
 export default function MemorialOutputPage() {
   const { id } = useParams();
-  const [activeTab, setActiveTab] = useState('Outputs');
+  const [activeTab, setActiveTab] = useState('Photo Archive');
   const [output, setOutput] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showShare, setShowShare] = useState(false);
 
-  // Read from mockMemorials.js — single source of truth for mock data
-  // Day 9: replace with real fetch from GET /memorials/:id
+  // Read from mockMemorials.js — Day 9: replace with GET /memorials/:id
   const mockData = mockMemorials.find((m) => m.id === id) ?? mockMemorials[0];
   const memorial = {
     id: mockData.id,
@@ -484,41 +759,62 @@ export default function MemorialOutputPage() {
 
   useEffect(() => { load(); }, [id]);
 
+  // Fix full-page cream background — no white showing around edges
+  useEffect(() => {
+    const prevBody = document.body.style.backgroundColor;
+    const prevHtml = document.documentElement.style.backgroundColor;
+    document.body.style.backgroundColor = COLORS.bg;
+    document.documentElement.style.backgroundColor = COLORS.bg;
+    return () => {
+      document.body.style.backgroundColor = prevBody;
+      document.documentElement.style.backgroundColor = prevHtml;
+    };
+  }, []);
+
   return (
-    <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
-      <div className="mx-auto flex w-full max-w-[960px] flex-col gap-8">
+    <div className="min-h-screen w-full pb-20" style={{ backgroundColor: COLORS.bg }}>
 
-        <nav className="flex h-10 items-center justify-between">
-          <span className="text-2xl leading-8 text-neutral-950">Remember</span>
-          <Link href="/dashboard" className="flex items-center gap-1.5 text-base text-neutral-950 hover:text-slate-600 transition-colors">
-            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-            Back
+      {/* Top nav */}
+      <header className="flex items-center justify-between px-8 py-5">
+        <span className="text-xl font-medium" style={{ color: COLORS.text }}>Remember</span>
+        <div className="flex items-center gap-4">
+          <button onClick={() => setShowShare(true)}
+            className="text-sm hover:opacity-70 transition-opacity"
+            style={{ color: COLORS.text }}>
+            Share
+          </button>
+          <Link href="/dashboard"
+            className="text-sm hover:opacity-70 transition-opacity"
+            style={{ color: COLORS.text }}>
+            ← Back
           </Link>
-        </nav>
-
-        <MemorialHeader memorial={memorial} onShare={() => setShowShare(true)} />
-        <TabBar active={activeTab} onChange={setActiveTab} />
-
-        <div>
-          {loading ? (
-            <div className="flex justify-center py-16">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-950" />
-            </div>
-          ) : error ? (
-            // PRIORITY 4: Error state with retry button
-            <OutputError onRetry={load} />
-          ) : (
-            <>
-              {activeTab === 'Archive' && <ArchiveTab />}
-              {activeTab === 'Contributions' && <ContributionsTab />}
-              {activeTab === 'Outputs' && <OutputsTab output={output} />}
-            </>
-          )}
         </div>
+      </header>
 
-      </div>
+      {/* Content */}
+      <main className="px-8 pb-8">
+        {loading ? (
+          <div className="flex justify-center py-32">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#D4CAC0]"
+              style={{ borderTopColor: COLORS.text }} />
+          </div>
+        ) : error ? (
+          <OutputError onRetry={load} />
+        ) : (
+          <>
+            {activeTab === 'Slideshow' && <SlideshowSection />}
+            {activeTab === 'Constellations' && <ConstellationsSection />}
+            {activeTab === 'Voices' && <VoicesSection voices={output?.voices} />}
+            {activeTab === 'Photo Archive' && <PhotoArchiveSection output={output} />}
+          </>
+        )}
+      </main>
 
-      {showShare && <ShareModal onClose={() => setShowShare(false)} memorialId={id} />}
-    </main>
+      {/* Bottom navigation */}
+      <BottomNav active={activeTab} onChange={setActiveTab} />
+
+      {/* Share modal */}
+      {showShare && <ShareModal onClose={() => setShowShare(false)} />}
+    </div>
   );
 }

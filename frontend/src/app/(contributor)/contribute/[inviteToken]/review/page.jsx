@@ -29,7 +29,7 @@ function formatDuration(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-// ─── Section wrapper ───────────
+// ─── Section wrapper ──────────────────────────────────────────────────────────
 
 function ReviewSection({ title, children }) {
   return (
@@ -40,22 +40,7 @@ function ReviewSection({ title, children }) {
   );
 }
 
-function formatRelationship(contributor) {
-  const relationshipType = contributor?.relationship_type;
-  const relationshipLabel = contributor?.relationship_label;
-
-  if (!relationshipType && !relationshipLabel) {
-    return 'Not provided';
-  }
-
-  if (relationshipType === 'Other' && relationshipLabel) {
-    return `${relationshipType} / ${relationshipLabel}`;
-  }
-
-  return relationshipLabel || relationshipType;
-}
-
-// ─── Page ───────────
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ReviewPage() {
   const router = useRouter();
@@ -143,20 +128,6 @@ export default function ReviewPage() {
           <p className="mt-2 text-base text-slate-500">Review all uploaded media.</p>
         </div>
 
-        {/* Contributor */}
-        <ReviewSection title="Contributor">
-          <div className="flex flex-col gap-3">
-            <div>
-              <p className="text-sm font-medium text-neutral-950">
-                {summary?.contributor?.name || 'Contributor'}
-              </p>
-              <p className="mt-0.5 text-sm text-slate-500">
-                {formatRelationship(summary?.contributor)}
-              </p>
-            </div>
-          </div>
-        </ReviewSection>
-
         {/* Photos */}
         {summary?.photos?.length > 0 && (
           <ReviewSection title="Uploaded photos">
@@ -183,12 +154,6 @@ export default function ReviewPage() {
                 </div>
               ))}
             </div>
-            <Link
-              href={`/contribute/${inviteToken}/photos`}
-              className="mt-4 inline-flex text-sm font-medium text-neutral-950 hover:text-slate-600 transition-colors"
-            >
-              Edit photos
-            </Link>
           </ReviewSection>
         )}
 
@@ -198,16 +163,15 @@ export default function ReviewPage() {
             <div className="flex flex-col gap-4">
               {summary.voice.map((rec) => (
                 <div key={rec.id} className="flex items-center gap-4">
-                  {/* Play button */}
                   <button className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-neutral-950 text-white hover:opacity-80 transition-opacity">
                     <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M8 5v14l11-7z" />
                     </svg>
                   </button>
-                  {/* Info */}
+                  {/* Show filename per design */}
                   <div className="flex-1 min-w-0">
                     <p className="truncate text-sm font-medium text-neutral-950">
-                      {rec.contributor_title}
+                      {rec.file_name || rec.contributor_title}
                     </p>
                     <div className="mt-1.5 flex items-center gap-2">
                       <div className="h-1 flex-1 rounded-full bg-blue-500/30">
@@ -218,17 +182,13 @@ export default function ReviewPage() {
                       </span>
                     </div>
                   </div>
-                  {/* Edit / Delete */}
                   <div className="flex shrink-0 gap-2">
                     <button className="p-1.5 text-neutral-500 hover:text-neutral-950 transition-colors">
                       <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a4 4 0 01-1.414.828l-3 1 1-3a4 4 0 01.828-1.414z" />
                       </svg>
                     </button>
-                    <button
-                      onClick={() => handleDeleteVoice(rec.id)}
-                      className="p-1.5 text-red-400 hover:text-red-600 transition-colors"
-                    >
+                    <button onClick={() => handleDeleteVoice(rec.id)} className="p-1.5 text-red-400 hover:text-red-600 transition-colors">
                       <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6m2 0a1 1 0 00-1-1h-4a1 1 0 00-1 1H5" />
                       </svg>
@@ -237,39 +197,31 @@ export default function ReviewPage() {
                 </div>
               ))}
             </div>
-            <Link
-              href={`/contribute/${inviteToken}/voice`}
-              className="mt-4 inline-flex text-sm font-medium text-neutral-950 hover:text-slate-600 transition-colors"
-            >
-              Edit voice
-            </Link>
           </ReviewSection>
         )}
 
-        {/* Stories / questionnaire responses */}
+        {/* Stories — title + AI summary format per updated design */}
         {summary?.responses?.length > 0 && (
           <ReviewSection title="Stories">
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-4">
               {summary.responses.map((r, i) => (
                 <div key={i}>
-                  <p className="text-sm font-medium text-neutral-950">{r.question_text}</p>
-                  <p className="mt-0.5 text-sm text-slate-500">{r.response_text}</p>
+                  <p className="text-sm font-medium text-neutral-950">
+                    {r.question_text}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {r.response_text || "An AI generated summary of the user's story will be featured here."}
+                  </p>
                 </div>
               ))}
             </div>
-            <Link
-              href={`/contribute/${inviteToken}/questions`}
-              className="mt-4 inline-flex text-sm font-medium text-neutral-950 hover:text-slate-600 transition-colors"
-            >
-              Edit questionnaire
-            </Link>
           </ReviewSection>
         )}
 
-        {/* Actions */}
+        {/* Actions — both pill-shaped per design */}
         <div className="flex gap-3">
           <Link
-            href={`/contribute/${inviteToken}/photos`}
+            href={`/contribute/${inviteToken}/upload`}
             className="flex-1 rounded-full border border-neutral-200 py-4 text-center text-base font-medium text-neutral-950 hover:bg-neutral-50 transition-colors"
           >
             Upload more
