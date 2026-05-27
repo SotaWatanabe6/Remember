@@ -6,6 +6,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { mockMemorials } from "@/data/mockMemorials.js";
+import { getStore, clearStore } from "@/lib/contributionStore";
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 const MOCK_DELAY = 500;
@@ -37,56 +38,6 @@ function writeStoredResponses(token, responsesByContributor) {
   window.localStorage.setItem(
     getResponsesStorageKey(token),
     JSON.stringify(responsesByContributor),
-  );
-}
-
-// ─── Photos localStorage ───────────
-
-function getPhotosStorageKey(token) {
-  return `remember_photos:${token}`;
-}
-
-function readStoredPhotos(token) {
-  if (typeof window === "undefined") return [];
-  try {
-    return JSON.parse(
-      window.localStorage.getItem(getPhotosStorageKey(token)) || "[]",
-    );
-  } catch {
-    return [];
-  }
-}
-
-function writeStoredPhotos(token, photos) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(
-    getPhotosStorageKey(token),
-    JSON.stringify(photos),
-  );
-}
-
-// ─── Voice localStorage ───────────
-
-function getVoiceStorageKey(token) {
-  return `remember_voice:${token}`;
-}
-
-function readStoredVoice(token) {
-  if (typeof window === "undefined") return [];
-  try {
-    return JSON.parse(
-      window.localStorage.getItem(getVoiceStorageKey(token)) || "[]",
-    );
-  } catch {
-    return [];
-  }
-}
-
-function writeStoredVoice(token, recordings) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(
-    getVoiceStorageKey(token),
-    JSON.stringify(recordings),
   );
 }
 
@@ -171,7 +122,6 @@ export async function startContribution(token, name) {
 /**
  * POST /contribute/:token/relationship
  * Saves relationship type to contributors table.
- * Body: { contributor_id, contributor_token, relationship_type, relationship_custom_label? }
  * TODO: Replace with real fetch() on Day 9.
  */
 export async function saveRelationship(token, relationshipInput) {
@@ -192,7 +142,6 @@ export async function saveRelationship(token, relationshipInput) {
 /**
  * POST /contribute/:token/responses
  * Saves questionnaire Q&A. Supports partial saves (autosave).
- * Saves to localStorage so review page can read real answers.
  * TODO: Replace with real fetch() on Day 9.
  */
 export async function saveResponses(token, responses) {
@@ -229,7 +178,6 @@ export async function saveResponses(token, responses) {
 /**
  * GET /contribute/:token/responses
  * Returns saved questionnaire responses for one contributor session.
- * Reads from localStorage — matches what saveResponses() wrote.
  * TODO: Replace with real fetch() on Day 9.
  */
 export async function getResponses(token, contributorInput) {
@@ -246,111 +194,35 @@ export async function getResponses(token, contributorInput) {
 }
 
 /**
- * POST /contribute/:token/photos
- * Uploads photos. Saves to localStorage so review page can read real uploads.
- * TODO: Replace with real fetch() + FormData on Day 9.
- */
-export async function uploadPhotos(token, files, caption = null) {
-  await delay(MOCK_DELAY * 2);
-
-  const newAssets = files.map((file, i) => ({
-    id: `photo-${Date.now()}-${i}`,
-    file_name: file.name,
-    file_type: file.type,
-    file_size_bytes: file.size,
-    storage_path: `memorials/mock/contributions/mock/photos/${file.name}`,
-    storage_bucket: "memorial-assets",
-    taken_at: null,
-    caption: caption ?? null,
-    previewUrl: typeof URL !== "undefined" ? URL.createObjectURL(file) : null,
-  }));
-
-  const existing = readStoredPhotos(token);
-  writeStoredPhotos(token, [...existing, ...newAssets]);
-
-  return {
-    success: true,
-    uploaded: files.length,
-    assets: newAssets,
-  };
-}
-
-/**
- * POST /contribute/:token/voice
- * Uploads voice recording. Saves to localStorage so review page can read real uploads.
- * contributor_title is required — throws if missing.
- * TODO: Replace with real fetch() + FormData on Day 9.
- */
-export async function uploadVoice(token, file, contributorTitle) {
-  await delay(MOCK_DELAY * 2);
-
-  if (!contributorTitle || contributorTitle.trim() === "") {
-    throw new Error("A title is required for each voice recording");
-  }
-
-  const recording = {
-    id: `voice-${Date.now()}`,
-    contributor_title: contributorTitle,
-    file_name: file.name,
-    file_type: file.type,
-    file_size_bytes: file.size,
-    storage_path: `memorials/mock/contributions/mock/voice/${file.name}`,
-    storage_bucket: "memorial-assets",
-    duration_seconds: 0,
-  };
-
-  const existing = readStoredVoice(token);
-  writeStoredVoice(token, [...existing, recording]);
-
-  return { success: true, recording };
-}
-
-/**
- * DELETE /contribute/:token/photos/:assetId
- * Removes a photo before submission.
- * TODO: Replace with real fetch() on Day 9.
- */
-export async function deletePhoto(token, assetId) {
-  await delay(MOCK_DELAY);
-
-  const existing = readStoredPhotos(token);
-  writeStoredPhotos(
-    token,
-    existing.filter((p) => p.id !== assetId),
-  );
-
-  return { success: true };
-}
-
-/**
- * DELETE /contribute/:token/voice/:recordingId
- * Removes a voice recording before submission.
- * TODO: Replace with real fetch() on Day 9.
- */
-export async function deleteVoice(token, recordingId) {
-  await delay(MOCK_DELAY);
-
-  const existing = readStoredVoice(token);
-  writeStoredVoice(
-    token,
-    existing.filter((r) => r.id !== recordingId),
-  );
-
-  return { success: true };
-}
-
-/**
  * GET /contribute/:token/summary
- * Returns everything the contributor submitted — used on review screen.
- * TODO: Replace with real fetch() on Day 9.
+ * Returns everything the contributor has so far — used on review screen.
+ * Reads photos + voice from contributionStore (in-memory).
+ * Reads questionnaire responses from localStorage.
  */
 export async function getContributorSummary(token) {
   await delay(MOCK_DELAY);
 
   const session = readContributorSession(token);
-  const photos = readStoredPhotos(token);
-  const voice = readStoredVoice(token);
+  const store = getStore();
 
+  // Photos from in-memory store
+  const photos = store.photos.map((p) => ({
+    id: p.id,
+    file_name: p.file.name,
+    previewUrl: p.previewUrl,
+    caption: p.caption,
+  }));
+
+  // Voice from in-memory store
+  const voice = store.voice.map((r) => ({
+    id: r.id,
+    contributor_title: r.title,
+    file_name: r.file.name,
+    previewUrl: r.previewUrl,
+    duration_seconds: 0,
+  }));
+
+  // Questionnaire responses from localStorage
   const contributorId =
     session?.contributorId || "c1b2c3d4-0000-0000-0000-000000000001";
   const responsesByContributor = readStoredResponses(token);
@@ -376,23 +248,90 @@ export async function getContributorSummary(token) {
 }
 
 /**
+ * DELETE a photo from the in-memory store (review page delete).
+ */
+export async function deletePhoto(token, assetId) {
+  const { removePhoto } = await import("@/lib/contributionStore");
+  removePhoto(assetId);
+  return { success: true };
+}
+
+/**
+ * DELETE a voice recording from the in-memory store (review page delete).
+ */
+export async function deleteVoice(token, recordingId) {
+  const { removeVoice } = await import("@/lib/contributionStore");
+  removeVoice(recordingId);
+  return { success: true };
+}
+
+/**
  * POST /contribute/:token/submit
- * Finalises the contribution — sets contributor status = submitted.
- * TODO: Replace with real fetch() on Day 9.
+ * Sends all photos, voice, and responses to the backend in one request.
+ * TODO: Replace MOCK_DELAY simulation with real fetch() on Day 9.
  */
 export async function submitContribution(token) {
-  await delay(MOCK_DELAY);
-  return {
-    success: true,
-    submitted_at: new Date().toISOString(),
-  };
+  const store = getStore();
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+
+  // ─── PLACEHOLDERS — replace with real session values from Sungjun ───
+  const memorial_id = "00000000-0000-0000-0000-000000000001";
+  const contributor_id = "00000000-0000-0000-0000-000000000002";
+  // ────────────────────────────────────────────────────────────────────
+
+  // 1. Upload photos
+  if (store.photos.length > 0) {
+    const photoForm = new FormData();
+    store.photos.forEach((photo) => {
+      photoForm.append("files", photo.file, photo.file.name);
+    });
+    photoForm.append("memorial_id", memorial_id);
+    photoForm.append("contributor_id", contributor_id);
+    photoForm.append("file_category", "photo");
+    photoForm.append("caption", store.photos[0]?.caption ?? "");
+
+    const photoRes = await fetch(`${BACKEND_URL}/api/media/upload`, {
+      method: "POST",
+      body: photoForm,
+    });
+    if (!photoRes.ok) throw new Error("Photo upload failed");
+  }
+
+  // 2. Upload voice
+  for (const rec of store.voice) {
+    const voiceForm = new FormData();
+    voiceForm.append("files", rec.file, rec.file.name);
+    voiceForm.append("memorial_id", memorial_id);
+    voiceForm.append("contributor_id", contributor_id);
+    voiceForm.append("file_category", "voice");
+    voiceForm.append("contributor_title", rec.title);
+
+    const voiceRes = await fetch(`${BACKEND_URL}/api/media/upload`, {
+      method: "POST",
+      body: voiceForm,
+    });
+    if (!voiceRes.ok) throw new Error("Voice upload failed");
+  }
+
+  // 3. Skip real submit — contributors table not ready yet
+  // TODO: uncomment when Supabase tables are fully set up
+  // const submitRes = await fetch(`${BACKEND_URL}/contribute/${token}/submit`, {
+  //   method: "POST",
+  //   headers: { "Content-Type": "application/json" },
+  //   body: JSON.stringify({ contributor_token: contributor_id }),
+  // });
+  // if (!submitRes.ok) throw new Error("Submission failed");
+
+  // 4. Clear in-memory store
+  clearStore();
+
+  return { success: true, submitted_at: new Date().toISOString() };
 }
 
 // ─── OUTPUT TABS (viewer experience) ─────────────────────────────────────────
 
 /**
  * GET /memorials/:id/output
- * Returns complete four-tab JSON for the memorial output page.
  * TODO: Replace with real fetch() on Day 9.
  */
 export async function getMemorialOutput(memorialId) {
@@ -583,8 +522,6 @@ export async function getMemorialOutput(memorialId) {
 
 /**
  * GET /share/:shareToken
- * Viewer-only access — same four-tab output, no organizer controls.
- * Returns identical shape to getMemorialOutput().
  * TODO: Replace with real fetch() on Day 9.
  */
 export async function getShareToken(shareToken) {
@@ -606,8 +543,6 @@ const isBrowser = () => typeof window !== "undefined";
 const AUTH_STORAGE_KEY = "remember.mock.auth";
 const MEMORIALS_STORAGE_KEY = "remember.mock.memorials";
 const USERS_STORAGE_KEY = "remember.mock.users";
-
-// ─── SEED DATA ────────────────────────────────────────────────────────────────
 
 const MOCK_USER = {
   id: "user-uuid-0000-0000-000000000001",
@@ -633,8 +568,6 @@ const MOCK_MEMORIALS = mockMemorials.map((m) => ({
   created_at: m.created_at,
   updated_at: m.updated_at,
 }));
-
-const MOCK_MEMORIAL_ID = MOCK_MEMORIALS[0].id;
 
 const MOCK_CONTRIBUTORS = [
   {
@@ -670,8 +603,6 @@ const MOCK_INVITE_LINK = {
   use_count: 3,
   created_at: now(),
 };
-
-// ─── SHARED localStorage HELPERS ─────────────────────────────────────────────
 
 const readStoredValue = (key, fallbackValue) => {
   if (!isBrowser()) return fallbackValue;
@@ -716,14 +647,10 @@ const getStoredMemorials = () => {
 };
 
 const getStoredSession = () => readStoredValue(AUTH_STORAGE_KEY, null);
-
 const setStoredSession = ({ user, token }) => {
   writeStoredValue(AUTH_STORAGE_KEY, { user, token });
 };
-
 const getActiveUser = () => getStoredSession()?.user ?? MOCK_USER;
-
-// ─── AUTH ─────────────────────────────────────────────────────────────────────
 
 export async function register({ email, password, full_name }) {
   await delay(MOCK_DELAY);
@@ -772,7 +699,6 @@ export async function login({ email, password }) {
   const token = fakeToken();
 
   setStoredSession({ user, token });
-
   return { user, token };
 }
 
@@ -786,8 +712,6 @@ export async function getCurrentUser() {
   await delay(MOCK_DELAY / 2);
   return getActiveUser();
 }
-
-// ─── MEMORIALS ────────────────────────────────────────────────────────────────
 
 export async function createMemorial({
   subject_name,
@@ -811,7 +735,6 @@ export async function createMemorial({
   };
 
   writeStoredValue(MEMORIALS_STORAGE_KEY, [memorial, ...getStoredMemorials()]);
-
   return { memorial };
 }
 
@@ -834,8 +757,6 @@ export async function getMemorial(id) {
   const memorial = getStoredMemorials().find((m) => m.id === id) ?? null;
   return { memorial };
 }
-
-// ─── INVITE LINK ──────────────────────────────────────────────────────────────
 
 export async function createInviteLink(memorialId, { expires_at, max_uses }) {
   await delay(MOCK_DELAY);
@@ -860,14 +781,10 @@ export async function updateInviteLink(memorialId, { is_active }) {
   };
 }
 
-// ─── CONTRIBUTORS ─────────────────────────────────────────────────────────────
-
 export async function getContributors(memorialId) {
   await delay(MOCK_DELAY);
   return { contributors: MOCK_CONTRIBUTORS };
 }
-
-// ─── SHARE ────────────────────────────────────────────────────────────────────
 
 export async function createShareLink(memorialId) {
   await delay(MOCK_DELAY);
@@ -879,8 +796,6 @@ export async function createShareLink(memorialId) {
     },
   };
 }
-
-// ─── AI ───────────────────────────────────────────────────────────────────────
 
 export async function triggerGeneration(memorialId) {
   await delay(MOCK_DELAY);

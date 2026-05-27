@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { uploadVoice, deleteVoice } from '@/lib/api';
+import { addVoice, removeVoice, updateVoiceTitle, getStore } from '@/lib/contributionStore';
 
 function ContributorNav({ backHref }) {
   return (
@@ -95,10 +95,10 @@ function AudioRow({ recording, onDelete, onEditTitle }) {
             {formatDuration(recording.duration_seconds)}
           </span>
         </div>
-        {recording.audio_url && (
+        {recording.previewUrl && (
           <audio
             ref={audioRef}
-            src={recording.audio_url}
+            src={recording.previewUrl}
             onTimeUpdate={onTimeUpdate}
             onEnded={() => { setPlaying(false); setProgress(0); }}
           />
@@ -181,7 +181,16 @@ export default function VoicePage() {
 
   const [recordings, setRecordings] = useState([]);
   const [pendingFile, setPendingFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
+
+  // Load existing recordings from store on mount
+  useEffect(() => {
+    const stored = getStore().voice.map((r) => ({
+      ...r,
+      contributor_title: r.title,
+      duration_seconds: 0,
+    }));
+    setRecordings(stored);
+  }, []);
 
   function handleFileChange(e) {
     const file = e.target.files?.[0];
@@ -189,32 +198,24 @@ export default function VoicePage() {
     e.target.value = '';
   }
 
-  async function handleTitleConfirm(title) {
+  function handleTitleConfirm(title) {
     if (!pendingFile) return;
-    const file = pendingFile;
+    const recording = addVoice(pendingFile, title);
+    setRecordings((prev) => [...prev, {
+      ...recording,
+      contributor_title: recording.title,
+      duration_seconds: 0,
+    }]);
     setPendingFile(null);
-    setUploading(true);
-
-    try {
-      const result = await uploadVoice(inviteToken, file, title);
-      setRecordings((prev) => [...prev, result.recording]);
-    } catch (err) {
-      console.error('Voice upload failed:', err);
-    } finally {
-      setUploading(false);
-    }
   }
 
-  async function handleDelete(recordingId) {
-    try {
-      await deleteVoice(inviteToken, recordingId);
-      setRecordings((prev) => prev.filter((r) => r.id !== recordingId));
-    } catch (err) {
-      console.error('Delete failed:', err);
-    }
+  function handleDelete(recordingId) {
+    removeVoice(recordingId);
+    setRecordings((prev) => prev.filter((r) => r.id !== recordingId));
   }
 
   function handleEditTitle(id, newTitle) {
+    updateVoiceTitle(id, newTitle);
     setRecordings((prev) =>
       prev.map((r) => (r.id === id ? { ...r, contributor_title: newTitle } : r))
     );
@@ -244,21 +245,12 @@ export default function VoicePage() {
         {/* Upload only — no record button */}
         <button
           onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          className="flex w-full flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-neutral-300 bg-white py-16 hover:bg-neutral-50 transition-colors disabled:opacity-50"
+          className="flex w-full flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-neutral-300 bg-white py-16 hover:bg-neutral-50 transition-colors"
         >
-          {uploading ? (
-            <svg className="animate-spin" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-            </svg>
-          ) : (
-            <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 10l-4-4m0 0L8 10m4-4v12" />
-            </svg>
-          )}
-          <span className="text-base text-slate-600">
-            {uploading ? 'Uploading…' : 'Click to upload or drag and drop'}
-          </span>
+          <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 10l-4-4m0 0L8 10m4-4v12" />
+          </svg>
+          <span className="text-base text-slate-600">Click to upload or drag and drop</span>
           <span className="text-sm text-slate-400">MP3, WAV, M4A, OGG up to 50MB</span>
         </button>
 

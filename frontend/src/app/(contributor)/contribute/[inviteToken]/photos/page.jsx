@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { uploadPhotos, deletePhoto } from '@/lib/api';
+import { addPhotos, removePhoto, getStore } from '@/lib/contributionStore';
 
 function ContributorNav({ backHref }) {
   return (
@@ -63,7 +63,7 @@ function DropZone({ onFiles }) {
   );
 }
 
-function PhotoThumb({ asset, onDelete, uploading }) {
+function PhotoThumb({ asset, onDelete }) {
   return (
     <div className="relative aspect-square overflow-hidden rounded-xl bg-neutral-100">
       {asset.previewUrl ? (
@@ -72,33 +72,25 @@ function PhotoThumb({ asset, onDelete, uploading }) {
         <div className="h-full w-full bg-neutral-200" />
       )}
 
-      {uploading && (
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-neutral-300">
-          <div className="h-full w-1/2 animate-pulse bg-blue-500 rounded-full" />
-        </div>
-      )}
-
-      {!uploading && (
-        <div className="absolute right-2 top-2 flex gap-1.5">
-          <button
-            className="rounded-full bg-white/90 p-1.5 shadow-sm hover:bg-white transition-colors"
-            aria-label="Edit caption"
-          >
-            <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a4 4 0 01-1.414.828l-3 1 1-3a4 4 0 01.828-1.414z" />
-            </svg>
-          </button>
-          <button
-            onClick={() => onDelete(asset.id)}
-            className="rounded-full bg-white/90 p-1.5 shadow-sm hover:bg-white transition-colors"
-            aria-label="Delete photo"
-          >
-            <svg width="12" height="12" fill="none" stroke="#ef4444" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6m2 0a1 1 0 00-1-1h-4a1 1 0 00-1 1H5" />
-            </svg>
-          </button>
-        </div>
-      )}
+      <div className="absolute right-2 top-2 flex gap-1.5">
+        <button
+          className="rounded-full bg-white/90 p-1.5 shadow-sm hover:bg-white transition-colors"
+          aria-label="Edit caption"
+        >
+          <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a4 4 0 01-1.414.828l-3 1 1-3a4 4 0 01.828-1.414z" />
+          </svg>
+        </button>
+        <button
+          onClick={() => onDelete(asset.id)}
+          className="rounded-full bg-white/90 p-1.5 shadow-sm hover:bg-white transition-colors"
+          aria-label="Delete photo"
+        >
+          <svg width="12" height="12" fill="none" stroke="#ef4444" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6m2 0a1 1 0 00-1-1h-4a1 1 0 00-1 1H5" />
+          </svg>
+        </button>
+      </div>
     </div>
   );
 }
@@ -109,48 +101,20 @@ export default function PhotosPage() {
 
   const [assets, setAssets] = useState([]);
   const [caption, setCaption] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [uploadingIds, setUploadingIds] = useState(new Set());
 
-  const handleFiles = useCallback(async (files) => {
-    const previews = files.map((file, i) => ({
-      id: `pending-${Date.now()}-${i}`,
-      file_name: file.name,
-      previewUrl: URL.createObjectURL(file),
-      pending: true,
-    }));
-    setAssets((prev) => [...prev, ...previews]);
-    setUploading(true);
+  // Load existing photos from store on mount
+  useEffect(() => {
+    setAssets(getStore().photos);
+  }, []);
 
-    const pendingIds = new Set(previews.map((p) => p.id));
-    setUploadingIds(pendingIds);
+  const handleFiles = useCallback((files) => {
+    const newAssets = addPhotos(files, caption.trim() || null);
+    setAssets((prev) => [...prev, ...newAssets]);
+  }, [caption]);
 
-    try {
-      const result = await uploadPhotos(inviteToken, files, caption.trim() || null);
-      setAssets((prev) => {
-        const kept = prev.filter((a) => !a.pending);
-        const newAssets = result.assets.map((a, i) => ({
-          ...a,
-          previewUrl: previews[i]?.previewUrl || null,
-        }));
-        return [...kept, ...newAssets];
-      });
-    } catch (err) {
-      setAssets((prev) => prev.filter((a) => !a.pending));
-      console.error('Upload failed:', err);
-    } finally {
-      setUploading(false);
-      setUploadingIds(new Set());
-    }
-  }, [inviteToken, caption]);
-
-  async function handleDelete(assetId) {
-    try {
-      await deletePhoto(inviteToken, assetId);
-      setAssets((prev) => prev.filter((a) => a.id !== assetId));
-    } catch (err) {
-      console.error('Delete failed:', err);
-    }
+  function handleDelete(assetId) {
+    removePhoto(assetId);
+    setAssets((prev) => prev.filter((a) => a.id !== assetId));
   }
 
   function handleContinue() {
@@ -198,7 +162,6 @@ export default function PhotosPage() {
                   key={asset.id}
                   asset={asset}
                   onDelete={handleDelete}
-                  uploading={uploadingIds.has(asset.id)}
                 />
               ))}
             </div>
