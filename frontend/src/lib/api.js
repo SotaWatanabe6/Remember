@@ -2,8 +2,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // SHARED API LAYER
 // Every API call in the app goes through this file.
-// Contributor invite validation uses the real backend; later flow steps still
-// use the existing branch-scoped mock behavior until their backend branches land.
+// Contributor invite validation and session setup use the real backend; later
+// flow steps still use the existing branch-scoped mock behavior until their
+// backend branches land.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { mockMemorials } from "@/data/mockMemorials.js";
@@ -163,42 +164,28 @@ export async function getInviteToken(token) {
  * POST /contribute/:token/start
  * Creates contributor row, returns contributor session token.
  * Body: { name: string }
- * TODO: Replace with real fetch() on Day 9.
  */
 export async function startContribution(token, name) {
-  await delay(MOCK_DELAY);
-  const now = new Date().toISOString();
-
-  return {
-    contributor: {
-      id: 'c1b2c3d4-0000-0000-0000-000000000001',
-      name,
-      status: 'in_progress',
-      created_at: now,
-      updated_at: now,
-    },
-    contributor_token: 'mock-contributor-session-token',
-  };
+  return requestJson(`/contribute/${encodeURIComponent(token)}/start`, {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
 }
 
 /**
  * POST /contribute/:token/relationship
  * Saves relationship type to contributors table.
- * Body: { contributor_id, contributor_token, relationship_type, relationship_custom_label? }
- * TODO: Replace with real fetch() on Day 9.
+ * Body: { contributor_token, relationship_type, relationship_label? }
  */
 export async function saveRelationship(token, relationshipInput) {
-  await delay(MOCK_DELAY);
-
-  return {
-    success: true,
-    contributor: {
-      id: relationshipInput.contributor_id,
+  return requestJson(`/contribute/${encodeURIComponent(token)}/relationship`, {
+    method: "POST",
+    body: JSON.stringify({
+      contributor_token: relationshipInput.contributor_token,
       relationship_type: relationshipInput.relationship_type,
-      relationship_custom_label: relationshipInput.relationship_custom_label ?? null,
-      updated_at: new Date().toISOString(),
-    },
-  };
+      relationship_label: relationshipInput.relationship_label ?? null,
+    }),
+  });
 }
 
 /**

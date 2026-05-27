@@ -139,8 +139,12 @@ export default function ContributorInviteLanding({ inviteToken }) {
     try {
       await beginContributorDraft(inviteToken, trimmedContributorName);
       router.push(`/contribute/${inviteToken}/relationship`);
-    } catch {
-      setSubmitError("We could not begin your contribution. Please try again.");
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "We could not begin your contribution. Please try again.",
+      );
       setIsSubmitting(false);
     }
   };

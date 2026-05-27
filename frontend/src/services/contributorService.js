@@ -44,6 +44,13 @@ function storeContributorSession(inviteToken, session) {
   window.localStorage.setItem(getSessionStorageKey(inviteToken), JSON.stringify(session));
 }
 
+function isMockContributorSession(session) {
+  return (
+    session?.contributorToken === "mock-contributor-session-token" ||
+    session?.contributorId === "c1b2c3d4-0000-0000-0000-000000000001"
+  );
+}
+
 function isExpired(expiresAt) {
   return Boolean(expiresAt) && new Date(expiresAt).getTime() < Date.now();
 }
@@ -182,7 +189,11 @@ export async function beginContributorDraft(inviteToken, contributorName) {
   const now = new Date().toISOString();
   const storedSession = getStoredContributorSession(inviteToken);
 
-  if (storedSession?.contributorId && storedSession.memorialId === invite.memorialId) {
+  if (
+    storedSession?.contributorId &&
+    storedSession.memorialId === invite.memorialId &&
+    !isMockContributorSession(storedSession)
+  ) {
     const resumedSession = {
       ...storedSession,
       inviteToken,
@@ -196,14 +207,22 @@ export async function beginContributorDraft(inviteToken, contributorName) {
   }
 
   const contribution = await startContribution(inviteToken, trimmedContributorName);
+  const contributor = contribution?.contributor;
+  const contributorId = contributor?.id;
+
+  if (!contributorId) {
+    throw new Error("The Remember API did not return a contributor session.");
+  }
+
   const session = {
     inviteToken,
-    memorialId: invite.memorialId,
-    contributorId: contribution.contributor.id,
-    contributorToken: contribution.contributor_token,
-    contributorName: trimmedContributorName,
-    createdAt: contribution.contributor.created_at ?? now,
-    updatedAt: contribution.contributor.updated_at ?? now,
+    memorialId: contributor.memorial_id ?? invite.memorialId,
+    contributorId,
+    contributorToken: contribution.contributor_token ?? null,
+    contributorName: contributor.name ?? trimmedContributorName,
+    status: contributor.status ?? "in_progress",
+    createdAt: contributor.created_at ?? now,
+    updatedAt: contributor.updated_at ?? now,
   };
 
   storeContributorSession(inviteToken, session);
@@ -215,7 +234,8 @@ function hasValidContributorSession(session, invite) {
     session?.contributorId &&
       session?.contributorToken &&
       session?.memorialId &&
-      session.memorialId === invite.memorialId,
+      session.memorialId === invite.memorialId &&
+      !isMockContributorSession(session),
   );
 }
 
@@ -286,17 +306,17 @@ export async function saveContributorRelationship(
     trimmedRelationshipType === CONTRIBUTOR_RELATIONSHIP_OTHER ? trimmedCustomLabel : null;
 
   const savedRelationship = await saveRelationship(inviteToken, {
-    contributor_id: draft.session.contributorId,
     contributor_token: draft.session.contributorToken,
     relationship_type: trimmedRelationshipType,
-    relationship_custom_label,
+    relationship_label: relationship_custom_label,
   });
 
   const updatedSession = {
     ...draft.session,
     relationship_type: savedRelationship.contributor?.relationship_type ?? trimmedRelationshipType,
     relationship_custom_label:
-      savedRelationship.contributor?.relationship_custom_label ?? relationship_custom_label,
+      savedRelationship.contributor?.relationship_label ?? relationship_custom_label,
+    relationship_label: savedRelationship.contributor?.relationship_label ?? relationship_custom_label,
     updatedAt: savedRelationship.contributor?.updated_at ?? new Date().toISOString(),
   };
 
