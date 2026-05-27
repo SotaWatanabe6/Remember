@@ -19,8 +19,15 @@ export default function MemorialContributionsPage({ contributors }) {
                 2 contributions
               </p>
 
-              <p className="text-sm text-gray-600 mt-1">
-                Last submitted {contributor.submitted_at}
+              <p className="text-[12px] text-gray-600 mt-1">
+                Last submitted{" "}
+                {contributor.submitted_at
+                  ? new Date(contributor.submitted_at).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })
+                  : "N/A"}
               </p>
 
               <button className="mt-4 bg-gray-200 hover:bg-gray-300 transition px-6 py-2 rounded-lg text-sm text-black">

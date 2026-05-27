@@ -117,35 +117,8 @@ function ArchiveTab() {
 
 // ─── Contributions Tab ────────────────────────────────────────────────────────
 
-function ContributionsTab() {
-  const params = useParams();
-  const memorialId = params?.id;
-  const [contributors, setContributors] = useState([]);
-  
-  useEffect(() => {    
-    if (!memorialId) return;
-    
-    const loadMemorial = async () => {        
-      
-    const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
-      if (typeof token === "undefined") {
-        console.log("Token retrieved:", token);
-        return ;
-      }
-      const contributor= await getMemorialContributors(memorialId,token);
+function ContributionsTab({contributorslist}) {
 
-      setContributors(contributor.contributors);
-    }
-    loadMemorial();
-
-  }, [memorialId]);  
-
-  // const contributors = Array.from({ length: 6 }, (_, i) => ({
-  //   id: i,
-  //   name: "Jane Smith",
-  //   contributions: 10,
-  //   lastSubmitted: "May 20, 2026",
-  // }));  
   return (
     <div className="min-h-screen bg-white p-6">
       {/* Filter */}
@@ -156,15 +129,9 @@ function ContributionsTab() {
           <option>Developers</option>
         </select>
       </div>
-      {/* Contributors Grid */}
-        <MemorialContributionsPage contributors={contributors} />
-
+      <MemorialContributionsPage contributors={contributorslist} />
     </div>    
-    // <div className="pt-6">
-    //   <div className="rounded-2xl border border-neutral-200 p-6 flex items-center justify-center py-16">
-    //     <p className="text-sm text-slate-400">Contributions tab — built by Mendrika</p>
-    //   </div>
-    // </div>
+
   );
 }
 
@@ -523,6 +490,32 @@ export default function MemorialOutputPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showShare, setShowShare] = useState(false);
+  const memorialId = id;
+  const [contributors, setContributors] = useState([]);
+  
+  useEffect(() => {    
+    if (!memorialId) return;
+    
+    const loadMemorial = async () => {        
+      setLoading(true);
+      setError(null);
+      try {
+        const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
+        if (typeof token === "undefined") {
+          console.log("Token retrieved:", token);
+          return ;
+        }
+        const contributor= await getMemorialContributors(memorialId,token);
+        setContributors(contributor.contributors);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }      
+    }
+    loadMemorial();
+
+  }, [memorialId]);  
 
   // Read from mockMemorials.js — single source of truth for mock data
   // Day 9: replace with real fetch from GET /memorials/:id
@@ -577,7 +570,7 @@ export default function MemorialOutputPage() {
           ) : (
             <>
               {activeTab === 'Archive' && <ArchiveTab />}
-              {activeTab === 'Contributions' && <ContributionsTab />}
+              {activeTab === 'Contributions' && <ContributionsTab contributorslist={contributors} />}
               {activeTab === 'Outputs' && <OutputsTab output={output} />}
             </>
           )}
