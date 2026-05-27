@@ -125,7 +125,7 @@ function ContributionsTab({contributorslist}) {
       <div className="mb-8">
         <select className="border border-gray-300 rounded-md px-4 py-2 text-sm outline-none">
           <option>Contributors</option>
-          <option>Designers</option>
+          <option>Awaiting Approval</option>
           <option>Developers</option>
         </select>
       </div>
