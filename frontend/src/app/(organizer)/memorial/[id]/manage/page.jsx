@@ -5,7 +5,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getMemorialOutput } from '@/lib/api';
+import { getMemorialOutput } from '@/services/memorialService';
 import { getMemorialContributors} from '@/services/contributorService'
 import { mockMemorials } from '@/data/mockMemorials.js';
 import ConstellationGraph from "../_components/constellation";
@@ -284,7 +284,6 @@ function AllPhotosSection({ albums }) {
     const i = (lightboxIndex + 1) % currentAlbumPhotos.length;
     setLightboxIndex(i); setLightboxPhoto(currentAlbumPhotos[i]);
   }
-
   // ── PRIORITY 3: Empty state — no photos submitted yet ──
   if (!albums || albums.length === 0) {
     return (
@@ -319,7 +318,7 @@ function AllPhotosSection({ albums }) {
           </div>
         </div>
         <div className="grid grid-cols-3 gap-4 mb-8">
-          {albums.map((album, i) => (
+          {albums?.albums?.map((album, i) => (
             <button
               key={i}
               onClick={() => setOpenAlbum(openAlbum?.album_name === album.album_name ? null : album)}
@@ -422,25 +421,7 @@ function PreGenerationEmpty() {
 
 function OutputsTab({ output }) {
   // PRIORITY 3: Show pre-generation empty state if no output yet
-  const params = useParams();
-  const memorialId = params?.id;
-  const [memorialOutput, setMemorialOutput] = useState(null);
-  useEffect(() => {
 
-    if (!memorialId) return;
-    
-    const loadMemorial = async () => {        
-        const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
-        if (typeof token === "undefined") {
-          console.log("Token retrieved:", token);
-          return ;
-        }
-        const constellation= await getMemorialOutput(memorialId,token);
-        setMemorialOutput(constellation);
-        
-      }
-      loadMemorial();
-  }, [memorialId]);
 
   if (!output) {
     return (
@@ -459,9 +440,7 @@ function OutputsTab({ output }) {
       </CollapsibleSection>
       <CollapsibleSection title="Constellation">
         <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6 aspect-video flex items-center justify-center">
-          <p className="text-sm text-slate-400">
-            <ConstellationGraph memorial={memorialOutput} />
-          </p>
+          <ConstellationGraph memorial={output} />
         </div>
       </CollapsibleSection>
       <CollapsibleSection title="Voices">
@@ -615,11 +594,16 @@ export default function MemorialOutputPage() {
     bio: mockData.brief_biography || mockData.short_description || null,
   };
 
-  async function load() {
+  const load = async () => {        
     setLoading(true);
     setError(null);
     try {
-      const data = await getMemorialOutput(id);
+      const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
+      if (typeof token === "undefined") {
+        console.log("Token retrieved:", token);
+        return ;
+      }
+      const data = await getMemorialOutput(id, token);
       setOutput(data);
     } catch (err) {
       setError(err.message);
@@ -628,7 +612,10 @@ export default function MemorialOutputPage() {
     }
   }
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { 
+    if (!id) return;
+    load(); 
+  }, [id]);
 
   return (
     <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">

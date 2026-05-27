@@ -60,7 +60,6 @@ const normalizeMemorial = (memorial) => {
 export async function getMemorialOutput(id,token) {
     await waitForMockRequest();
     try {
-      console.log(token.access_token);
       const response = await fetch(
         `${API_BASE_URL}/memorials/${id}/output`,
         {
