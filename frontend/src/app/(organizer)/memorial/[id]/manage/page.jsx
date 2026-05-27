@@ -9,8 +9,10 @@ import { getMemorialOutput } from '@/lib/api';
 import { getMemorialContributors} from '@/services/contributorService'
 import { mockMemorials } from '@/data/mockMemorials.js';
 import ConstellationGraph from "../_components/constellation";
-import MemorialContributionsPage from "../_components/contribution-tab";
-
+import MemorialContributionsPage from "../_components/contribution-list";
+import MemorialContributionApproval from "../_components/contribution-awaiting";
+import {  ChevronLeft,
+  ChevronRight } from "lucide-react";
 
 // ─── Memorial Header ──────────────────────────────────────────────────────────
 
@@ -118,20 +120,104 @@ function ArchiveTab() {
 // ─── Contributions Tab ────────────────────────────────────────────────────────
 
 function ContributionsTab({contributorslist}) {
+  const [value, setValue] = useState("contributors");
+  const submissions = [
+    {
+      id: 1,
+      user: "Jane Smith",
+      contribution: "10 contributions",
+      summary:
+        "This can be an AI generated summary of the contribution, either mentioning surfaced themes or flagged submissions that may be sensitive or inappropriate.",
+    },
+    {
+      id: 2,
+      user: "Michael Johnson",
+      contribution: "7 contributions",
+      summary:
+        "AI generated summaries can highlight themes, relationships, and potentially sensitive submissions for moderators to review quickly.",
+    },
+    {
+      id: 3,
+      user: "Emily Davis",
+      contribution: "4 contributions",
+      summary:
+        "This summary may contain surfaced insights generated automatically from uploaded stories, photos, and audio.",
+    },
+    {
+      id: 4,
+      user: "Chris Brown",
+      contribution: "15 contributions",
+      summary:
+        "AI can help identify emotional themes and summarize media content for easier moderation workflows.",
+    },
+    {
+      id: 5,
+      user: "Sarah Wilson",
+      contribution: "3 contributions",
+      summary:
+        "Potentially sensitive content or highlighted themes may appear here after automatic AI analysis.",
+    },
+  ];
+  const handleChange = (e) => {
+    setValue(e.target.value);
+  };
+  const [currentIndex, setCurrentIndex] = useState(0);
 
+  const current = submissions[currentIndex];
+
+  const handlePrev = () => {
+      setCurrentIndex((prev) =>
+      prev === 0 ? submissions.length - 1 : prev - 1
+      );
+  };
+
+  const handleNext = () => {
+      setCurrentIndex((prev) =>
+      prev === submissions.length - 1 ? 0 : prev + 1
+      );
+  };      
   return (
-    <div className="min-h-screen bg-white p-6">
-      {/* Filter */}
-      <div className="mb-8">
-        <select className="border border-gray-300 rounded-md px-4 py-2 text-sm outline-none">
-          <option>Contributors</option>
-          <option>Awaiting Approval</option>
-          <option>Developers</option>
-        </select>
-      </div>
-      <MemorialContributionsPage contributors={contributorslist} />
-    </div>    
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-4 flex items-center justify-between">      
+          <div className="flex items-center gap-3">
+            <select onChange={handleChange} value={value} className="border border-gray-300 rounded-md px-4 py-2 text-sm outline-none">
+              <option value="contributors">Contributors</option>
+              <option value="awaiting">Awaiting Approval</option>
+            </select>
+          </div>
+          {
+            value=="awaiting" ? (
+            <div className="flex items-center gap-4 text-sm text-gray-600">
+              <button
+                onClick={handlePrev}
+                className="rounded p-1 transition hover:bg-gray-200"
+              >
+                <ChevronLeft size={18} />
+              </button>
 
+              <span>
+                {currentIndex + 1}/{submissions.length}
+              </span>
+
+              <button
+                onClick={handleNext}
+                className="rounded p-1 transition hover:bg-gray-200"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+                      
+            ): null
+          }
+        </div>    
+        {
+          value === "contributors" ? (
+            <MemorialContributionsPage contributors={contributorslist} />
+          ) : value === "awaiting" ? (
+            <MemorialContributionApproval contributors={current} />
+          ) : null
+        }
+      </div>
   );
 }
 
@@ -324,7 +410,7 @@ function PreGenerationEmpty() {
           <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
         </svg>
       </div>
-      <p className="text-neutral-950 text-base font-medium">Generation hasn't run yet</p>
+      <p className="text-neutral-950 text-base font-medium">Generation hasn t run yet</p>
       <p className="text-slate-500 text-sm mt-1 max-w-xs leading-relaxed">
         Once you have contributions, click Generate to create the Story, Constellation, Voices, and Photos.
       </p>

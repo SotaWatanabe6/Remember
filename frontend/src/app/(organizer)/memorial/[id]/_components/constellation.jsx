@@ -5,6 +5,7 @@ import * as d3 from "d3";
 
 export default function ConstellationGraph({ memorial }) {
  const ref = useRef(null);
+ 
   useEffect(() => {
     const width = 800;
     const height = 600;
@@ -37,7 +38,20 @@ export default function ConstellationGraph({ memorial }) {
       weight: d.weight
     })); 
     
-    
+    const edgeStyle = (type) => {
+      switch (type) {
+        case "family":
+          return ""; // solid
+        case "friend":
+          return "6,4"; // dashed
+        case "colleague":
+          return "2,4"; // dotted
+        case "community":
+          return "10,4,2,4"; // long-dash pattern
+        default:
+          return "";
+      }
+    };
 
     const svg = d3
       .select(ref.current)
@@ -62,7 +76,8 @@ export default function ConstellationGraph({ memorial }) {
       .enter()
       .append("line")
       .attr("stroke", "#000000")
-      .attr("stroke-width", 2);
+      .attr("stroke-width", d => d.weight || 1)
+      .attr("stroke-dasharray", d => edgeStyle(d.relationship_type));
 
     const node = svg
       .append("g")
@@ -72,6 +87,7 @@ export default function ConstellationGraph({ memorial }) {
       .append("circle")
       .attr("r", d=> d.prominence * 100 + 5) // size based on prominence
       .attr("fill", "#ffffff")
+      .attr("stroke", "#1a1a1a")
       .call(
         d3.drag()
           .on("start", dragStarted)
