@@ -1,14 +1,66 @@
 // frontend/src/lib/api.js
 // ─────────────────────────────────────────────────────────────────────────────
-// MOCK API LAYER
+// SHARED API LAYER
 // Every API call in the app goes through this file.
-// On Day 9, swap mock return values for real fetch() calls — nothing else changes.
+// Contributor invite validation uses the real backend; later flow steps still
+// use the existing branch-scoped mock behavior until their backend branches land.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { mockMemorials } from "@/data/mockMemorials.js";
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 const MOCK_DELAY = 500;
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+
+export class ApiRequestError extends Error {
+  constructor(message, { status = 0, code = "request_error", data = null } = {}) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.code = code;
+    this.data = data;
+  }
+}
+
+async function requestJson(path, options = {}) {
+  if (!API_BASE_URL) {
+    throw new ApiRequestError("NEXT_PUBLIC_API_URL is not configured.", {
+      code: "configuration_error",
+    });
+  }
+
+  let response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers: {
+        Accept: "application/json",
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...options.headers,
+      },
+    });
+  } catch {
+    throw new ApiRequestError("Could not reach the Remember API.", {
+      code: "network_error",
+    });
+  }
+
+  const contentType = response.headers.get("content-type") ?? "";
+  const data = contentType.includes("application/json")
+    ? await response.json().catch(() => null)
+    : null;
+
+  if (!response.ok) {
+    throw new ApiRequestError(data?.error || `Request failed with status ${response.status}.`, {
+      status: response.status,
+      code: response.status === 404 ? "not_found" : "request_error",
+      data,
+    });
+  }
+
+  return data;
+}
 
 // ─── Questionnaire responses localStorage ───────────
 
@@ -102,38 +154,9 @@ function writeContributorSession(token, session) {
 /**
  * GET /contribute/:token
  * Validates invite token, returns memorial details for landing page.
- * TODO: Replace with real fetch() on Day 9.
  */
 export async function getInviteToken(token) {
-  await delay(MOCK_DELAY);
-
-  if (token === 'invalid') {
-    throw new Error('Invalid invite link');
-  }
-
-  const memorial = mockMemorials[0];
-  const now = new Date();
-  const expiredAt = new Date(now);
-  expiredAt.setDate(expiredAt.getDate() - 1);
-
-  return {
-    memorial: {
-      id: memorial.id,
-      deceased_name: memorial.deceased_name,
-      profile_photo_url: memorial.profile_photo_url,
-      date_of_birth: memorial.birth_date,
-      date_of_passing: memorial.death_date,
-      status: token === 'closed' ? 'closed' : 'active',
-      contributions_open: token !== 'closed',
-    },
-    link: {
-      id: 'a1b2c3d4-0000-0000-0000-000000000002',
-      is_active: token !== 'closed',
-      use_count: 3,
-      max_uses: null,
-      expires_at: token === 'expired' ? expiredAt.toISOString() : null,
-    },
-  };
+  return requestJson(`/contribute/${encodeURIComponent(token)}`);
 }
 
 /**

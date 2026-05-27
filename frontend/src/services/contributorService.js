@@ -1,4 +1,5 @@
 import {
+  ApiRequestError,
   getInviteToken,
   getResponses,
   saveRelationship,
@@ -48,15 +49,25 @@ function isExpired(expiresAt) {
 }
 
 function getInviteStatus(invite) {
-  if (!invite?.link || !invite?.memorial) {
+  const inviteLink = invite?.invite ?? invite?.link;
+
+  if (!inviteLink) {
     return "invalid";
   }
 
-  if (isExpired(invite.link.expires_at)) {
+  if (!invite?.memorial) {
+    return "missing_data";
+  }
+
+  if (isExpired(inviteLink.expires_at)) {
     return "expired";
   }
 
-  if (invite.link.is_active === false || invite.memorial.contributions_open === false) {
+  if (inviteLink.is_active === false || invite.memorial.contributions_open === false) {
+    return "closed";
+  }
+
+  if (inviteLink.max_uses && inviteLink.use_count >= inviteLink.max_uses) {
     return "closed";
   }
 
@@ -71,43 +82,86 @@ function getDeceasedPhotoUrl(memorial) {
   return memorial.profile_photo_url || memorial.cover_photo_url || memorial.photo_url || null;
 }
 
+function getInviteUnavailableStatus(error) {
+  const message = error.message.toLowerCase();
+
+  if (message.includes("expired")) {
+    return "expired";
+  }
+
+  return "closed";
+}
+
+function getInviteErrorStatus(error) {
+  if (!(error instanceof ApiRequestError)) {
+    return "error";
+  }
+
+  if (error.status === 404 || error.code === "not_found") {
+    return "invalid";
+  }
+
+  if (error.status === 410) {
+    return getInviteUnavailableStatus(error);
+  }
+
+  if (error.code === "network_error" || error.code === "configuration_error") {
+    return "network_error";
+  }
+
+  return "error";
+}
+
+function normalizeInvite(inviteToken, invite, status) {
+  const memorial = invite?.memorial ?? null;
+  const inviteLink = invite?.invite ?? invite?.link ?? null;
+  const memorialId = memorial?.id ?? "";
+  const deceasedName = getDeceasedName(memorial);
+
+  if (status === "missing_data" || (status === "valid" && (!memorialId || !deceasedName))) {
+    return {
+      inviteToken,
+      memorialId,
+      status: "missing_data",
+      deceased: {
+        name: deceasedName,
+        photoUrl: getDeceasedPhotoUrl(memorial),
+      },
+      memorial,
+      invite: inviteLink,
+    };
+  }
+
+  return {
+    inviteToken,
+    memorialId,
+    status,
+    deceased: {
+      name: deceasedName,
+      photoUrl: getDeceasedPhotoUrl(memorial),
+    },
+    memorial,
+    invite: inviteLink,
+  };
+}
+
 export async function validateContributorInvite(inviteToken) {
   try {
     const invite = await getInviteToken(inviteToken);
     const status = getInviteStatus(invite);
-    const memorialId = invite?.memorial?.id ?? "";
-    const deceasedName = getDeceasedName(invite?.memorial);
 
-    if (status === "valid" && (!memorialId || !deceasedName)) {
-      return {
-        inviteToken,
-        memorialId,
-        status: "invalid",
-        deceased: {
-          name: "",
-          photoUrl: null,
-        },
-      };
-    }
-
-    return {
-      inviteToken,
-      memorialId,
-      status,
-      deceased: {
-        name: deceasedName,
-        photoUrl: getDeceasedPhotoUrl(invite?.memorial),
-      },
-    };
-  } catch {
+    return normalizeInvite(inviteToken, invite, status);
+  } catch (error) {
     return {
       inviteToken,
       memorialId: "",
-      status: "invalid",
+      status: getInviteErrorStatus(error),
       deceased: {
         name: "",
         photoUrl: null,
       },
+      memorial: null,
+      invite: null,
     };
   }
 }
