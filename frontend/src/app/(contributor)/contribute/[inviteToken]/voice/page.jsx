@@ -232,51 +232,43 @@ export default function VoicePage() {
     <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
       <div className="mx-auto flex w-full max-w-[680px] flex-col gap-10">
 
-        <ContributorNav backHref={`/contribute/${inviteToken}/photos`} />
+        <ContributorNav backHref={`/contribute/${inviteToken}/upload`} />
 
         <div className="text-center">
           <h1 className="text-[40px] font-medium leading-tight text-neutral-950">
             Upload your memories
           </h1>
-          <p className="mt-2 text-base text-slate-500">Record or upload a voice memo.</p>
+          <p className="mt-2 text-base text-slate-500">Upload a voice memo below.</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <button className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-neutral-200 bg-white py-12 hover:bg-neutral-50 transition-colors">
-            <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" />
+        {/* Upload only — no record button */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="flex w-full flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-neutral-300 bg-white py-16 hover:bg-neutral-50 transition-colors disabled:opacity-50"
+        >
+          {uploading ? (
+            <svg className="animate-spin" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
             </svg>
-            <span className="text-base text-slate-600">Record audio</span>
-          </button>
+          ) : (
+            <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 10l-4-4m0 0L8 10m4-4v12" />
+            </svg>
+          )}
+          <span className="text-base text-slate-600">
+            {uploading ? 'Uploading…' : 'Click to upload or drag and drop'}
+          </span>
+          <span className="text-sm text-slate-400">MP3, WAV, M4A, OGG up to 50MB</span>
+        </button>
 
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-neutral-300 bg-white py-12 hover:bg-neutral-50 transition-colors disabled:opacity-50"
-          >
-            {uploading ? (
-              <svg className="animate-spin" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-              </svg>
-            ) : (
-              <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 10l-4-4m0 0L8 10m4-4v12" />
-              </svg>
-            )}
-            <span className="text-base text-slate-600">
-              {uploading ? 'Uploading…' : 'Click to upload or drag and drop'}
-            </span>
-          </button>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="audio/*,.m4a,.mp3,.wav,.ogg"
-            className="hidden"
-            onChange={handleFileChange}
-          />
-        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="audio/*,.m4a,.mp3,.wav,.ogg"
+          className="hidden"
+          onChange={handleFileChange}
+        />
 
         {recordings.length > 0 && (
           <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-auth">

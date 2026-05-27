@@ -5,8 +5,6 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { uploadPhotos, deletePhoto } from '@/lib/api';
 
-// ─── Nav ──────
-
 function ContributorNav({ backHref }) {
   return (
     <nav className="flex h-10 items-center justify-between">
@@ -23,8 +21,6 @@ function ContributorNav({ backHref }) {
     </nav>
   );
 }
-
-// ─── Drop Zone ──────
 
 function DropZone({ onFiles }) {
   const inputRef = useRef(null);
@@ -67,8 +63,6 @@ function DropZone({ onFiles }) {
   );
 }
 
-// ─── Photo Thumbnail ──────
-
 function PhotoThumb({ asset, onDelete, uploading }) {
   return (
     <div className="relative aspect-square overflow-hidden rounded-xl bg-neutral-100">
@@ -109,13 +103,12 @@ function PhotoThumb({ asset, onDelete, uploading }) {
   );
 }
 
-// ─── Page ──────
-
 export default function PhotosPage() {
   const router = useRouter();
   const { inviteToken } = useParams();
 
   const [assets, setAssets] = useState([]);
+  const [caption, setCaption] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadingIds, setUploadingIds] = useState(new Set());
 
@@ -133,7 +126,7 @@ export default function PhotosPage() {
     setUploadingIds(pendingIds);
 
     try {
-      const result = await uploadPhotos(inviteToken, files);
+      const result = await uploadPhotos(inviteToken, files, caption.trim() || null);
       setAssets((prev) => {
         const kept = prev.filter((a) => !a.pending);
         const newAssets = result.assets.map((a, i) => ({
@@ -149,7 +142,7 @@ export default function PhotosPage() {
       setUploading(false);
       setUploadingIds(new Set());
     }
-  }, [inviteToken]);
+  }, [inviteToken, caption]);
 
   async function handleDelete(assetId) {
     try {
@@ -168,7 +161,7 @@ export default function PhotosPage() {
     <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
       <div className="mx-auto flex w-full max-w-[680px] flex-col gap-10">
 
-        <ContributorNav backHref={`/contribute/${inviteToken}/questions`} />
+        <ContributorNav backHref={`/contribute/${inviteToken}/upload`} />
 
         <div className="text-center">
           <h1 className="text-[40px] font-medium leading-tight text-neutral-950">
@@ -178,6 +171,21 @@ export default function PhotosPage() {
         </div>
 
         <DropZone onFiles={handleFiles} />
+
+        {/* Caption input */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="caption" className="text-sm font-medium text-neutral-700">
+            Caption <span className="text-slate-400 font-normal">(optional)</span>
+          </label>
+          <input
+            id="caption"
+            type="text"
+            placeholder="e.g. John's 50th birthday party"
+            value={caption}
+            onChange={(e) => setCaption(e.target.value)}
+            className="w-full rounded-xl border border-neutral-200 px-4 py-3 text-sm text-neutral-950 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-neutral-300"
+          />
+        </div>
 
         {assets.length > 0 && (
           <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-auth">

@@ -250,7 +250,7 @@ export async function getResponses(token, contributorInput) {
  * Uploads photos. Saves to localStorage so review page can read real uploads.
  * TODO: Replace with real fetch() + FormData on Day 9.
  */
-export async function uploadPhotos(token, files) {
+export async function uploadPhotos(token, files, caption = null) {
   await delay(MOCK_DELAY * 2);
 
   const newAssets = files.map((file, i) => ({
@@ -261,7 +261,7 @@ export async function uploadPhotos(token, files) {
     storage_path: `memorials/mock/contributions/mock/photos/${file.name}`,
     storage_bucket: "memorial-assets",
     taken_at: null,
-    caption: null,
+    caption: caption ?? null,
     previewUrl: typeof URL !== "undefined" ? URL.createObjectURL(file) : null,
   }));
 

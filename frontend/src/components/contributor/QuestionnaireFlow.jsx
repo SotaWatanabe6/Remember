@@ -409,7 +409,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
     stopListening();
     window.clearTimeout(saveTimerRef.current);
     await saveAnswer(currentQuestion.id, answersRef.current[currentQuestion.id] ?? createEmptyAnswer());
-    router.push(`/contribute/${inviteToken}/photos`);
+    router.push(`/contribute/${inviteToken}/upload`);
   };
 
   if (isLoading) {
