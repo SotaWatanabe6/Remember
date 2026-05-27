@@ -367,41 +367,30 @@ export async function deleteVoice(token, recordingId) {
 }
 
 /**
- * GET /contribute/:token/summary
- * Returns everything the contributor submitted — used on review screen.
- * CHANGED: now reads from localStorage instead of returning hardcoded data.
- * Reads session (name + relationship) from Sungjun's key.
- * Reads photos and voice from keys written by uploadPhotos/uploadVoice.
- * Reads questionnaire responses from keys written by saveResponses.
- * TODO: Replace with real fetch() on Day 9.
+ * Returns the same-browser contributor draft summary for the review screen.
+ *
+ * Backend-backed review/resume is blocked until the API exposes saved response
+ * and media read endpoints. Do not call fake GET contribution endpoints here.
  */
 export async function getContributorSummary(token) {
-  await delay(MOCK_DELAY);
-
-  // Read contributor session — written by Sungjun's contributorService.js
   const session = readContributorSession(token);
-
-  // Read photos uploaded in step 4
   const photos = readStoredPhotos(token);
-
-  // Read voice recordings uploaded in step 5
   const voice = readStoredVoice(token);
 
-  // Read questionnaire responses saved in step 3
-  const contributorId = session?.contributorId || 'c1b2c3d4-0000-0000-0000-000000000001';
+  const contributorId = session?.contributorId ?? null;
   const responsesByContributor = readStoredResponses(token);
-  const contributorResponses = responsesByContributor[contributorId] ?? {};
+  const contributorResponses = contributorId ? responsesByContributor[contributorId] ?? {} : {};
   const responses = Object.values(contributorResponses)
     .sort((a, b) => (a.question_order ?? 0) - (b.question_order ?? 0))
     .map((r) => ({
-      question_text: r.question_id || r.question_text || 'Question',
+      question_text: r.question_text || r.question_id || 'Question',
       response_text: r.answer_text || r.response_text || '',
     }));
 
   return {
     contributor: {
       id: contributorId,
-      name: session?.contributorName || 'Contributor',
+      name: session?.contributorName || '',
       relationship_type: session?.relationship_type || '',
       relationship_label: session?.relationship_custom_label || null,
     },
@@ -413,27 +402,47 @@ export async function getContributorSummary(token) {
 
 /**
  * POST /contribute/:token/submit
- * Finalises the contribution — sets contributor status = submitted.
- * TODO: Replace with real fetch() on Day 9.
+ * Finalizes the contribution and marks the contributor submitted.
  */
-export async function submitContribution(token) {
-  await delay(MOCK_DELAY);
-  const now = new Date().toISOString();
+export async function submitContribution(token, contributorToken) {
+  if (!contributorToken) {
+    throw new ApiRequestError("A contributor session is required before submitting.", {
+      code: "missing_contributor_token",
+    });
+  }
+
+  const result = await requestJson(`/contribute/${encodeURIComponent(token)}/submit`, {
+    method: "POST",
+    body: JSON.stringify({
+      contributor_token: contributorToken,
+    }),
+  });
+
+  const submittedContributor = result?.contributor;
+
+  if (
+    !submittedContributor?.id ||
+    submittedContributor.status !== "submitted" ||
+    !submittedContributor.submitted_at
+  ) {
+    throw new ApiRequestError("The Remember API did not confirm the contribution was submitted.", {
+      code: "unexpected_response",
+      data: result,
+    });
+  }
+
   const session = readContributorSession(token);
 
   if (session) {
     writeContributorSession(token, {
       ...session,
-      status: 'submitted',
-      submittedAt: now,
-      updatedAt: now,
+      status: submittedContributor.status,
+      submittedAt: submittedContributor.submitted_at,
+      updatedAt: submittedContributor.submitted_at,
     });
   }
 
-  return {
-    success: true,
-    submitted_at: now,
-  };
+  return result;
 }
 
 // ─── OUTPUT TABS (viewer experience) ─────────────────────────────────────────
