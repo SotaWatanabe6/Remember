@@ -52,12 +52,8 @@ function isMockContributorSession(session) {
   );
 }
 
-function isExpired(expiresAt) {
-  return Boolean(expiresAt) && new Date(expiresAt).getTime() < Date.now();
-}
-
 function getInviteStatus(invite) {
-  const inviteLink = invite?.invite ?? invite?.link;
+  const inviteLink = invite?.invite;
 
   if (!inviteLink) {
     return "invalid";
@@ -67,15 +63,7 @@ function getInviteStatus(invite) {
     return "missing_data";
   }
 
-  if (isExpired(inviteLink.expires_at)) {
-    return "expired";
-  }
-
-  if (inviteLink.is_active === false || invite.memorial.contributions_open === false) {
-    return "closed";
-  }
-
-  if (inviteLink.max_uses && inviteLink.use_count >= inviteLink.max_uses) {
+  if (inviteLink.is_active === false) {
     return "closed";
   }
 
@@ -83,11 +71,11 @@ function getInviteStatus(invite) {
 }
 
 function getDeceasedName(memorial) {
-  return memorial.deceased_name || memorial.subject_name || memorial.name || "";
+  return memorial?.subject_name || "";
 }
 
 function getDeceasedPhotoUrl(memorial) {
-  return memorial.profile_photo_url || memorial.cover_photo_url || memorial.photo_url || null;
+  return memorial?.cover_photo_url || null;
 }
 
 function getInviteUnavailableStatus(error) {
@@ -122,7 +110,7 @@ function getInviteErrorStatus(error) {
 
 function normalizeInvite(inviteToken, invite, status) {
   const memorial = invite?.memorial ?? null;
-  const inviteLink = invite?.invite ?? invite?.link ?? null;
+  const inviteLink = invite?.invite ?? null;
   const memorialId = memorial?.id ?? "";
   const deceasedName = getDeceasedName(memorial);
 
