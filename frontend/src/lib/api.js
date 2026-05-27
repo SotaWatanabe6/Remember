@@ -219,6 +219,13 @@ export async function saveResponses(token, responses, options = {}) {
     }),
   });
 
+  if (result?.saved !== true) {
+    throw new ApiRequestError("The Remember API did not confirm the response was saved.", {
+      code: "unexpected_response",
+      data: result,
+    });
+  }
+
   const now = new Date().toISOString();
   const responsesByContributor = readStoredResponses(token);
   const savedResponses = [];
@@ -241,32 +248,19 @@ export async function saveResponses(token, responses, options = {}) {
   writeStoredResponses(token, responsesByContributor);
 
   return {
-    success: result?.saved === true || result?.success === true,
-    saved: result?.saved_count ?? savedResponses.length,
+    success: true,
+    saved: savedResponses.length,
     responses: savedResponses,
   };
 }
 
 /**
- * GET /contribute/:token/responses
- * Returns saved questionnaire responses for one contributor session.
- * Uses the backend response-loading endpoint when it exists. The current
- * backend branch does not expose one yet, so a 404 falls back to the local
- * successful-save mirror used by this contributor flow.
+ * Returns same-browser draft responses for one contributor session.
+ *
+ * Dev note: backend-backed questionnaire resume is blocked until the API
+ * exposes a real saved responses endpoint. Do not call a fake GET route here.
  */
 export async function getResponses(token, contributorInput) {
-  try {
-    return await requestJson(
-      `/contribute/${encodeURIComponent(token)}/responses?contributor_token=${encodeURIComponent(
-        contributorInput.contributor_token,
-      )}`,
-    );
-  } catch (error) {
-    if (!(error instanceof ApiRequestError) || error.status !== 404) {
-      throw error;
-    }
-  }
-
   const responsesByContributor = readStoredResponses(token);
   const contributorResponses = responsesByContributor[contributorInput.contributor_id] ?? {};
 

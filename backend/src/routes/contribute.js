@@ -169,7 +169,7 @@ router.post('/:token/responses', async (req, res) => {
       .update({ updated_at: now })
       .eq('id', contributor_token)
 
-    res.json({ saved: true, saved_count: rows.length })
+    res.json({ saved: true })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
