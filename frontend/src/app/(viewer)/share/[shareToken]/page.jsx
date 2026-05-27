@@ -4,9 +4,10 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { getShareToken } from '@/lib/api';
+import { getShareToken, getMemorial } from '@/lib/api';
+import { mockMemorials } from '@/data/mockMemorials.js';
 
-// ─── Tab bar ─────────
+// ─── Tab bar ─────────────────────────────────────────────────────────────────
 
 const TABS = ['Story', 'Constellation', 'Voices', 'All Photos'];
 
@@ -30,11 +31,13 @@ function TabBar({ active, onChange }) {
   );
 }
 
-// ─── Memorial header (viewer only — no buttons) ─────────
+// ─── Memorial header ──────────────────────────────────────────────────────────
+// Viewer only — no organizer buttons
+// UPDATED: now accepts memorial prop directly (not output?.memorial)
+// Ashwini confirmed: GET /share/:token does NOT return memorial data
+// Memorial header data comes from separate GET /memorials/:id call
 
-function MemorialHeader({ output }) {
-  const memorial = output?.memorial;
-
+function MemorialHeader({ memorial }) {
   const birthYear = memorial?.date_of_birth
     ? new Date(memorial.date_of_birth).getFullYear()
     : null;
@@ -44,7 +47,6 @@ function MemorialHeader({ output }) {
 
   return (
     <div className="flex items-start gap-8">
-      {/* Cover photo */}
       <div className="h-36 w-36 shrink-0 overflow-hidden rounded-full bg-[#4a5568]">
         {memorial?.cover_photo_url ? (
           <img
@@ -56,11 +58,9 @@ function MemorialHeader({ output }) {
           <div className="h-full w-full bg-[#4a5568]" />
         )}
       </div>
-
-      {/* Name + dates + bio */}
       <div className="flex-1 min-w-0 pt-2">
         <h1 className="text-[32px] font-medium text-neutral-950 leading-tight">
-          {memorial?.subject_name || 'Memorial'}
+          {memorial?.subject_name || memorial?.deceased_name || 'Memorial'}
         </h1>
         {(birthYear || passingYear) && (
           <p className="mt-1 text-sm text-slate-400">
@@ -69,9 +69,9 @@ function MemorialHeader({ output }) {
               : birthYear || passingYear}
           </p>
         )}
-        {memorial?.brief_biography && (
+        {(memorial?.brief_biography || memorial?.short_description) && (
           <p className="mt-2 text-sm text-slate-500 leading-relaxed max-w-md">
-            {memorial.brief_biography}
+            {memorial.brief_biography || memorial.short_description}
           </p>
         )}
       </div>
@@ -79,7 +79,7 @@ function MemorialHeader({ output }) {
   );
 }
 
-// ─── Placeholder tabs (other team members build these) ─────────
+// ─── Placeholder tabs ─────────────────────────────────────────────────────────
 
 function StoryTab({ data }) {
   if (!data || data.length === 0) {
@@ -127,7 +127,7 @@ function VoicesTab({ data }) {
   );
 }
 
-// ─── Lightbox ─────────
+// ─── Lightbox ─────────────────────────────────────────────────────────────────
 
 function Lightbox({ photo, onClose, onPrev, onNext }) {
   useEffect(() => {
@@ -141,10 +141,7 @@ function Lightbox({ photo, onClose, onPrev, onNext }) {
   }, [onClose, onPrev, onNext]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4" onClick={onClose}>
       <div className="relative max-w-3xl w-full" onClick={(e) => e.stopPropagation()}>
         <div className="aspect-[4/3] w-full overflow-hidden rounded-2xl bg-neutral-800">
           {photo.url ? (
@@ -156,35 +153,27 @@ function Lightbox({ photo, onClose, onPrev, onNext }) {
           )}
         </div>
         <div className="mt-3 px-1">
-          {photo.caption && (
-            <p className="text-white text-sm font-medium">{photo.caption}</p>
-          )}
+          {photo.caption && <p className="text-white text-sm font-medium">{photo.caption}</p>}
           <p className="text-neutral-400 text-xs mt-0.5">
             {photo.contributor_name}
             {photo.taken_at && ` · ${new Date(photo.taken_at).getFullYear()}`}
           </p>
         </div>
         <button onClick={onPrev} className="absolute left-[-48px] top-1/2 -translate-y-1/2 p-2 text-white hover:text-neutral-300">
-          <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
+          <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
         </button>
         <button onClick={onNext} className="absolute right-[-48px] top-1/2 -translate-y-1/2 p-2 text-white hover:text-neutral-300">
-          <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
+          <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
         </button>
         <button onClick={onClose} className="absolute -top-10 right-0 p-2 text-white hover:text-neutral-300">
-          <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
       </div>
     </div>
   );
 }
 
-// ─── All Photos tab ─────────
+// ─── All Photos tab ───────────────────────────────────────────────────────────
 
 function AllPhotosTab({ albums }) {
   const [openAlbum, setOpenAlbum] = useState(null);
@@ -202,7 +191,6 @@ function AllPhotosTab({ albums }) {
     setLightboxIndex(i); setLightboxPhoto(currentAlbumPhotos[i]);
   }
 
-  // Empty state
   if (!albums || albums.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -219,7 +207,6 @@ function AllPhotosTab({ albums }) {
     );
   }
 
-  // Album grid
   if (!openAlbum) {
     return (
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
@@ -227,11 +214,8 @@ function AllPhotosTab({ albums }) {
           <button key={i} onClick={() => setOpenAlbum(album)} className="group text-left">
             <div className="aspect-square overflow-hidden rounded-2xl bg-neutral-100 relative">
               {album.cover_photo_url || album.photos?.[0]?.url ? (
-                <img
-                  src={album.cover_photo_url || album.photos[0].url}
-                  alt={album.album_name}
-                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                />
+                <img src={album.cover_photo_url || album.photos[0].url} alt={album.album_name}
+                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
               ) : (
                 <div className="h-full w-full bg-neutral-200 flex items-center justify-center">
                   <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" className="text-neutral-400">
@@ -243,22 +227,17 @@ function AllPhotosTab({ albums }) {
                 {album.photos?.length || 0}
               </div>
             </div>
-            <p className="mt-2 text-sm font-medium text-neutral-950 leading-snug">
-              {album.album_name}
-            </p>
+            <p className="mt-2 text-sm font-medium text-neutral-950 leading-snug">{album.album_name}</p>
           </button>
         ))}
       </div>
     );
   }
 
-  // Individual album
   return (
     <div>
-      <button
-        onClick={() => setOpenAlbum(null)}
-        className="mb-6 flex items-center gap-1.5 text-sm text-slate-500 hover:text-neutral-950 transition-colors"
-      >
+      <button onClick={() => setOpenAlbum(null)}
+        className="mb-6 flex items-center gap-1.5 text-sm text-slate-500 hover:text-neutral-950 transition-colors">
         <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
         </svg>
@@ -268,51 +247,35 @@ function AllPhotosTab({ albums }) {
       <p className="text-sm text-slate-500 mb-6">{openAlbum.photos?.length || 0} photos</p>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {openAlbum.photos?.map((photo, index) => (
-          <button
-            key={photo.id}
-            onClick={() => openLightbox(photo, index)}
-            className="group relative aspect-square overflow-hidden rounded-xl bg-neutral-100"
-          >
-            {photo.url ? (
-              <img src={photo.url} alt="" className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
-            ) : (
-              <div className="h-full w-full bg-neutral-200" />
-            )}
-            {/* STEP 1: Updated hover — caption + contributor name + year */}
+          <button key={photo.id} onClick={() => openLightbox(photo, index)}
+            className="group relative aspect-square overflow-hidden rounded-xl bg-neutral-100">
+            {photo.url
+              ? <img src={photo.url} alt="" className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+              : <div className="h-full w-full bg-neutral-200" />
+            }
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-200 flex items-end p-2 opacity-0 group-hover:opacity-100">
               <div className="w-full">
-                {photo.caption && (
-                  <p className="text-white text-xs font-semibold truncate">{photo.caption}</p>
-                )}
-                {photo.contributor_name && (
-                  <p className="text-white text-xs font-medium truncate">{photo.contributor_name}</p>
-                )}
-                {photo.taken_at && (
-                  <p className="text-white/70 text-xs">{new Date(photo.taken_at).getFullYear()}</p>
-                )}
+                {photo.caption && <p className="text-white text-xs font-semibold truncate">{photo.caption}</p>}
+                {photo.contributor_name && <p className="text-white text-xs font-medium truncate">{photo.contributor_name}</p>}
+                {photo.taken_at && <p className="text-white/70 text-xs">{new Date(photo.taken_at).getFullYear()}</p>}
               </div>
             </div>
           </button>
         ))}
       </div>
       {lightboxPhoto && (
-        <Lightbox
-          photo={lightboxPhoto}
-          onClose={() => setLightboxPhoto(null)}
-          onPrev={prevPhoto}
-          onNext={nextPhoto}
-        />
+        <Lightbox photo={lightboxPhoto} onClose={() => setLightboxPhoto(null)}
+          onPrev={prevPhoto} onNext={nextPhoto} />
       )}
     </div>
   );
 }
 
-// ─── Loading skeleton ─────────
+// ─── Loading skeleton ─────────────────────────────────────────────────────────
 
 function LoadingSkeleton() {
   return (
     <div className="animate-pulse space-y-8">
-      {/* Header skeleton */}
       <div className="flex items-start gap-8">
         <div className="h-36 w-36 shrink-0 rounded-full bg-neutral-100" />
         <div className="flex-1 pt-2 space-y-3">
@@ -321,9 +284,7 @@ function LoadingSkeleton() {
           <div className="h-4 w-64 rounded bg-neutral-100" />
         </div>
       </div>
-      {/* Tab skeleton */}
       <div className="h-10 rounded-xl bg-neutral-100" />
-      {/* Content skeleton */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         {[...Array(6)].map((_, i) => (
           <div key={i}>
@@ -336,7 +297,32 @@ function LoadingSkeleton() {
   );
 }
 
-// ─── Invalid token screen ─────────
+// ─── normalizePhotos ──────────────────────────────────────────────────────────
+// Handles both real backend shape and mock shape:
+// Real: { albums: [{ name, photos, photo_count, cover_photo_url }] }
+// Mock: [{ album_name, photos, cover_photo_url }]
+
+function normalizePhotos(photos) {
+  if (!photos) return [];
+  // Real backend returns { albums: [...] }
+  if (photos.albums) {
+    return photos.albums.map((a) => ({
+      album_name: a.name,
+      cover_photo_url: a.cover_photo_url || null,
+      photos: (a.photos || []).map((p) => ({
+        id: p.id,
+        url: p.url || null,
+        caption: p.caption || null,
+        taken_at: p.taken_at || null,
+        contributor_name: p.contributor_name || null,
+      })),
+    }));
+  }
+  // Mock returns flat array — already correct shape
+  return photos;
+}
+
+// ─── Invalid token screen ─────────────────────────────────────────────────────
 
 function InvalidToken({ message }) {
   return (
@@ -360,20 +346,36 @@ function InvalidToken({ message }) {
   );
 }
 
-// ─── Page ─────────
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SharePage() {
   const { shareToken } = useParams();
   const [activeTab, setActiveTab] = useState('Story');
   const [output, setOutput] = useState(null);
+  const [memorial, setMemorial] = useState(null); // ← separate state for memorial header
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     async function load() {
       try {
+        // Step 1 — fetch the four output tabs
         const data = await getShareToken(shareToken);
         setOutput(data);
+
+        // Step 2 — fetch memorial header separately
+        // CONFIRMED by Ashwini: GET /share/:token does NOT return memorial data
+        // GET /memorials/:id returns subject_name, dates, cover_photo_url
+        // Day 9: get memorial ID from the share token lookup
+        // For now use mockMemorials as fallback
+        try {
+          const memorialData = await getMemorial('mock-memorial-1');
+          setMemorial(memorialData?.memorial || mockMemorials[0]);
+        } catch {
+          // Fallback to mockMemorials if real call fails
+          setMemorial(mockMemorials[0]);
+        }
+
       } catch (err) {
         setError(err.message);
       } finally {
@@ -389,7 +391,7 @@ export default function SharePage() {
     <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
       <div className="mx-auto flex w-full max-w-[960px] flex-col gap-8">
 
-        {/* Nav — viewer only, no organizer controls */}
+        {/* Nav — viewer only */}
         <nav className="flex h-10 items-center">
           <span className="text-2xl leading-8 text-neutral-950">Remember</span>
         </nav>
@@ -398,8 +400,8 @@ export default function SharePage() {
           <LoadingSkeleton />
         ) : (
           <>
-            {/* Memorial header — name, photo, dates only. No buttons (viewer only) */}
-            <MemorialHeader output={output} />
+            {/* Memorial header — fetched separately from GET /memorials/:id */}
+            <MemorialHeader memorial={memorial} />
 
             {/* Tab bar */}
             <TabBar active={activeTab} onChange={setActiveTab} />
@@ -409,7 +411,7 @@ export default function SharePage() {
               {activeTab === 'Story' && <StoryTab data={output?.story} />}
               {activeTab === 'Constellation' && <ConstellationTab data={output?.constellation} />}
               {activeTab === 'Voices' && <VoicesTab data={output?.voices} />}
-              {activeTab === 'All Photos' && <AllPhotosTab albums={output?.photos} />}
+              {activeTab === 'All Photos' && <AllPhotosTab albums={normalizePhotos(output?.photos)} />}
             </div>
           </>
         )}
