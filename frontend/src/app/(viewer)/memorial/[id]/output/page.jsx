@@ -8,7 +8,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getMemorialOutput, getMemorialById } from '@/lib/api';
@@ -85,7 +85,141 @@ function ConstellationsSection() {
   );
 }
 
-// ─── Voices section (Sungjun fills in) ───────────────────────────────────────
+// ─── Waveform Player (wavesurfer.js) ─────────────────────────────────────────
+// Renders a real audio waveform with play/pause + scrub bar
+// Falls back to static placeholder bars if no audio_url available
+// Day 9: audio_url comes from Supabase storage via backend
+
+function WaveformPlayer({ audioUrl, color }) {
+  const containerRef = useRef(null);
+  const wavesurferRef = useRef(null);
+  const [playing, setPlaying] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    // Dynamically import wavesurfer to avoid SSR issues
+    import('wavesurfer.js').then((WaveSurfer) => {
+      // Destroy previous instance if exists
+      if (wavesurferRef.current) {
+        wavesurferRef.current.destroy();
+      }
+
+      const ws = WaveSurfer.default.create({
+        container: containerRef.current,
+        waveColor: color || COLORS.colleague,
+        progressColor: COLORS.text,
+        cursorColor: 'transparent',
+        barWidth: 3,
+        barGap: 2,
+        barRadius: 3,
+        height: 48,
+        normalize: true,
+        interact: true,
+        backend: 'WebAudio',
+      });
+
+      // Load audio if URL exists
+      if (audioUrl) {
+        ws.load(audioUrl);
+        ws.on('ready', () => {
+          setReady(true);
+          setDuration(ws.getDuration());
+        });
+        ws.on('timeupdate', (time) => setCurrentTime(time));
+        ws.on('finish', () => setPlaying(false));
+      } else {
+        // No audio URL — show static placeholder waveform
+        setReady(false);
+      }
+
+      wavesurferRef.current = ws;
+    }).catch(() => {
+      // wavesurfer not installed yet — falls back to placeholder
+      setReady(false);
+    });
+
+    return () => {
+      if (wavesurferRef.current) {
+        wavesurferRef.current.destroy();
+        wavesurferRef.current = null;
+      }
+    };
+  }, [audioUrl, color]);
+
+  function togglePlay() {
+    if (!wavesurferRef.current || !ready) return;
+    wavesurferRef.current.playPause();
+    setPlaying(!playing);
+  }
+
+  function formatTime(secs) {
+    if (!secs || isNaN(secs)) return '0:00';
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      {/* Play/Pause button */}
+      <button
+        onClick={togglePlay}
+        className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 transition-opacity hover:opacity-80"
+        style={{ backgroundColor: COLORS.colleague }}
+        aria-label={playing ? 'Pause' : 'Play'}
+      >
+        {playing ? (
+          <svg width="16" height="16" fill="white" viewBox="0 0 24 24">
+            <rect x="6" y="4" width="4" height="16" rx="1" />
+            <rect x="14" y="4" width="4" height="16" rx="1" />
+          </svg>
+        ) : (
+          <svg width="16" height="16" fill="white" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        )}
+      </button>
+
+      {/* Waveform container or placeholder */}
+      <div className="flex-1 flex flex-col gap-1">
+        {audioUrl ? (
+          // Real wavesurfer waveform
+          <div ref={containerRef} className="w-full" />
+        ) : (
+          // Static placeholder — no audio URL yet
+          <div className="flex items-center gap-0.5 h-12">
+            {[...Array(50)].map((_, i) => (
+              <div
+                key={i}
+                className="flex-1 rounded-full transition-all"
+                style={{
+                  backgroundColor: COLORS.colleague,
+                  opacity: playing ? 0.8 : 0.4,
+                  height: `${16 + Math.sin(i * 0.6) * 12 + Math.cos(i * 1.2) * 8}px`,
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Time display */}
+        {(ready || audioUrl) && (
+          <div className="flex justify-between text-xs"
+            style={{ color: COLORS.textMuted }}>
+            <span>{formatTime(currentTime)}</span>
+            <span>{formatTime(duration)}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Voices section ───────────────────────────────────────────────────────────
 
 function VoicesSection({ voices }) {
   const [selected, setSelected] = useState(0);
@@ -111,7 +245,6 @@ function VoicesSection({ voices }) {
       <div className="flex gap-8">
         {/* Left — audio list */}
         <div className="w-48 shrink-0 flex flex-col gap-0">
-          {/* Sort dropdown */}
           <div className="flex items-center gap-2 mb-4">
             <select className="text-sm text-[#1a1a1a] bg-transparent border border-[#D4CAC0] rounded-lg px-3 py-1.5 pr-8 appearance-none cursor-pointer focus:outline-none">
               <option>Sort</option>
@@ -136,51 +269,50 @@ function VoicesSection({ voices }) {
 
         {/* Right — player area */}
         <div className="flex-1 flex flex-col gap-4">
-          {/* Photo placeholder */}
-          <div className="w-full aspect-video rounded-2xl bg-[#D4CAC0] flex items-center justify-center">
-            <span className="text-[#6b6b6b] text-sm">Photo</span>
-          </div>
-
-          {/* Audio player placeholder */}
-          <div className="flex items-center gap-3">
-            <button className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
-              style={{ backgroundColor: COLORS.colleague }}>
-              <svg width="18" height="18" fill="white" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            </button>
-            {/* Waveform placeholder — Day 9: replace with wavesurfer.js */}
-            <div className="flex-1 flex items-center gap-0.5 h-8">
-              {[...Array(40)].map((_, i) => (
-                <div
-                  key={i}
-                  className="flex-1 rounded-full"
-                  style={{
-                    backgroundColor: COLORS.colleague,
-                    opacity: 0.5,
-                    height: `${20 + Math.sin(i * 0.8) * 15}px`,
-                  }}
-                />
-              ))}
+          {/* Photo placeholder — shows if photo linked to voice */}
+          {current?.photo_url ? (
+            <img
+              src={current.photo_url}
+              alt=""
+              className="w-full aspect-video rounded-2xl object-cover"
+            />
+          ) : (
+            <div className="w-full aspect-video rounded-2xl flex items-center justify-center"
+              style={{ backgroundColor: COLORS.cardBg }}>
+              <span className="text-sm" style={{ color: COLORS.textMuted }}>
+                No photo linked
+              </span>
             </div>
-          </div>
+          )}
+
+          {/* Waveform player — real wavesurfer or placeholder */}
+          {current && (
+            <WaveformPlayer
+              key={current.id}
+              audioUrl={current.audio_url || null}
+              color={COLORS.colleague}
+            />
+          )}
 
           {/* Transcript */}
           {current?.transcript_text && (
-            <p className="text-sm text-[#6b6b6b] italic leading-relaxed">
+            <p className="text-sm italic leading-relaxed"
+              style={{ color: COLORS.textMuted }}>
               "{current.transcript_text}"
             </p>
           )}
 
-          {/* Tag + submitter */}
+          {/* Tag */}
           {current?.ai_category && (
-            <span className="inline-block self-start rounded-full border border-[#D4CAC0] px-4 py-1.5 text-sm text-[#6b6b6b]">
+            <span className="inline-block self-start rounded-full border px-4 py-1.5 text-sm"
+              style={{ borderColor: COLORS.border, color: COLORS.textMuted }}>
               {current.ai_category}
             </span>
           )}
 
+          {/* Submitter */}
           {current && (
-            <div className="text-sm text-[#1a1a1a] font-medium">
+            <div className="text-sm font-medium" style={{ color: COLORS.text }}>
               Submitted by {current.contributor_name || 'Contributor'}
             </div>
           )}

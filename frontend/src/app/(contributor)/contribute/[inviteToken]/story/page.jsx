@@ -9,13 +9,16 @@ import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 
+const FONT = "'Cormorant Garamond', Georgia, serif";
+
 function ContributorNav({ backHref }) {
   return (
     <nav className="flex h-10 items-center justify-between">
-      <span className="text-2xl leading-8 text-neutral-950">Remember</span>
+      <span style={{ fontFamily: FONT }} className="text-2xl leading-8 text-[#423F39]">Remember</span>
       <Link
         href={backHref}
-        className="flex items-center gap-1.5 text-base text-neutral-950 hover:text-slate-600 transition-colors"
+        style={{ fontFamily: FONT }}
+        className="flex items-center gap-1.5 text-base text-[#5F5A52] hover:text-[#423F39] transition-colors"
       >
         <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -26,7 +29,7 @@ function ContributorNav({ backHref }) {
   );
 }
 
-// AI title suggestions — Day 9: replace with real API call
+// Day 9: replace with real API call
 const MOCK_SUGGESTIONS = [
   'Our first time meeting',
   'A day I will never forget',
@@ -58,10 +61,8 @@ export default function StoryPage() {
       setError('Please add a title or write something before continuing.');
       return;
     }
-
     setSaving(true);
     setError('');
-
     try {
       // Day 9: save story to backend
       // await saveStory(inviteToken, { title: title.trim(), body: body.trim() });
@@ -74,17 +75,20 @@ export default function StoryPage() {
   }
 
   return (
-    <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
+    <main
+      className="min-h-screen px-6 py-10 sm:px-[50px]"
+      style={{ backgroundColor: '#F0EAE2', fontFamily: FONT, color: '#423F39' }}
+    >
       <div className="mx-auto flex w-full max-w-[680px] flex-col gap-10">
 
         <ContributorNav backHref={`/contribute/${inviteToken}/upload`} />
 
         {/* Heading */}
         <div className="text-center pt-4">
-          <h1 className="text-[40px] font-medium leading-tight text-neutral-950">
+          <h1 className="text-[48px] font-bold leading-tight" style={{ color: '#423F39', letterSpacing: '-0.01em' }}>
             Upload your memories
           </h1>
-          <p className="mt-3 text-base text-slate-500">
+          <p className="mt-3 text-[18px]" style={{ color: '#5F5A52' }}>
             Type a story about {deceasedName}.
           </p>
         </div>
@@ -92,16 +96,16 @@ export default function StoryPage() {
         {/* Story form */}
         <div className="flex flex-col gap-3">
 
-          {/* Title row */}
+          {/* Title label row */}
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-neutral-950">
+            <label className="text-sm font-medium" style={{ color: '#423F39' }}>
               Story title
             </label>
             <button
               onClick={() => setShowSuggestions(!showSuggestions)}
-              className="flex items-center gap-1.5 text-sm text-neutral-950 hover:opacity-70 transition-opacity"
+              className="flex items-center gap-1.5 text-sm transition-opacity hover:opacity-70"
+              style={{ color: '#423F39', fontFamily: FONT }}
             >
-              {/* Sparkle icon */}
               <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 2l2.4 7.2H22l-6.2 4.5 2.4 7.2L12 16.4l-6.2 4.5 2.4-7.2L2 9.2h7.6z" />
               </svg>
@@ -111,12 +115,18 @@ export default function StoryPage() {
 
           {/* Suggestions dropdown */}
           {showSuggestions && (
-            <div className="rounded-xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
+            <div
+              className="rounded-xl overflow-hidden shadow-sm"
+              style={{ border: '1px solid #D4CAC0', backgroundColor: '#FBF9F6' }}
+            >
               {MOCK_SUGGESTIONS.map((suggestion) => (
                 <button
                   key={suggestion}
                   onClick={() => handleSuggestion(suggestion)}
-                  className="w-full px-4 py-3 text-left text-sm text-neutral-950 hover:bg-neutral-50 transition-colors border-b border-neutral-100 last:border-0"
+                  className="w-full px-4 py-3 text-left text-sm transition-colors"
+                  style={{ borderBottom: '1px solid #E8E0D8', color: '#423F39', fontFamily: FONT, backgroundColor: 'transparent' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#E8E0D8'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                 >
                   {suggestion}
                 </button>
@@ -130,7 +140,15 @@ export default function StoryPage() {
             value={title}
             onChange={(e) => { setTitle(e.target.value); setError(''); }}
             placeholder="Our first time meeting"
-            className="w-full rounded-xl border border-neutral-200 px-4 py-3 text-sm text-neutral-950 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-neutral-200"
+            className="w-full rounded-xl px-4 py-4 text-[18px] focus:outline-none"
+            style={{
+              border: '1px solid #D4CAC0',
+              color: '#423F39',
+              fontFamily: FONT,
+              backgroundColor: 'transparent',
+            }}
+            onFocus={(e) => { e.target.style.borderColor = '#B8AEA4'; }}
+            onBlur={(e) => { e.target.style.borderColor = '#D4CAC0'; }}
           />
 
           {/* Body textarea */}
@@ -139,11 +157,20 @@ export default function StoryPage() {
             onChange={(e) => { setBody(e.target.value); setError(''); }}
             placeholder="Write your memory here..."
             rows={12}
-            className="w-full rounded-xl border border-neutral-200 px-4 py-3 text-sm text-neutral-950 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-neutral-200 resize-none"
+            className="w-full rounded-xl px-4 py-4 text-[18px] focus:outline-none resize-none"
+            style={{
+              border: '1px solid #D4CAC0',
+              color: '#423F39',
+              fontFamily: FONT,
+              backgroundColor: 'transparent',
+              lineHeight: 1.6,
+            }}
+            onFocus={(e) => { e.target.style.borderColor = '#B8AEA4'; }}
+            onBlur={(e) => { e.target.style.borderColor = '#D4CAC0'; }}
           />
 
           {error && (
-            <p className="text-sm text-red-500">{error}</p>
+            <p className="text-sm" style={{ color: '#C0503A' }}>{error}</p>
           )}
         </div>
 
@@ -151,7 +178,14 @@ export default function StoryPage() {
         <button
           onClick={handleContinue}
           disabled={saving}
-          className="w-full rounded-full bg-neutral-950 py-4 text-base font-semibold text-white transition-opacity hover:opacity-80 active:opacity-70 disabled:opacity-50"
+          className="w-full rounded-full py-4 text-[17px] transition-opacity hover:opacity-80 active:opacity-70 disabled:opacity-50"
+          style={{
+            backgroundColor: '#C4B49A',
+            color: '#5F5A52',
+            border: 'none',
+            fontFamily: FONT,
+            letterSpacing: '0.02em',
+          }}
         >
           {saving ? 'Saving…' : 'Continue'}
         </button>
