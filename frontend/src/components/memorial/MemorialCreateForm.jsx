@@ -3,12 +3,12 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createMemorial } from "@/services/memorialService.js";
+import { uploadPhotoToSupabase } from "@/lib/supabaseStorage.js";
 
 const currentYear = new Date().getFullYear();
 
-const yearOptions = Array.from(
-  { length: currentYear - 1900 + 1 },
-  (_, index) => String(currentYear - index),
+const yearOptions = Array.from({ length: currentYear - 1900 + 1 }, (_, index) =>
+  String(currentYear - index),
 );
 
 const relationshipOptions = [
@@ -43,8 +43,7 @@ const initialRemembered = {
 const fieldClassName =
   "h-[63px] w-full rounded-[13px] border border-[#CAD5E2] bg-white px-5 text-[20px] leading-[30px] text-[#0A0A0A] outline-none transition placeholder:text-[#0A0A0A80] focus:border-slate-500 focus:ring-2 focus:ring-slate-200";
 
-const labelClassName =
-  "text-[24px] font-medium leading-none text-[#0A0A0A]";
+const labelClassName = "text-[24px] font-medium leading-none text-[#0A0A0A]";
 
 const smallLabelClassName =
   "text-[16px] leading-[24px] font-medium text-[#0A0A0A]";
@@ -199,9 +198,7 @@ export default function MemorialCreateForm() {
     setRemembered((current) => ({
       ...current,
       relatedPeople: current.relatedPeople.map((person, personIndex) =>
-        personIndex === index
-          ? { ...person, [field]: value }
-          : person,
+        personIndex === index ? { ...person, [field]: value } : person,
       ),
     }));
   };
@@ -255,11 +252,31 @@ export default function MemorialCreateForm() {
     setIsSubmitting(true);
 
     try {
+      let photoUrl = null;
+
+      // Upload photo to Supabase Storage if one was selected
+      if (remembered.photo) {
+        try {
+          photoUrl = await uploadPhotoToSupabase(remembered.photo);
+        } catch (uploadErr) {
+          throw new Error(`Photo upload failed: ${uploadErr.message}`);
+        }
+      }
+
       const memorial = await createMemorial({
         subject_name: `${remembered.firstName} ${remembered.lastName}`.trim(),
-        date_of_birth: remembered.yearOfBirth ? `${remembered.yearOfBirth}-01-01` : null,
-        date_of_passing: remembered.yearOfPassing ? `${remembered.yearOfPassing}-01-01` : null,
+        first_name: remembered.firstName,
+        last_name: remembered.lastName,
+        nickname: remembered.nickName,
+        date_of_birth: remembered.yearOfBirth
+          ? `${remembered.yearOfBirth}-01-01`
+          : null,
+        date_of_passing: remembered.yearOfPassing
+          ? `${remembered.yearOfPassing}-01-01`
+          : null,
         description: remembered.briefBiography,
+        related_people: remembered.relatedPeople,
+        cover_photo_url: photoUrl,
       });
 
       if (memorial?.id) {
@@ -281,10 +298,7 @@ export default function MemorialCreateForm() {
   ];
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="flex w-full flex-col gap-[50px]"
-    >
+    <form onSubmit={handleSubmit} className="flex w-full flex-col gap-[50px]">
       <div className="grid w-full grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
         <div className="flex w-full flex-col gap-5">
           <TextField
@@ -390,10 +404,7 @@ export default function MemorialCreateForm() {
       </div>
 
       <div className="flex w-full flex-col gap-[10px]">
-        <label
-          htmlFor="brief-biography"
-          className={labelClassName}
-        >
+        <label htmlFor="brief-biography" className={labelClassName}>
           Brief Biography
         </label>
 
@@ -415,8 +426,7 @@ export default function MemorialCreateForm() {
 
         <div className="flex flex-col gap-5">
           {remembered.relatedPeople.map((person, index) => {
-            const isLastRow =
-              index === remembered.relatedPeople.length - 1;
+            const isLastRow = index === remembered.relatedPeople.length - 1;
 
             return (
               <div
@@ -430,11 +440,7 @@ export default function MemorialCreateForm() {
                   type="text"
                   value={person.name}
                   onChange={(event) =>
-                    updateRelatedPerson(
-                      index,
-                      "name",
-                      event.target.value,
-                    )
+                    updateRelatedPerson(index, "name", event.target.value)
                   }
                   placeholder="Jane"
                   disabled={isSubmitting}
@@ -478,9 +484,7 @@ export default function MemorialCreateForm() {
       </section>
 
       {error && (
-        <div className="rounded-[10px] bg-red-50 p-4 text-red-700">
-          {error}
-        </div>
+        <div className="rounded-[10px] bg-red-50 p-4 text-red-700">{error}</div>
       )}
 
       <div className="flex justify-center pt-[20px]">
