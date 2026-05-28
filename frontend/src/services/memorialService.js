@@ -1,27 +1,8 @@
-import { getCurrentUser } from "./authService.js";
-import { MOCK_MEMORIALS_STORAGE_KEY, mockMemorials } from "../data/mockMemorials.js";
-
-const MOCK_DELAY_MS = 500;
-
-const waitForMockRequest = () =>
-  new Promise((resolve) => {
-    window.setTimeout(resolve, MOCK_DELAY_MS);
-  });
-
-const readStoredMemorial = () => {
-  const storedMemorial = localStorage.getItem(MOCK_MEMORIALS_STORAGE_KEY);
-
-  if (!storedMemorial) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(storedMemorial);
-  } catch {
-    localStorage.removeItem(MOCK_MEMORIALS_STORAGE_KEY);
-    return null;
-  }
-};
+import {
+  createMemorial as apiCreateMemorial,
+  getMemorials as apiGetMemorials,
+  getMemorial as apiGetMemorial,
+} from "../lib/api.js";
 
 const normalizeMemorial = (memorial) => {
   if (!memorial) {
@@ -47,82 +28,62 @@ const normalizeMemorial = (memorial) => {
     death_date: memorial.death_date || dateOfPassing,
     description,
     short_description: memorial.short_description || description,
-    cover_photo_url: memorial.cover_photo_url || memorial.profile_photo_url || null,
-    profile_photo_url: memorial.profile_photo_url || memorial.cover_photo_url || null,
+    cover_photo_url:
+      memorial.cover_photo_url || memorial.profile_photo_url || null,
+    profile_photo_url:
+      memorial.profile_photo_url || memorial.cover_photo_url || null,
   };
 };
 
 export async function createMemorial(memorialInput) {
-  // TODO: Replace this local mock with POST /memorials or a Supabase insert when the backend is ready.
-  await waitForMockRequest();
-
-  const currentUser = await getCurrentUser();
-  const now = new Date().toISOString();
-  const id = `mock-memorial-${Date.now()}`;
-  const subjectName =
-    memorialInput.subject_name || memorialInput.deceased_name || "";
-  const dateOfBirth =
-    memorialInput.date_of_birth || memorialInput.birth_date || null;
-  const dateOfPassing =
-    memorialInput.date_of_passing || memorialInput.death_date || null;
-  const description =
-    memorialInput.description ||
-    memorialInput.short_description ||
-    memorialInput.brief_biography ||
-    "";
-  const coverPhotoUrl =
-    memorialInput.cover_photo_url || memorialInput.profile_photo_url || null;
-
-  const memorial = normalizeMemorial({
-    id,
-    organizer_id: currentUser?.id ?? "mock-organizer-1",
-    subject_name: subjectName,
-    deceased_name: subjectName,
-    email_address: memorialInput.email_address || "",
-    relationship_to_organizer: memorialInput.relationship_to_organizer || null,
-    year_of_birth: memorialInput.year_of_birth || "",
-    year_of_passing: memorialInput.year_of_passing || "",
-    family_names: memorialInput.family_names || "",
-    brief_biography: description,
-    birth_date: dateOfBirth,
-    death_date: dateOfPassing,
-    date_of_birth: dateOfBirth,
-    date_of_passing: dateOfPassing,
-    description,
-    short_description: description,
-    cover_photo_url: coverPhotoUrl,
-    profile_photo_url: coverPhotoUrl,
-    privacy: memorialInput.privacy || "private",
-    status: memorialInput.status || "draft",
-    invite_link: `https://remember.local/invite/${id}`,
-    created_at: now,
-    updated_at: now,
+  const response = await apiCreateMemorial({
+    subject_name:
+      memorialInput.subject_name || memorialInput.deceased_name || "",
+    first_name: memorialInput.first_name || "",
+    last_name: memorialInput.last_name || "",
+    nickname: memorialInput.nickname || "",
+    date_of_birth:
+      memorialInput.date_of_birth || memorialInput.birth_date || null,
+    date_of_passing:
+      memorialInput.date_of_passing || memorialInput.death_date || null,
+    description: memorialInput.description || "",
+    related_people: memorialInput.related_people || [],
+    cover_photo_url:
+      memorialInput.cover_photo_url || memorialInput.profile_photo_url || null,
   });
 
-  localStorage.setItem(MOCK_MEMORIALS_STORAGE_KEY, JSON.stringify(memorial));
-  return memorial;
+  return normalizeMemorial(response.memorial);
 }
 
 export async function getMemorials() {
-  await waitForMockRequest();
-  const storedMemorial = readStoredMemorial();
-  return [storedMemorial, ...mockMemorials]
-    .filter(Boolean)
-    .map(normalizeMemorial);
+  const response = await apiGetMemorials();
+  return response.memorials.map(normalizeMemorial);
 }
 
 export async function getMemorial(id) {
-  await waitForMockRequest();
-  const memorials = await getMemorials();
-  return memorials.find((memorial) => memorial.id === id) ?? null;
+  const response = await apiGetMemorial(id);
+  return normalizeMemorial(response.memorial);
 }
 
+// Local session storage for tracking current memorial being created/edited
+const CURRENT_MEMORIAL_KEY = "remember.current_memorial";
+
 export function getCurrentMemorial() {
-  // TODO: Replace this local lookup with a memorial query scoped to the signed-in organizer.
-  return normalizeMemorial(readStoredMemorial() ?? mockMemorials[0] ?? null);
+  if (typeof window === "undefined") return null;
+  const stored = localStorage.getItem(CURRENT_MEMORIAL_KEY);
+  return stored ? normalizeMemorial(JSON.parse(stored)) : null;
+}
+
+export function setCurrentMemorial(memorial) {
+  if (typeof window === "undefined") return;
+  if (memorial) {
+    localStorage.setItem(CURRENT_MEMORIAL_KEY, JSON.stringify(memorial));
+  } else {
+    localStorage.removeItem(CURRENT_MEMORIAL_KEY);
+  }
 }
 
 export function clearCurrentMemorial() {
-  // TODO: Replace this with backend draft deletion or local draft reset behavior when persistence is ready.
-  localStorage.removeItem(MOCK_MEMORIALS_STORAGE_KEY);
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(CURRENT_MEMORIAL_KEY);
 }

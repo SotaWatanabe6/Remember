@@ -6,9 +6,21 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { mockMemorials } from "@/data/mockMemorials.js";
+import { getSupabaseClient } from "@/lib/supabaseClient.js";
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 const MOCK_DELAY = 500;
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+
+// ─── Helper to get Supabase JWT token ──────────────────────────────────────
+async function getAuthToken() {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data.session) {
+    throw new Error("Not authenticated");
+  }
+  return data.session.access_token;
+}
 
 // ─── Questionnaire responses localStorage ───────────
 
@@ -705,7 +717,7 @@ const readStoredValue = (key, fallbackValue) => {
     window.localStorage.removeItem(getResponsesStorageKey(token));
     return {};
   }
-}
+};
 
 const writeStoredValue = (key, value) => {
   if (!isBrowser()) return;
@@ -824,32 +836,45 @@ export async function getCurrentUser() {
 /**
  * POST /memorials
  * Creates a new memorial. Protected.
- * Body: { subject_name, date_of_birth, date_of_passing, cover_photo_url }
  */
 export async function createMemorial({
   subject_name,
+  first_name,
+  last_name,
+  nickname,
   date_of_birth,
   date_of_passing,
+  description,
+  related_people,
   cover_photo_url,
 }) {
-  await delay(MOCK_DELAY);
-  const currentUser = getActiveUser();
-  const createdAt = now();
-  const memorial = {
-    id: makeId("memorial"),
-    user_id: currentUser.id,
-    subject_name: subject_name.trim(),
-    date_of_birth: date_of_birth ?? null,
-    date_of_passing: date_of_passing ?? null,
-    cover_photo_url: cover_photo_url ?? null,
-    status: "collecting",
-    created_at: createdAt,
-    updated_at: createdAt,
-  };
+  const token = await getAuthToken();
 
-  writeStoredValue(MEMORIALS_STORAGE_KEY, [memorial, ...getStoredMemorials()]);
+  const response = await fetch(`${API_URL}/memorials`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      subject_name: subject_name.trim(),
+      first_name: (first_name || "").trim(),
+      last_name: (last_name || "").trim(),
+      nickname: (nickname || "").trim(),
+      date_of_birth: date_of_birth ?? null,
+      date_of_passing: date_of_passing ?? null,
+      description: (description || "").trim(),
+      related_people: related_people ?? [],
+      cover_photo_url: cover_photo_url ?? null,
+    }),
+  });
 
-  return { memorial };
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to create memorial");
+  }
+
+  return response.json();
 }
 
 /**
@@ -857,17 +882,21 @@ export async function createMemorial({
  * Returns all memorials for the logged in organizer. Protected.
  */
 export async function getMemorials() {
-  await delay(MOCK_DELAY);
-  const currentUser = getActiveUser();
-  return {
-    memorials: getStoredMemorials()
-      .filter((memorial) => memorial.user_id === currentUser.id)
-      .sort(
-        (left, right) =>
-          new Date(right.updated_at ?? right.created_at).getTime() -
-          new Date(left.updated_at ?? left.created_at).getTime(),
-      ),
-  };
+  const token = await getAuthToken();
+
+  const response = await fetch(`${API_URL}/memorials`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to fetch memorials");
+  }
+
+  return response.json();
 }
 
 /**
@@ -875,9 +904,21 @@ export async function getMemorials() {
  * Returns a single memorial by ID. Protected.
  */
 export async function getMemorial(id) {
-  await delay(MOCK_DELAY);
-  const memorial = getStoredMemorials().find((m) => m.id === id) ?? null;
-  return { memorial };
+  const token = await getAuthToken();
+
+  const response = await fetch(`${API_URL}/memorials/${id}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to fetch memorial");
+  }
+
+  return response.json();
 }
 
 // ─── INVITE LINK ──────────────────────────────────────────────────────────────
@@ -887,18 +928,37 @@ export async function getMemorial(id) {
  * Generates a contributor invite link. Protected.
  * Body: { expires_at: string, max_uses: number }
  */
-export async function createInviteLink(memorialId, { expires_at, max_uses }) {
-  await delay(MOCK_DELAY);
-  return {
-    invite_link: {
-      ...MOCK_INVITE_LINK,
-      id: "invite-uuid-" + Math.random().toString(36).slice(2),
-      expires_at,
-      max_uses,
-      created_at: now(),
+export async function createInviteLink(
+  memorialId,
+  { expires_at, max_uses } = {},
+) {
+  const token = await getAuthToken();
+
+  const response = await fetch(
+    `${API_URL}/memorials/${memorialId}/invite-link`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        expires_at: expires_at ?? null,
+        max_uses: max_uses ?? null,
+      }),
     },
-  };
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error || "Failed to create invite link");
+  }
+
+  return response.json();
 }
+
+// Alias for consistency
+export const generateInviteLink = createInviteLink;
 
 /**
  * PATCH /memorials/:id/invite-link
