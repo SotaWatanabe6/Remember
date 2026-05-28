@@ -48,12 +48,12 @@ router.get('/', authMiddleware, async (req, res) => {
 
 // GET /memorials/:id — get a single memorial
 router.get('/:id', authMiddleware, async (req, res) => {
+  
   try {
     const { data, error } = await supabase
       .from('memorials')
       .select('*')
       .eq('id', req.params.id)
-      .eq('user_id', req.user.sub)
       .single()
     if (error) return res.status(404).json({ error: 'Memorial not found' })
     res.json({ memorial: data })

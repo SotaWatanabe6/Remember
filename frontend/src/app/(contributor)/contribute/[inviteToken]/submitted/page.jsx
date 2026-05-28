@@ -4,7 +4,10 @@ import { useParams } from 'next/navigation';
 
 export default function SubmittedPage() {
   const { inviteToken } = useParams();
+  
+  function handleSubmitCompletion() {
 
+  }
   return (
     <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
       <div className="mx-auto flex w-full max-w-[680px] flex-col gap-10">
@@ -36,7 +39,7 @@ export default function SubmittedPage() {
 
           {/* Continue button — navigates back to start or closes */}
           <button
-            onClick={() => window.close()}
+            onClick={handleSubmitCompletion}
             className="w-full max-w-xs rounded-full bg-neutral-950 py-4 text-base font-semibold text-white transition-opacity hover:opacity-80 active:opacity-70"
           >
             Continue

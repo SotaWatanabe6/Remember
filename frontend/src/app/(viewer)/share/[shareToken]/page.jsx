@@ -3,7 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { getShareToken } from '@/lib/api';
-
+import MemorialContributionsPage from "@/components/output/contribution-list";
+import MemorialContributionApproval from "@/components/output/contribution-awaiting";
+import {  ChevronLeft, ChevronRight } from "lucide-react";
+import ConstellationGraph from "@/components/output/constellation";
 // ─── Tab bar (same as output page) ────────
 
 const TABS = ['Story', 'Constellation', 'Voices', 'All Photos'];
@@ -38,10 +41,10 @@ function StoryTab() {
   );
 }
 
-function ConstellationTab() {
+function ConstellationTab({ data }) {
   return (
     <div className="flex flex-col items-center justify-center py-24">
-      <p className="text-slate-400 text-sm">Constellation tab — built by Mendrika</p>
+      <ConstellationGraph data={data} />
     </div>
   );
 }

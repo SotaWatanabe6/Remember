@@ -5,7 +5,14 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getMemorialOutput } from '@/lib/api';
+import { getMemorialOutput } from '@/services/memorialService';
+import { getMemorialContributors } from '@/services/contributorService';
+import ConstellationGraph from "@/components/output/constellation";
+import MemorialContributionsPage from "@/components/output/contribution-list";
+import MemorialContributionApproval from "@/components/output/contribution-awaiting";
+import {  ChevronLeft,
+  ChevronRight } from "lucide-react";
+
 
 function MemorialHeader({ memorial, onShare }) {
   return (
@@ -82,13 +89,105 @@ function ArchiveTab() {
   );
 }
 
-function ContributionsTab() {
+function ContributionsTab({contributorslist}) {
+  const [value, setValue] = useState("contributors");
+  const submissions = [
+    {
+      id: 1,
+      user: "Jane Smith",
+      contribution: "10 contributions",
+      summary:
+        "This can be an AI generated summary of the contribution, either mentioning surfaced themes or flagged submissions that may be sensitive or inappropriate.",
+    },
+    {
+      id: 2,
+      user: "Michael Johnson",
+      contribution: "7 contributions",
+      summary:
+        "AI generated summaries can highlight themes, relationships, and potentially sensitive submissions for moderators to review quickly.",
+    },
+    {
+      id: 3,
+      user: "Emily Davis",
+      contribution: "4 contributions",
+      summary:
+        "This summary may contain surfaced insights generated automatically from uploaded stories, photos, and audio.",
+    },
+    {
+      id: 4,
+      user: "Chris Brown",
+      contribution: "15 contributions",
+      summary:
+        "AI can help identify emotional themes and summarize media content for easier moderation workflows.",
+    },
+    {
+      id: 5,
+      user: "Sarah Wilson",
+      contribution: "3 contributions",
+      summary:
+        "Potentially sensitive content or highlighted themes may appear here after automatic AI analysis.",
+    },
+  ];
+  const handleChange = (e) => {
+    setValue(e.target.value);
+  };
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  const current = submissions[currentIndex];
+
+  const handlePrev = () => {
+      setCurrentIndex((prev) =>
+      prev === 0 ? submissions.length - 1 : prev - 1
+      );
+  };
+
+  const handleNext = () => {
+      setCurrentIndex((prev) =>
+      prev === submissions.length - 1 ? 0 : prev + 1
+      );
+  };      
   return (
-    <div className="pt-6">
-      <div className="rounded-2xl border border-neutral-200 p-6 flex items-center justify-center py-16">
-        <p className="text-sm text-slate-400">Contributions tab — built by Mendrika</p>
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-4 flex items-center justify-between">      
+          <div className="flex items-center gap-3">
+            <select onChange={handleChange} value={value} className="border border-gray-300 rounded-md px-4 py-2 text-sm outline-none">
+              <option value="contributors">Contributors</option>
+              <option value="awaiting">Awaiting Approval</option>
+            </select>
+          </div>
+          {
+            value=="awaiting" ? (
+            <div className="flex items-center gap-4 text-sm text-gray-600">
+              <button
+                onClick={handlePrev}
+                className="rounded p-1 transition hover:bg-gray-200"
+              >
+                <ChevronLeft size={18} />
+              </button>
+
+              <span>
+                {currentIndex + 1}/{submissions.length}
+              </span>
+
+              <button
+                onClick={handleNext}
+                className="rounded p-1 transition hover:bg-gray-200"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+                      
+            ): null
+          }
+        </div>    
+        {
+          value === "contributors" ? (
+            <MemorialContributionsPage contributors={contributorslist} />
+          ) : value === "awaiting" ? (
+            <MemorialContributionApproval contributors={current} />
+          ) : null
+        }
       </div>
-    </div>
   );
 }
 
@@ -179,7 +278,11 @@ function OutputsTab({ output }) {
   return (
     <div className="flex flex-col divide-y divide-neutral-100 pt-4">
       <CollapsibleSection title="Story"><div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6"><p className="text-sm text-slate-400">Story — built by Sungjun</p></div></CollapsibleSection>
-      <CollapsibleSection title="Constellation"><div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6 aspect-video flex items-center justify-center"><p className="text-sm text-slate-400">Constellation — built by Mendrika</p></div></CollapsibleSection>
+      <CollapsibleSection title="Constellation">
+        <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6 aspect-video flex items-center justify-center">
+          <ConstellationGraph memorial={output?.constellation} />
+        </div>
+      </CollapsibleSection>
       <CollapsibleSection title="Voices"><div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6"><p className="text-sm text-slate-400">Voices — built by Sungjun</p></div></CollapsibleSection>
       <CollapsibleSection title="All Photos" defaultOpen={true}><AllPhotosSection albums={output?.photos} /></CollapsibleSection>
     </div>
@@ -236,6 +339,32 @@ export default function MemorialOutputPage() {
   const [output, setOutput] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showShare, setShowShare] = useState(false);
+  const memorialId = id;
+  const [contributors, setContributors] = useState([]);
+  
+  useEffect(() => {    
+    if (!memorialId) return;
+    
+    const loadMemorial = async () => {        
+      setLoading(true);
+      setError(null);
+      try {
+        const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
+        if (typeof token === "undefined") {
+          console.log("Token retrieved:", token);
+          return ;
+        }
+        const contributor= await getMemorialContributors(memorialId,token);
+        setContributors(contributor.contributors);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }      
+    }
+    loadMemorial();
+
+  }, [memorialId]);  
 
   const memorial = {
     id,
@@ -278,7 +407,7 @@ export default function MemorialOutputPage() {
           ) : (
             <>
               {activeTab === 'Archive' && <ArchiveTab />}
-              {activeTab === 'Contributions' && <ContributionsTab />}
+              {activeTab === 'Contributions' && <ContributionsTab contributorslist={contributors} />}
               {activeTab === 'Outputs' && <OutputsTab output={output} />}
             </>
           )}

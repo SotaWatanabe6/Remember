@@ -9,6 +9,7 @@ import { mockMemorials } from "@/data/mockMemorials.js";
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 const MOCK_DELAY = 500;
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 // ─── Questionnaire responses localStorage ───────────
 
@@ -415,8 +416,30 @@ export async function submitContribution(token) {
  * Rebecca owns: All Photos tab + output page shell.
  * TODO: Replace with real fetch() on Day 9.
  */
-export async function getMemorialOutput(memorialId) {
+export async function getMemorialOutput(memorialId,token) {
   await delay(MOCK_DELAY);
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/memorials/${memorialId}/output`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token.access_token}`,
+
+        },
+      }
+    );
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch memorial output: ${response.status}`
+      );
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching memorial output:", error);
+    throw error;
+  }  
   return {
     story: [
       {
@@ -874,10 +897,30 @@ export async function getMemorials() {
  * GET /memorials/:id
  * Returns a single memorial by ID. Protected.
  */
-export async function getMemorial(id) {
+export async function getMemorial(id,token) {
   await delay(MOCK_DELAY);
-  const memorial = getStoredMemorials().find((m) => m.id === id) ?? null;
-  return { memorial };
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/memorials/${id}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token.access_token}`,
+
+        },
+      }
+    );
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch memorial: ${response.status}`
+      );
+    }
+    return response.json();
+  } catch (error) {
+    console.error("Error fetching memorial:", error);
+    throw error;
+  }  
 }
 
 // ─── INVITE LINK ──────────────────────────────────────────────────────────────
@@ -921,9 +964,25 @@ export async function updateInviteLink(memorialId, { is_active }) {
  * GET /memorials/:id/contributors
  * Returns all contributors for a memorial. Protected.
  */
-export async function getContributors(memorialId) {
+export async function getContributors(memorialId,token) {
   await delay(MOCK_DELAY);
-  return { contributors: MOCK_CONTRIBUTORS };
+  if (!memorialId) throw new Error("memorialId is required");
+  const res = await fetch(
+    `${API_BASE_URL}/memorials/${memorialId}/contributors`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token.access_token}` } : {}),
+      },
+    }
+  );
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || "Failed to fetch contributors");
+  }
+  return res.json();
 }
 
 // ─── SHARE ────────────────────────────────────────────────────────────────────
@@ -951,6 +1010,35 @@ export async function createShareLink(memorialId) {
  */
 export async function triggerGeneration(memorialId) {
   await delay(MOCK_DELAY);
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/ai/memorials/${memorialId}/generate`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to generate memorial: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    return {
+      success: true,
+      data,
+    };
+  } catch (error) {
+    console.error("Generate memorial error:", error);
+
+    return {
+      success: false,
+      error: error.message,
+    };  
+}
   return {
     job: {
       id: "job-uuid-" + Math.random().toString(36).slice(2),
@@ -978,6 +1066,23 @@ export async function getJobStatus(jobId) {
     "Matching photos to themes...",
     "Building the story arc...",
   ];
+  if (!memorialId) throw new Error("memorialId is required");
+  const res = await fetch(
+    `${API_BASE_URL}/memorials/${memorialId}/contributors`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token.access_token}` } : {}),
+      },
+    }
+  );
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.message || "Failed to fetch contributors");
+  }  
+  return res.json();
   const stepIndex = Math.floor((_mockProgress / 100) * steps.length);
   return {
     job: {
