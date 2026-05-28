@@ -26,13 +26,8 @@ const normalizeMemorial = (memorial) => {
     memorial.description ||
     memorial.short_description ||
     memorial.brief_biography ||
-<<<<<<< HEAD
     '';
-=======
-    "";
-  const relatedPeople =
-    memorial.related_people || memorial.relatedPeople || [];
->>>>>>> f8cf237 (fix(frontend): align memorial form with backend contract)
+  const relatedPeople = memorial.related_people || memorial.relatedPeople || [];
 
   return {
     ...memorial,
@@ -43,12 +38,6 @@ const normalizeMemorial = (memorial) => {
     date_of_passing: dateOfPassing,
     birth_date: memorial.birth_date || dateOfBirth,
     death_date: memorial.death_date || dateOfPassing,
-<<<<<<< HEAD
-    description,
-    short_description: memorial.short_description || description,
-    cover_photo_url: memorial.cover_photo_url || memorial.profile_photo_url || null,
-    profile_photo_url: memorial.profile_photo_url || memorial.cover_photo_url || null,
-=======
     biography,
     description: memorial.description || biography,
     short_description: memorial.short_description || biography,
@@ -58,7 +47,6 @@ const normalizeMemorial = (memorial) => {
       memorial.cover_photo_url || memorial.profile_photo_url || null,
     profile_photo_url:
       memorial.profile_photo_url || memorial.cover_photo_url || null,
->>>>>>> f8cf237 (fix(frontend): align memorial form with backend contract)
   };
 };
 
@@ -70,17 +58,6 @@ const normalizeMemorial = (memorial) => {
  */
 export async function createMemorial(memorialInput) {
   const response = await apiCreateMemorial({
-<<<<<<< HEAD
-    subject_name: memorialInput.subject_name || memorialInput.deceased_name || '',
-    first_name: memorialInput.first_name || '',
-    last_name: memorialInput.last_name || '',
-    nickname: memorialInput.nickname || '',
-    date_of_birth: memorialInput.date_of_birth || memorialInput.birth_date || null,
-    date_of_passing: memorialInput.date_of_passing || memorialInput.death_date || null,
-    description: memorialInput.description || '',
-    related_people: memorialInput.related_people || [],
-    cover_photo_url: memorialInput.cover_photo_url || memorialInput.profile_photo_url || null,
-=======
     subject_name:
       memorialInput.subject_name || memorialInput.deceased_name || "",
     nickname: memorialInput.nickname || "",
@@ -97,7 +74,6 @@ export async function createMemorial(memorialInput) {
       memorialInput.related_people || memorialInput.relatedPeople || [],
     cover_photo_url:
       memorialInput.cover_photo_url || memorialInput.profile_photo_url || null,
->>>>>>> f8cf237 (fix(frontend): align memorial form with backend contract)
   });
   return normalizeMemorial(response.memorial);
 }

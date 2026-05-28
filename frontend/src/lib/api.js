@@ -12,10 +12,6 @@ import { getSupabaseClient } from "@/lib/supabaseClient.js";
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 const MOCK_DELAY = 500;
-<<<<<<< HEAD
-=======
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
->>>>>>> f8cf237 (fix(frontend): align memorial form with backend contract)
 
 // API base URL — reads from env for production, falls back to localhost for dev
 // Set NEXT_PUBLIC_API_URL in Vercel dashboard for production deployment
@@ -219,17 +215,15 @@ export async function getCurrentUser() {
  * POST /memorials
  * Creates a new memorial. Protected.
  * PHASE 4: Blessing wired to real backend — using correct port 3001
- * Includes extra fields from Blessing's design: first_name, last_name, nickname, description
+ * Sends backend-aligned fields: nickname, biography, related_people
  * Falls back to mock if backend fails
  */
 export async function createMemorial({
   subject_name,
-  first_name,
-  last_name,
   nickname,
   date_of_birth,
   date_of_passing,
-  description,
+  biography,
   related_people,
   cover_photo_url,
 }) {
@@ -242,13 +236,11 @@ export async function createMemorial({
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        subject_name: subject_name?.trim(),
-        first_name: (first_name || '').trim(),
-        last_name: (last_name || '').trim(),
+        subject_name: subject_name?.trim() || '',
         nickname: (nickname || '').trim(),
         date_of_birth: date_of_birth ?? null,
         date_of_passing: date_of_passing ?? null,
-        description: (description || '').trim(),
+        biography: (biography || '').trim(),
         related_people: related_people ?? [],
         cover_photo_url: cover_photo_url ?? null,
       }),
@@ -260,10 +252,15 @@ export async function createMemorial({
     await delay(MOCK_DELAY);
     const currentUser = getActiveUser();
     const createdAt = now();
+    const normalizedBiography = (biography || '').trim();
     const memorial = {
       id: makeId('memorial'),
       user_id: currentUser.id,
-      subject_name: subject_name?.trim(),
+      subject_name: subject_name?.trim() || '',
+      nickname: (nickname || '').trim(),
+      biography: normalizedBiography,
+      description: normalizedBiography,
+      related_people: related_people ?? [],
       date_of_birth: date_of_birth ?? null,
       date_of_passing: date_of_passing ?? null,
       cover_photo_url: cover_photo_url ?? null,
@@ -864,235 +861,10 @@ export async function getShareToken(shareToken) {
  */
 export async function getMemorialById(memorialId) {
   try {
-<<<<<<< HEAD
-    const session = getStoredSession();
+    const token = await getAuthToken();
     const response = await fetch(`${API_URL}/memorials/${memorialId}`, {
-=======
-    return JSON.parse(storedResponses);
-  } catch {
-    window.localStorage.removeItem(getResponsesStorageKey(token));
-    return {};
-  }
-};
-
-const writeStoredValue = (key, value) => {
-  if (!isBrowser()) return;
-  window.localStorage.setItem(key, JSON.stringify(value));
-};
-
-const clearStoredValue = (key) => {
-  if (!isBrowser()) return;
-  window.localStorage.removeItem(key);
-};
-
-const ensureMockState = () => {
-  if (!isBrowser()) return;
-  if (!readStoredValue(USERS_STORAGE_KEY, null)) {
-    writeStoredValue(USERS_STORAGE_KEY, MOCK_USERS);
-  }
-  if (!readStoredValue(MEMORIALS_STORAGE_KEY, null)) {
-    writeStoredValue(MEMORIALS_STORAGE_KEY, MOCK_MEMORIALS);
-  }
-};
-
-const getStoredUsers = () => {
-  ensureMockState();
-  return readStoredValue(USERS_STORAGE_KEY, MOCK_USERS);
-};
-
-const getStoredMemorials = () => {
-  ensureMockState();
-  return readStoredValue(MEMORIALS_STORAGE_KEY, MOCK_MEMORIALS);
-};
-
-const getStoredSession = () => readStoredValue(AUTH_STORAGE_KEY, null);
-
-const setStoredSession = ({ user, token }) => {
-  writeStoredValue(AUTH_STORAGE_KEY, { user, token });
-};
-
-const getActiveUser = () => getStoredSession()?.user ?? MOCK_USER;
-
-// ─── AUTH ─────────────────────────────────────────────────────────────────────
-
-/**
- * POST /auth/register
- * Creates a new organizer account.
- * Body: { email: string, password: string, full_name?: string }
- */
-export async function register({ email, password, full_name }) {
-  await delay(MOCK_DELAY);
-  const trimmedEmail = email.trim();
-  const users = getStoredUsers();
-  const emailAlreadyExists = users.some(
-    (user) => user.email.toLowerCase() === trimmedEmail.toLowerCase(),
-  );
-
-  if (emailAlreadyExists) {
-    throw new Error("An account with this email already exists.");
-  }
-
-  const user = {
-    id: makeId("user-uuid"),
-    email: trimmedEmail,
-    full_name: full_name ?? "",
-  };
-  const token = fakeToken();
-
-  writeStoredValue(USERS_STORAGE_KEY, [...users, { ...user, password }]);
-  setStoredSession({ user, token });
-
-  return { user, token };
-}
-
-/**
- * POST /auth/login
- * Logs in to an existing organizer account.
- * Body: { email: string, password: string }
- */
-export async function login({ email, password }) {
-  await delay(MOCK_DELAY);
-  const trimmedEmail = email.trim();
-  const users = getStoredUsers();
-  const matchingUser = users.find(
-    (user) => user.email.toLowerCase() === trimmedEmail.toLowerCase(),
-  );
-
-  if (matchingUser?.password && matchingUser.password !== password) {
-    throw new Error("Invalid email or password.");
-  }
-
-  const user = matchingUser
-    ? {
-        id: matchingUser.id,
-        email: matchingUser.email,
-        full_name: matchingUser.full_name ?? "",
-      }
-    : { ...MOCK_USER, email: trimmedEmail || MOCK_USER.email };
-  const token = fakeToken();
-
-  setStoredSession({ user, token });
-
-  return { user, token };
-}
-
-export async function logout() {
-  await delay(MOCK_DELAY / 2);
-  clearStoredValue(AUTH_STORAGE_KEY);
-  return { success: true };
-}
-
-export async function getCurrentUser() {
-  await delay(MOCK_DELAY / 2);
-  return getActiveUser();
-}
-
-// ─── MEMORIALS ────────────────────────────────────────────────────────────────
-
-/**
- * POST /memorials
- * Creates a new memorial. Protected.
- */
-export async function createMemorial({
-  subject_name,
-  nickname,
-  date_of_birth,
-  date_of_passing,
-  biography,
-  related_people,
-  cover_photo_url,
-}) {
-  const token = await getAuthToken();
-
-  const response = await fetch(`${API_URL}/memorials`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      subject_name: subject_name.trim(),
-      nickname: (nickname || "").trim(),
-      date_of_birth: date_of_birth ?? null,
-      date_of_passing: date_of_passing ?? null,
-      biography: (biography || "").trim(),
-      related_people: related_people ?? [],
-      cover_photo_url: cover_photo_url ?? null,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to create memorial");
-  }
-
-  return response.json();
-}
-
-/**
- * GET /memorials
- * Returns all memorials for the logged in organizer. Protected.
- */
-export async function getMemorials() {
-  const token = await getAuthToken();
-
-  const response = await fetch(`${API_URL}/memorials`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to fetch memorials");
-  }
-
-  return response.json();
-}
-
-/**
- * GET /memorials/:id
- * Returns a single memorial by ID. Protected.
- */
-export async function getMemorial(id) {
-  const token = await getAuthToken();
-
-  const response = await fetch(`${API_URL}/memorials/${id}`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error || "Failed to fetch memorial");
-  }
-
-  return response.json();
-}
-
-// ─── INVITE LINK ──────────────────────────────────────────────────────────────
-
-/**
- * POST /memorials/:id/invite-link
- * Generates a contributor invite link. Protected.
- * Body: { expires_at: string, max_uses: number }
- */
-export async function createInviteLink(
-  memorialId,
-  { expires_at, max_uses } = {},
-) {
-  const token = await getAuthToken();
-
-  const response = await fetch(
-    `${API_URL}/memorials/${memorialId}/invite-link`,
-    {
-      method: "POST",
->>>>>>> f8cf237 (fix(frontend): align memorial form with backend contract)
       headers: {
-        Authorization: `Bearer ${session?.token || ''}`,
+        Authorization: `Bearer ${token}`,
       },
     });
 
