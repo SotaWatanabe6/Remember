@@ -1,17 +1,34 @@
 'use client';
 
+// frontend/src/app/(contributor)/contribute/[inviteToken]/review/page.jsx
+
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getContributorSummary, deletePhoto, deleteVoice, submitContribution } from '@/lib/api';
 
+const FONT = "'Cormorant Garamond', Georgia, serif";
+
+const COLORS = {
+  bg: '#F0EAE2',
+  family: '#AF5F42',
+  friend: '#45556C',
+  colleague: '#59763C',
+  text: '#1a1a1a',
+  textMuted: '#6b6b6b',
+  cardBg: '#E8E0D8',
+  border: '#D4CAC0',
+};
+
+
 function ContributorNav({ backHref }) {
   return (
     <nav className="flex h-10 items-center justify-between">
-      <span className="text-2xl leading-8 text-neutral-950">Remember</span>
+      <span style={{ fontFamily: FONT }} className="text-2xl leading-8 text-[#423F39]">Remember</span>
       <Link
         href={backHref}
-        className="flex items-center gap-1.5 text-base text-neutral-950 hover:text-slate-600 transition-colors"
+        style={{ fontFamily: FONT }}
+        className="flex items-center gap-1.5 text-base text-[#5F5A52] hover:text-[#423F39] transition-colors"
       >
         <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -33,8 +50,8 @@ function formatDuration(seconds) {
 
 function ReviewSection({ title, children }) {
   return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-auth">
-      <p className="mb-4 text-base font-medium text-slate-600">{title}</p>
+    <div className="rounded-2xl p-6" style={{ border: '1px solid #D4CAC0' }}>
+      <p className="mb-4 text-[20px] font-semibold" style={{ color: '#423F39', fontFamily: FONT }}>{title}</p>
       {children}
     </div>
   );
@@ -67,10 +84,7 @@ export default function ReviewPage() {
   async function handleDeletePhoto(assetId) {
     try {
       await deletePhoto(inviteToken, assetId);
-      setSummary((prev) => ({
-        ...prev,
-        photos: prev.photos.filter((p) => p.id !== assetId),
-      }));
+      setSummary((prev) => ({ ...prev, photos: prev.photos.filter((p) => p.id !== assetId) }));
     } catch (err) {
       console.error('Delete photo failed:', err);
     }
@@ -79,10 +93,7 @@ export default function ReviewPage() {
   async function handleDeleteVoice(recordingId) {
     try {
       await deleteVoice(inviteToken, recordingId);
-      setSummary((prev) => ({
-        ...prev,
-        voice: prev.voice.filter((v) => v.id !== recordingId),
-      }));
+      setSummary((prev) => ({ ...prev, voice: prev.voice.filter((v) => v.id !== recordingId) }));
     } catch (err) {
       console.error('Delete voice failed:', err);
     }
@@ -99,15 +110,30 @@ export default function ReviewPage() {
     }
   }
 
+  // Fix full-page cream background — no white showing around edges
+  useEffect(() => {
+    const prevBody = document.body.style.backgroundColor;
+    const prevHtml = document.documentElement.style.backgroundColor;
+    document.body.style.backgroundColor = COLORS.bg;
+    document.documentElement.style.backgroundColor = COLORS.bg;
+    return () => {
+      document.body.style.backgroundColor = prevBody;
+      document.documentElement.style.backgroundColor = prevHtml;
+    };
+  }, []);
+
   if (loading) {
     return (
-      <main className="min-h-screen bg-white px-6 py-10 sm:px-[50px]">
+      <main
+        className="min-h-screen px-6 py-10 sm:px-[50px]"
+        style={{ backgroundColor: '#F0EAE2', fontFamily: FONT }}
+      >
         <div className="mx-auto max-w-[680px]">
           <div className="flex h-10 items-center justify-between">
-            <span className="text-2xl text-neutral-950">Remember</span>
+            <span className="text-2xl" style={{ color: '#423F39' }}>Remember</span>
           </div>
           <div className="mt-16 flex justify-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-950" />
+            <div className="h-8 w-8 animate-spin rounded-full border-2" style={{ borderColor: '#D4CAC0', borderTopColor: '#423F39' }} />
           </div>
         </div>
       </main>
@@ -115,17 +141,20 @@ export default function ReviewPage() {
   }
 
   return (
-    <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
+    <main
+      className="min-h-screen px-6 py-10 sm:px-[50px]"
+      style={{ backgroundColor: '#F0EAE2', fontFamily: FONT, color: '#423F39' }}
+    >
       <div className="mx-auto flex w-full max-w-[680px] flex-col gap-8">
 
         <ContributorNav backHref={`/contribute/${inviteToken}/voice`} />
 
         {/* Heading */}
         <div className="text-center">
-          <h1 className="text-[40px] font-medium leading-tight text-neutral-950">
+          <h1 className="text-[44px] font-bold leading-tight" style={{ color: '#423F39', letterSpacing: '-0.01em' }}>
             Review contributions
           </h1>
-          <p className="mt-2 text-base text-slate-500">Review all uploaded media.</p>
+          <p className="mt-2 text-[17px]" style={{ color: '#4A7FA5' }}>Review all uploaded media.</p>
         </div>
 
         {/* Photos */}
@@ -133,20 +162,25 @@ export default function ReviewPage() {
           <ReviewSection title="Uploaded photos">
             <div className="grid grid-cols-3 gap-3">
               {summary.photos.map((photo) => (
-                <div key={photo.id} className="relative aspect-square overflow-hidden rounded-xl bg-neutral-100">
-                  <div className="h-full w-full bg-neutral-200" />
-                  {/* Edit / Delete */}
+                <div key={photo.id} className="relative aspect-square overflow-hidden rounded-xl" style={{ backgroundColor: '#E8E0D8' }}>
+                  {photo.previewUrl && (
+                    <img src={photo.previewUrl} alt={photo.file_name} className="h-full w-full object-cover" />
+                  )}
                   <div className="absolute right-2 top-2 flex gap-1.5">
-                    <button className="rounded-full bg-white/90 p-1.5 shadow-sm hover:bg-white transition-colors">
-                      <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <button
+                      className="rounded-full p-1.5 shadow-sm transition-colors"
+                      style={{ backgroundColor: 'rgba(240,234,226,0.9)' }}
+                    >
+                      <svg width="11" height="11" fill="none" stroke="#5F5A52" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a4 4 0 01-1.414.828l-3 1 1-3a4 4 0 01.828-1.414z" />
                       </svg>
                     </button>
                     <button
                       onClick={() => handleDeletePhoto(photo.id)}
-                      className="rounded-full bg-white/90 p-1.5 shadow-sm hover:bg-white transition-colors"
+                      className="rounded-full p-1.5 shadow-sm transition-colors"
+                      style={{ backgroundColor: 'rgba(240,234,226,0.9)' }}
                     >
-                      <svg width="11" height="11" fill="none" stroke="#ef4444" strokeWidth="2" viewBox="0 0 24 24">
+                      <svg width="11" height="11" fill="none" stroke="#C0503A" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6m2 0a1 1 0 00-1-1h-4a1 1 0 00-1 1H5" />
                       </svg>
                     </button>
@@ -163,32 +197,34 @@ export default function ReviewPage() {
             <div className="flex flex-col gap-4">
               {summary.voice.map((rec) => (
                 <div key={rec.id} className="flex items-center gap-4">
-                  <button className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-neutral-950 text-white hover:opacity-80 transition-opacity">
-                    <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24">
+                  <button
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-opacity hover:opacity-80"
+                    style={{ backgroundColor: '#423F39', color: 'white' }}
+                  >
+                    <svg width="14" height="14" fill="white" viewBox="0 0 24 24">
                       <path d="M8 5v14l11-7z" />
                     </svg>
                   </button>
-                  {/* Show filename per design */}
                   <div className="flex-1 min-w-0">
-                    <p className="truncate text-sm font-medium text-neutral-950">
+                    <p className="truncate text-sm font-medium" style={{ color: '#423F39' }}>
                       {rec.file_name || rec.contributor_title}
                     </p>
                     <div className="mt-1.5 flex items-center gap-2">
-                      <div className="h-1 flex-1 rounded-full bg-blue-500/30">
-                        <div className="h-full w-2/3 rounded-full bg-blue-500" />
+                      <div className="h-1 flex-1 rounded-full" style={{ backgroundColor: '#D4CAC0' }}>
+                        <div className="h-full w-2/3 rounded-full" style={{ backgroundColor: '#4A7FA5' }} />
                       </div>
-                      <span className="shrink-0 text-xs text-slate-500">
+                      <span className="shrink-0 text-xs" style={{ color: '#97877B' }}>
                         {formatDuration(rec.duration_seconds)}
                       </span>
                     </div>
                   </div>
                   <div className="flex shrink-0 gap-2">
-                    <button className="p-1.5 text-neutral-500 hover:text-neutral-950 transition-colors">
+                    <button className="p-1.5 transition-colors" style={{ color: '#97877B' }}>
                       <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a4 4 0 01-1.414.828l-3 1 1-3a4 4 0 01.828-1.414z" />
                       </svg>
                     </button>
-                    <button onClick={() => handleDeleteVoice(rec.id)} className="p-1.5 text-red-400 hover:text-red-600 transition-colors">
+                    <button onClick={() => handleDeleteVoice(rec.id)} className="p-1.5 transition-colors" style={{ color: '#C0503A' }}>
                       <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6m2 0a1 1 0 00-1-1h-4a1 1 0 00-1 1H5" />
                       </svg>
@@ -200,16 +236,16 @@ export default function ReviewPage() {
           </ReviewSection>
         )}
 
-        {/* Stories — title + AI summary format per updated design */}
+        {/* Stories */}
         {summary?.responses?.length > 0 && (
           <ReviewSection title="Stories">
             <div className="flex flex-col gap-4">
               {summary.responses.map((r, i) => (
-                <div key={i}>
-                  <p className="text-sm font-medium text-neutral-950">
+                <div key={i} style={{ borderTop: i > 0 ? '1px solid #D4CAC0' : 'none', paddingTop: i > 0 ? '16px' : '0' }}>
+                  <p className="text-[17px] font-semibold" style={{ color: '#423F39' }}>
                     {r.question_text}
                   </p>
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-sm leading-relaxed" style={{ color: '#97877B' }}>
                     {r.response_text || "An AI generated summary of the user's story will be featured here."}
                   </p>
                 </div>
@@ -218,18 +254,32 @@ export default function ReviewPage() {
           </ReviewSection>
         )}
 
-        {/* Actions — both pill-shaped per design */}
+        {/* Actions */}
         <div className="flex gap-3">
           <Link
             href={`/contribute/${inviteToken}/upload`}
-            className="flex-1 rounded-full border border-neutral-200 py-4 text-center text-base font-medium text-neutral-950 hover:bg-neutral-50 transition-colors"
+            className="flex-1 rounded-full py-4 text-center text-[16px] transition-colors"
+            style={{
+              border: '1px solid #D4CAC0',
+              color: '#423F39',
+              fontFamily: FONT,
+              backgroundColor: 'transparent',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#E8E0D8'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
           >
             Upload more
           </Link>
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="flex-1 rounded-full bg-neutral-950 py-4 text-base font-semibold text-white transition-opacity hover:opacity-80 active:opacity-70 disabled:opacity-50"
+            className="flex-1 rounded-full py-4 text-[16px] transition-opacity hover:opacity-80 active:opacity-70 disabled:opacity-50"
+            style={{
+              backgroundColor: '#C4B49A',
+              color: '#5F5A52',
+              border: 'none',
+              fontFamily: FONT,
+            }}
           >
             {submitting ? 'Submitting…' : 'Submit'}
           </button>

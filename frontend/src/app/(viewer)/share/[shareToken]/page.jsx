@@ -2,10 +2,13 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { getShareToken, getMemorialById } from '@/lib/api';
 import { mockMemorials } from '@/data/mockMemorials.js';
+
+// Cream background matching output page
+const CREAM_BG = '#F0EAE2';
 
 // ─── Tab bar ─────────────────────────────────────────────────────────────────
 
@@ -385,10 +388,23 @@ export default function SharePage() {
     load();
   }, [shareToken]);
 
+  // Match output page cream background
+  useEffect(() => {
+    const prevBody = document.body.style.backgroundColor;
+    const prevHtml = document.documentElement.style.backgroundColor;
+    document.body.style.backgroundColor = CREAM_BG;
+    document.documentElement.style.backgroundColor = CREAM_BG;
+    return () => {
+      document.body.style.backgroundColor = prevBody;
+      document.documentElement.style.backgroundColor = prevHtml;
+    };
+  }, []);
+
   if (error) return <InvalidToken message={error} />;
 
   return (
-    <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
+    <main className="min-h-screen w-full px-6 py-10 text-neutral-950 sm:px-[50px]"
+      style={{ backgroundColor: CREAM_BG }}>
       <div className="mx-auto flex w-full max-w-[960px] flex-col gap-8">
 
         {/* Nav — viewer only */}

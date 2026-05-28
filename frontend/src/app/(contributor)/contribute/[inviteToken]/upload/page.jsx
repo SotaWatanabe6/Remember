@@ -5,15 +5,30 @@
 // Navigates to the appropriate upload page based on selection
 
 import { useRouter, useParams } from 'next/navigation';
+import { useEffect } from 'react';
 import Link from 'next/link';
+
+const FONT = "'Cormorant Garamond', Georgia, serif";
+
+const COLORS = {
+  bg: '#F0EAE2',
+  family: '#AF5F42',
+  friend: '#45556C',
+  colleague: '#59763C',
+  text: '#1a1a1a',
+  textMuted: '#6b6b6b',
+  cardBg: '#E8E0D8',
+  border: '#D4CAC0',
+};
 
 function ContributorNav({ backHref }) {
   return (
     <nav className="flex h-10 items-center justify-between">
-      <span className="text-2xl leading-8 text-neutral-950">Remember</span>
+      <span style={{ fontFamily: FONT }} className="text-2xl leading-8 text-[#423F39]">Remember</span>
       <Link
         href={backHref}
-        className="flex items-center gap-1.5 text-base text-neutral-950 hover:text-slate-600 transition-colors"
+        style={{ fontFamily: FONT }}
+        className="flex items-center gap-1.5 text-base text-[#5F5A52] hover:text-[#423F39] transition-colors"
       >
         <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -65,22 +80,40 @@ export default function UploadSelectorPage() {
     if (type === 'story') router.push(`/contribute/${inviteToken}/story`);
   }
 
-  // Try to read deceased name from memorial context
   // Day 9: replace with real memorial data
   const deceasedName = 'John';
 
+  // Fix full-page cream background — no white showing around edges
+  useEffect(() => {
+    const prevBody = document.body.style.backgroundColor;
+    const prevHtml = document.documentElement.style.backgroundColor;
+    document.body.style.backgroundColor = COLORS.bg;
+    document.documentElement.style.backgroundColor = COLORS.bg;
+    return () => {
+      document.body.style.backgroundColor = prevBody;
+      document.documentElement.style.backgroundColor = prevHtml;
+    };
+  }, []);
+    
+
   return (
-    <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
+    <main
+      className="min-h-screen px-6 py-10 sm:px-[50px]"
+      style={{ backgroundColor: '#F0EAE2', fontFamily: FONT, color: '#423F39' }}
+    >
       <div className="mx-auto flex w-full max-w-[960px] flex-col gap-10">
 
         <ContributorNav backHref={`/contribute/${inviteToken}/questions`} />
 
         {/* Heading */}
         <div className="text-center pt-4">
-          <h1 className="text-[40px] font-medium leading-tight text-neutral-950">
+          <h1
+            className="text-[48px] font-bold leading-tight"
+            style={{ color: '#423F39', letterSpacing: '-0.01em' }}
+          >
             Upload your memories
           </h1>
-          <p className="mt-3 text-base text-slate-500">
+          <p className="mt-3 text-[18px]" style={{ color: '#5F5A52' }}>
             Select the media type to begin uploading your fondest memories of {deceasedName}.
           </p>
         </div>
@@ -91,10 +124,17 @@ export default function UploadSelectorPage() {
             <button
               key={type.id}
               onClick={() => handleSelect(type.id)}
-              className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-neutral-200 bg-white py-16 px-6 text-center hover:bg-neutral-50 hover:border-neutral-300 active:bg-neutral-100 transition-colors"
+              className="flex flex-col items-center justify-center gap-4 rounded-2xl py-16 px-6 text-center transition-colors"
+              style={{
+                border: '1px solid #D4CAC0',
+                backgroundColor: 'transparent',
+                fontFamily: FONT,
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#E8E0D8'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
             >
-              <span className="text-slate-500">{type.icon}</span>
-              <span className="text-lg text-slate-600 font-normal">{type.label}</span>
+              <span style={{ color: '#97877B' }}>{type.icon}</span>
+              <span className="text-[20px] font-normal" style={{ color: '#97877B' }}>{type.label}</span>
             </button>
           ))}
         </div>
