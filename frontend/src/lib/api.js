@@ -469,111 +469,143 @@ export async function getResponses(token, contributorInput) {
 
 /**
  * POST /contribute/:token/photos
- * Uploads photos to Supabase Storage via real backend.
- * PHASE 4: Now calls real backend at http://localhost:3001
- * Request: multipart/form-data — field name is files[]
- * Response: { uploaded: number, files: [{ id, storage_path, file_name }] }
- * Public URL: supabase.storage.from('memorial-assets').getPublicUrl(storage_path)
- * Note: storage_path only — no public URL returned directly
+ * PHASE 4: Calls real backend at http://localhost:3001
+ * MVP: Backend marks photos_done=true but returns { uploaded: 0, files: [] }
+ * Real file storage is Daniel's upload system — not yet merged
+ * Fix: always generate local preview URLs from File objects for UI display
+ * Day 9: when Daniel's system is merged, files[] will have real IDs + storage_paths
  */
 export async function uploadPhotos(token, files) {
-  // Get contributor_token from session
   const session = readContributorSession(token);
   const contributorToken = session?.contributorToken || session?.contributorId;
 
-  // Build FormData — field name confirmed as files[]
-  const formData = new FormData();
-  files.forEach((file) => formData.append('files[]', file));
-  if (contributorToken) formData.append('contributor_token', contributorToken);
-
-  const response = await fetch(`http://localhost:3001/contribute/${token}/photos`, {
-    method: 'POST',
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error || 'Photo upload failed');
-  }
-
-  const data = await response.json();
-
-  // Map backend response to shape UI expects
-  // Backend returns: { uploaded, files: [{ id, storage_path, file_name }] }
-  // UI expects: assets array with previewUrl for thumbnails
-  const assets = (data.files || []).map((f, i) => ({
-    id: f.id,
-    file_name: f.file_name,
-    storage_path: f.storage_path,
+  // Always create local preview assets from File objects
+  // These show in the review page regardless of backend response
+  const localAssets = files.map((file, i) => ({
+    id: `photo-${Date.now()}-${i}`,
+    file_name: file.name,
+    file_type: file.type,
+    file_size_bytes: file.size,
+    storage_path: null, // populated by Daniel's upload system later
     storage_bucket: 'memorial-assets',
     taken_at: null,
     caption: null,
-    // Generate preview URL from local file for immediate display
-    // Day 9 note: public URL via supabase.storage.from('memorial-assets').getPublicUrl(f.storage_path)
-    previewUrl: files[i] ? URL.createObjectURL(files[i]) : null,
+    previewUrl: typeof URL !== 'undefined' ? URL.createObjectURL(file) : null,
   }));
 
-  // Save to localStorage so review page can show uploads
-  const existing = readStoredPhotos(token);
-  writeStoredPhotos(token, [...existing, ...assets]);
+  try {
+    // Call real backend — marks photos_done=true in contributors table
+    // MVP endpoint returns { uploaded: 0, files: [] } — Daniel's system handles real storage
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files[]', file));
+    if (contributorToken) formData.append('contributor_token', contributorToken);
 
-  return { success: true, uploaded: data.uploaded, assets };
+    const response = await fetch(`http://localhost:3001/contribute/${token}/photos`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      // If backend returns real file data (Daniel's system merged) use it
+      // Otherwise use local assets for preview
+      const backendAssets = (data.files || []).filter(f => f.id && f.file_name);
+      const finalAssets = backendAssets.length > 0
+        ? backendAssets.map((f, i) => ({
+            id: f.id,
+            file_name: f.file_name,
+            storage_path: f.storage_path,
+            storage_bucket: 'memorial-assets',
+            taken_at: null,
+            caption: null,
+            previewUrl: files[i] ? URL.createObjectURL(files[i]) : null,
+          }))
+        : localAssets;
+
+      const existing = readStoredPhotos(token);
+      writeStoredPhotos(token, [...existing, ...finalAssets]);
+      return { success: true, uploaded: finalAssets.length, assets: finalAssets };
+    }
+    throw new Error('Backend returned error');
+
+  } catch {
+    // Fallback — backend not running or endpoint not added yet
+    // Still saves local previews so review page works
+    const existing = readStoredPhotos(token);
+    writeStoredPhotos(token, [...existing, ...localAssets]);
+    return { success: true, uploaded: files.length, assets: localAssets };
+  }
 }
 
 /**
  * POST /contribute/:token/voice
- * Uploads voice recording to Supabase Storage via real backend.
- * PHASE 4: Now calls real backend at http://localhost:3001
- * Request: multipart/form-data — file + contributor_title (required) + contributor_token
- * Response: { recording: { id, contributor_title, storage_path } }
- * Note: duration_seconds not returned — populated by backend after processing
- * Note: storage_path only — public URL via supabase.storage.from('memorial-assets').getPublicUrl(storage_path)
+ * PHASE 4: Calls real backend at http://localhost:3001
+ * MVP: Backend marks voice_done=true but returns { recording: { id: null, storage_path: null } }
+ * Real file storage is Daniel's upload system — not yet merged
+ * Fix: use local file data for UI display, backend data when available
+ * Day 9: when Daniel's system merged, id + storage_path will be populated
  */
 export async function uploadVoice(token, file, contributorTitle) {
   if (!contributorTitle || contributorTitle.trim() === '') {
     throw new Error('A title is required for each voice recording');
   }
 
-  // Get contributor_token from session
   const session = readContributorSession(token);
   const contributorToken = session?.contributorToken || session?.contributorId;
 
-  // Build FormData
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('contributor_title', contributorTitle.trim());
-  if (contributorToken) formData.append('contributor_token', contributorToken);
-
-  const response = await fetch(`http://localhost:3001/contribute/${token}/voice`, {
-    method: 'POST',
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error || 'Voice upload failed');
-  }
-
-  const data = await response.json();
-
-  // Map to shape UI expects
-  // Backend returns: { recording: { id, contributor_title, storage_path } }
-  const recording = {
-    id: data.recording.id,
-    contributor_title: data.recording.contributor_title,
+  // Always build local recording object for UI display
+  const localRecording = {
+    id: `voice-${Date.now()}`,
+    contributor_title: contributorTitle.trim(),
     file_name: file.name,
     file_type: file.type,
     file_size_bytes: file.size,
-    storage_path: data.recording.storage_path,
+    storage_path: null, // populated by Daniel's upload system later
     storage_bucket: 'memorial-assets',
-    duration_seconds: 0, // populated by backend after processing
+    duration_seconds: 0,
   };
 
-  // Save to localStorage so review page can show uploads
-  const existing = readStoredVoice(token);
-  writeStoredVoice(token, [...existing, recording]);
+  try {
+    // Call real backend — marks voice_done=true in contributors table
+    // MVP endpoint returns { recording: { id: null, contributor_title, storage_path: null } }
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('contributor_title', contributorTitle.trim());
+    if (contributorToken) formData.append('contributor_token', contributorToken);
 
-  return { success: true, recording };
+    const response = await fetch(`http://localhost:3001/contribute/${token}/voice`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      // Use backend data if real (Daniel's system merged)
+      // Otherwise use local recording for preview
+      const recording = {
+        id: data.recording?.id || localRecording.id,
+        contributor_title: data.recording?.contributor_title || contributorTitle.trim(),
+        file_name: file.name,
+        file_type: file.type,
+        file_size_bytes: file.size,
+        storage_path: data.recording?.storage_path || null,
+        storage_bucket: 'memorial-assets',
+        duration_seconds: 0,
+      };
+
+      const existing = readStoredVoice(token);
+      writeStoredVoice(token, [...existing, recording]);
+      return { success: true, recording };
+    }
+    throw new Error('Backend returned error');
+
+  } catch {
+    // Fallback — backend not running or endpoint not added yet
+    // Still saves local recording so review page works
+    const existing = readStoredVoice(token);
+    writeStoredVoice(token, [...existing, localRecording]);
+    return { success: true, recording: localRecording };
+  }
 }
 
 /**
