@@ -22,7 +22,7 @@ function ContributorNav({ backHref }) {
   );
 }
 
-// ─── Format duration ────────────
+// ─── Format duration ──────────────────────────────────────────────────────────
 
 function formatDuration(seconds) {
   if (!seconds) return '0:00';
@@ -31,7 +31,7 @@ function formatDuration(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-// ─── Audio row ────────────
+// ─── Audio row ────────────────────────────────────────────────────────────────
 
 function AudioRow({ recording, onDelete, onEditTitle }) {
   const audioRef = useRef(null);
@@ -136,7 +136,7 @@ function AudioRow({ recording, onDelete, onEditTitle }) {
   );
 }
 
-// ─── Title Modal ────────────
+// ─── Title Modal ──────────────────────────────────────────────────────────────
 
 function TitleModal({ fileName, onConfirm, onCancel }) {
   const [title, setTitle] = useState('');
@@ -183,7 +183,7 @@ function TitleModal({ fileName, onConfirm, onCancel }) {
   );
 }
 
-// ─── Page ────────────
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function VoicePage() {
   const router = useRouter();
@@ -244,7 +244,7 @@ export default function VoicePage() {
     <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
       <div className="mx-auto flex w-full max-w-[680px] flex-col gap-10">
 
-        <ContributorNav backHref={`/contribute/${inviteToken}/photos`} />
+        <ContributorNav backHref={`/contribute/${inviteToken}/upload`} />
 
         {/* Heading */}
         <div className="text-center">
@@ -294,7 +294,7 @@ export default function VoicePage() {
           />
         </div>
 
-        {/* Uploaded recordings */}
+        {/* Uploaded recordings — always shown once any exist */}
         {recordings.length > 0 && (
           <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-auth">
             <p className="mb-4 text-base font-medium text-slate-600">Uploaded audio</p>
@@ -324,7 +324,7 @@ export default function VoicePage() {
               onClick={handleSkip}
               className="w-full py-3 text-sm text-slate-500 hover:text-neutral-950 transition-colors"
             >
-              Skip — I don&apos;t have any voice recordings
+              Skip — I don't have any voice recordings
             </button>
           )}
         </div>
