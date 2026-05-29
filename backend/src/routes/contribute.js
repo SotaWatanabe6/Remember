@@ -197,4 +197,66 @@ router.post('/:token/submit', async (req, res) => {
   }
 })
 
+// POST /contribute/:token/photos
+router.post('/:token/photos', async (req, res) => {
+  try {
+    const { contributor_token } = req.body
+    if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
+
+    const { data: contributor } = await supabase
+      .from('contributors')
+      .select('memorial_id')
+      .eq('id', contributor_token)
+      .single()
+
+    if (!contributor) return res.status(404).json({ error: 'Contributor not found' })
+
+    // For MVP — just return success, Daniel's upload.js handles actual file storage
+    await supabase
+      .from('contributors')
+      .update({ photos_done: true })
+      .eq('id', contributor_token)
+
+    res.status(201).json({
+      uploaded: 0,
+      files: []
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+
+// POST /contribute/:token/voice
+router.post('/:token/voice', async (req, res) => {
+  try {
+    const { contributor_token, contributor_title } = req.body
+    if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
+    if (!contributor_title) return res.status(400).json({ error: 'contributor_title is required' })
+
+    const { data: contributor } = await supabase
+      .from('contributors')
+      .select('memorial_id')
+      .eq('id', contributor_token)
+      .single()
+
+    if (!contributor) return res.status(404).json({ error: 'Contributor not found' })
+
+    await supabase
+      .from('contributors')
+      .update({ voice_done: true })
+      .eq('id', contributor_token)
+
+    res.status(201).json({
+      recording: {
+        id: null,
+        contributor_title,
+        storage_path: null
+      }
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 module.exports = router
