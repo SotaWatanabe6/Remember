@@ -1,14 +1,18 @@
 import {
+  ApiRequestError,
   getInviteToken,
+  getContributorSummary,
   getResponses,
   saveRelationship,
   saveResponses,
   startContribution,
+  submitContribution,
 } from "@/lib/api.js";
 import {
   CONTRIBUTOR_RELATIONSHIP_OPTIONS,
   CONTRIBUTOR_RELATIONSHIP_OTHER,
 } from "@/lib/contribute/relationshipOptions.js";
+import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS } from "@/lib/contribute/questionnaireQuestions.js";
 
 const CONTRIBUTOR_SESSION_STORAGE_PREFIX = "remember_contributor_session";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -44,20 +48,25 @@ function storeContributorSession(inviteToken, session) {
   window.localStorage.setItem(getSessionStorageKey(inviteToken), JSON.stringify(session));
 }
 
-function isExpired(expiresAt) {
-  return Boolean(expiresAt) && new Date(expiresAt).getTime() < Date.now();
+function isMockContributorSession(session) {
+  return (
+    session?.contributorToken === "mock-contributor-session-token" ||
+    session?.contributorId === "c1b2c3d4-0000-0000-0000-000000000001"
+  );
 }
 
 function getInviteStatus(invite) {
-  if (!invite?.link || !invite?.memorial) {
+  const inviteRecord = invite?.invite;
+
+  if (!inviteRecord) {
     return "invalid";
   }
 
-  if (isExpired(invite.link.expires_at)) {
-    return "expired";
+  if (!invite?.memorial) {
+    return "missing_data";
   }
 
-  if (invite.link.is_active === false || invite.memorial.contributions_open === false) {
+  if (inviteRecord.is_active === false) {
     return "closed";
   }
 
@@ -65,50 +74,93 @@ function getInviteStatus(invite) {
 }
 
 function getDeceasedName(memorial) {
-  return memorial.deceased_name || memorial.subject_name || memorial.name || "";
+  return memorial?.subject_name || "";
 }
 
 function getDeceasedPhotoUrl(memorial) {
-  return memorial.profile_photo_url || memorial.cover_photo_url || memorial.photo_url || null;
+  return memorial?.cover_photo_url || null;
+}
+
+function getInviteUnavailableStatus(error) {
+  const message = error.message.toLowerCase();
+
+  if (message.includes("expired")) {
+    return "expired";
+  }
+
+  return "closed";
+}
+
+function getInviteErrorStatus(error) {
+  if (!(error instanceof ApiRequestError)) {
+    return "error";
+  }
+
+  if (error.status === 404 || error.code === "not_found") {
+    return "invalid";
+  }
+
+  if (error.status === 410) {
+    return getInviteUnavailableStatus(error);
+  }
+
+  if (error.code === "network_error" || error.code === "configuration_error") {
+    return "network_error";
+  }
+
+  return "error";
+}
+
+function normalizeInvite(inviteToken, invite, status) {
+  const memorial = invite?.memorial ?? null;
+  const inviteRecord = invite?.invite ?? null;
+  const memorialId = memorial?.id ?? "";
+  const deceasedName = getDeceasedName(memorial);
+
+  if (status === "missing_data" || (status === "valid" && (!memorialId || !deceasedName))) {
+    return {
+      inviteToken,
+      memorialId,
+      status: "missing_data",
+      deceased: {
+        name: deceasedName,
+        photoUrl: getDeceasedPhotoUrl(memorial),
+      },
+      memorial,
+      invite: inviteRecord,
+    };
+  }
+
+  return {
+    inviteToken,
+    memorialId,
+    status,
+    deceased: {
+      name: deceasedName,
+      photoUrl: getDeceasedPhotoUrl(memorial),
+    },
+    memorial,
+    invite: inviteRecord,
+  };
 }
 
 export async function validateContributorInvite(inviteToken) {
   try {
     const invite = await getInviteToken(inviteToken);
     const status = getInviteStatus(invite);
-    const memorialId = invite?.memorial?.id ?? "";
-    const deceasedName = getDeceasedName(invite?.memorial);
 
-    if (status === "valid" && (!memorialId || !deceasedName)) {
-      return {
-        inviteToken,
-        memorialId,
-        status: "invalid",
-        deceased: {
-          name: "",
-          photoUrl: null,
-        },
-      };
-    }
-
-    return {
-      inviteToken,
-      memorialId,
-      status,
-      deceased: {
-        name: deceasedName,
-        photoUrl: getDeceasedPhotoUrl(invite?.memorial),
-      },
-    };
-  } catch {
+    return normalizeInvite(inviteToken, invite, status);
+  } catch (error) {
     return {
       inviteToken,
       memorialId: "",
-      status: "invalid",
+      status: getInviteErrorStatus(error),
       deceased: {
         name: "",
         photoUrl: null,
       },
+      memorial: null,
+      invite: null,
     };
   }
 }
@@ -129,7 +181,11 @@ export async function beginContributorDraft(inviteToken, contributorName) {
   const now = new Date().toISOString();
   const storedSession = getStoredContributorSession(inviteToken);
 
-  if (storedSession?.contributorId && storedSession.memorialId === invite.memorialId) {
+  if (
+    storedSession?.contributorId &&
+    storedSession.memorialId === invite.memorialId &&
+    !isMockContributorSession(storedSession)
+  ) {
     const resumedSession = {
       ...storedSession,
       inviteToken,
@@ -143,14 +199,23 @@ export async function beginContributorDraft(inviteToken, contributorName) {
   }
 
   const contribution = await startContribution(inviteToken, trimmedContributorName);
+  const contributor = contribution?.contributor;
+  const contributorId = contributor?.id;
+  const contributorToken = contribution?.contributor_token;
+
+  if (!contributorId || !contributorToken) {
+    throw new Error("The Remember API did not return a contributor session.");
+  }
+
   const session = {
     inviteToken,
-    memorialId: invite.memorialId,
-    contributorId: contribution.contributor.id,
-    contributorToken: contribution.contributor_token,
-    contributorName: trimmedContributorName,
-    createdAt: contribution.contributor.created_at ?? now,
-    updatedAt: contribution.contributor.updated_at ?? now,
+    memorialId: contributor.memorial_id ?? invite.memorialId,
+    contributorId,
+    contributorToken,
+    contributorName: contributor.name ?? trimmedContributorName,
+    status: contributor.status ?? "in_progress",
+    createdAt: now,
+    updatedAt: now,
   };
 
   storeContributorSession(inviteToken, session);
@@ -162,7 +227,8 @@ function hasValidContributorSession(session, invite) {
     session?.contributorId &&
       session?.contributorToken &&
       session?.memorialId &&
-      session.memorialId === invite.memorialId,
+      session.memorialId === invite.memorialId &&
+      !isMockContributorSession(session),
   );
 }
 
@@ -233,18 +299,17 @@ export async function saveContributorRelationship(
     trimmedRelationshipType === CONTRIBUTOR_RELATIONSHIP_OTHER ? trimmedCustomLabel : null;
 
   const savedRelationship = await saveRelationship(inviteToken, {
-    contributor_id: draft.session.contributorId,
     contributor_token: draft.session.contributorToken,
     relationship_type: trimmedRelationshipType,
-    relationship_custom_label,
+    relationship_label: relationship_custom_label,
   });
 
   const updatedSession = {
     ...draft.session,
     relationship_type: savedRelationship.contributor?.relationship_type ?? trimmedRelationshipType,
-    relationship_custom_label:
-      savedRelationship.contributor?.relationship_custom_label ?? relationship_custom_label,
-    updatedAt: savedRelationship.contributor?.updated_at ?? new Date().toISOString(),
+    relationship_custom_label,
+    relationship_label: relationship_custom_label,
+    updatedAt: new Date().toISOString(),
   };
 
   storeContributorSession(inviteToken, updatedSession);
@@ -301,7 +366,21 @@ export async function getQuestionnaireResponses(inviteToken) {
     contributor_token: draft.session.contributorToken,
   });
 
-  return result.responses ?? [];
+  return (result.responses ?? []).map((response) => {
+    const questionIndex = Number.isFinite(Number(response.order_index))
+      ? Number(response.order_index) - 1
+      : Number(response.question_order) - 1;
+    const question = CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS[questionIndex];
+
+    return {
+      ...response,
+      question_id: response.question_id ?? question?.id ?? response.question_text,
+      question_order: response.question_order ?? response.order_index,
+      answer_text: response.answer_text ?? response.response_text ?? "",
+      input_mode: response.input_mode === "speech" ? "speech" : "text",
+      saved_at: response.saved_at ?? response.updated_at ?? response.created_at ?? null,
+    };
+  });
 }
 export async function getMemorialContributors(memorialId, token) {
   if (!memorialId) throw new Error("memorialId is required");
@@ -323,7 +402,8 @@ export async function getMemorialContributors(memorialId, token) {
 
   return res.json();
 }
-export async function saveQuestionnaireResponse(inviteToken, response) {
+
+export async function saveQuestionnaireResponse(inviteToken, response, options = {}) {
   const draft = await getContributorQuestionnaireDraft(inviteToken);
 
   if (draft.status !== "ready") {
@@ -333,17 +413,122 @@ export async function saveQuestionnaireResponse(inviteToken, response) {
   const inputMode =
     response.inputMode === "speech" || response.input_mode === "speech" ? "speech" : "text";
   const now = new Date().toISOString();
+  const questionId = response.questionId ?? response.question_id;
+  const questionOrder = response.questionOrder ?? response.question_order;
+  const question =
+    CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.find((item) => item.id === questionId) ??
+    CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS[Number(questionOrder) - 1];
   const responsePayload = {
+    contributor_token: draft.session.contributorToken,
     contributor_id: draft.session.contributorId,
     memorial_id: draft.session.memorialId,
     invite_token: inviteToken,
-    question_id: response.questionId ?? response.question_id,
-    question_order: response.questionOrder ?? response.question_order,
+    question_id: questionId,
+    question_text: response.questionText ?? response.question_text ?? question?.prompt ?? questionId,
+    question_order: questionOrder,
+    order_index: questionOrder,
     answer_text: response.answerText ?? response.answer_text ?? "",
+    response_text: response.answerText ?? response.answer_text ?? "",
     input_mode: inputMode,
     saved_at: now,
   };
 
-  const result = await saveResponses(inviteToken, [responsePayload]);
+  const result = await saveResponses(inviteToken, [responsePayload], {
+    contributorToken: draft.session.contributorToken,
+    signal: options.signal,
+  });
   return result.responses?.[0] ?? responsePayload;
+}
+
+export async function getContributorReviewDraft(inviteToken) {
+  const invite = await validateContributorInvite(inviteToken);
+
+  if (invite.status !== "valid") {
+    return {
+      status: invite.status,
+      invite,
+      session: null,
+      summary: null,
+    };
+  }
+
+  const session = getStoredContributorSession(inviteToken);
+
+  if (!hasValidContributorSession(session, invite)) {
+    return {
+      status: "missing",
+      invite,
+      session: null,
+      summary: null,
+    };
+  }
+
+  const summary = await getContributorSummary(inviteToken);
+
+  return {
+    status: "ready",
+    invite,
+    session,
+    summary: {
+      ...summary,
+      contributor: {
+        ...summary.contributor,
+        id: session.contributorId,
+        name: session.contributorName,
+        relationship_type: session.relationship_type ?? "",
+        relationship_label: session.relationship_custom_label ?? null,
+      },
+    },
+  };
+}
+
+export async function submitContributorDraft(inviteToken) {
+  const draft = await getContributorReviewDraft(inviteToken);
+
+  if (draft.status !== "ready") {
+    throw new Error("Your contribution could not be found. Please return to the invitation page.");
+  }
+
+  const result = await submitContribution(inviteToken, draft.session.contributorToken);
+  const submittedContributor = result.contributor;
+  const updatedSession = {
+    ...draft.session,
+    status: submittedContributor.status,
+    submittedAt: submittedContributor.submitted_at,
+    updatedAt: submittedContributor.submitted_at,
+  };
+
+  storeContributorSession(inviteToken, updatedSession);
+
+  return {
+    contributor: submittedContributor,
+    session: updatedSession,
+  };
+}
+
+export async function getContributorSubmittedDraft(inviteToken) {
+  const invite = await validateContributorInvite(inviteToken);
+  const session = getStoredContributorSession(inviteToken);
+
+  if (invite.status !== "valid") {
+    return {
+      status: invite.status,
+      invite,
+      session: null,
+    };
+  }
+
+  if (!hasValidContributorSession(session, invite)) {
+    return {
+      status: "missing",
+      invite,
+      session: null,
+    };
+  }
+
+  return {
+    status: "ready",
+    invite,
+    session,
+  };
 }

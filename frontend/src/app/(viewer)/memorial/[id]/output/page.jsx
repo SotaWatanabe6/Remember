@@ -298,7 +298,7 @@ function VoicesSection({ voices }) {
           {current?.transcript_text && (
             <p className="text-sm italic leading-relaxed"
               style={{ color: COLORS.textMuted }}>
-              "{current.transcript_text}"
+              &quot;{current.transcript_text}&quot;
             </p>
           )}
 
@@ -930,7 +930,9 @@ export default function MemorialOutputPage() {
     }
   }
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => {
+    queueMicrotask(load);
+  }, [id]);
 
   // Fix full-page cream background — no white showing around edges
   useEffect(() => {

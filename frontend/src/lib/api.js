@@ -1,8 +1,10 @@
 // frontend/src/lib/api.js
 // ─────────────────────────────────────────────────────────────────────────────
-// MOCK API LAYER
+// SHARED API LAYER
 // Every API call in the app goes through this file.
-// On Day 9, swap mock return values for real fetch() calls — nothing else changes.
+// Contributor invite validation, session setup, relationship, questionnaire
+// autosave, and submit use the real backend. Media and output fallbacks still
+// use local/mock data where backend read/upload endpoints are incomplete.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // mockMemorials.js is the single source of truth for mock memorial data.
@@ -16,6 +18,56 @@ const MOCK_DELAY = 500;
 // API base URL — reads from env for production, falls back to localhost for dev
 // Set NEXT_PUBLIC_API_URL in Vercel dashboard for production deployment
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+export class ApiRequestError extends Error {
+  constructor(message, { status = 0, code = "request_error", data = null } = {}) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.code = code;
+    this.data = data;
+  }
+}
+
+async function requestJson(path, options = {}) {
+  let response;
+
+  try {
+    response = await fetch(`${API_URL.replace(/\/$/, "")}${path}`, {
+      ...options,
+      headers: {
+        Accept: "application/json",
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...options.headers,
+      },
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new ApiRequestError("The request was cancelled.", {
+        code: "aborted",
+      });
+    }
+
+    throw new ApiRequestError("Could not reach the Remember API.", {
+      code: "network_error",
+    });
+  }
+
+  const contentType = response.headers.get("content-type") ?? "";
+  const data = contentType.includes("application/json")
+    ? await response.json().catch(() => null)
+    : null;
+
+  if (!response.ok) {
+    throw new ApiRequestError(data?.error || `Request failed with status ${response.status}.`, {
+      status: response.status,
+      code: response.status === 404 ? "not_found" : "request_error",
+      data,
+    });
+  }
+
+  return data;
+}
 
 // ─── Helper to get real Supabase JWT token ────────────────────────────────────
 // Used by Blessing's memorial endpoints — gets real session from Supabase Auth
@@ -106,15 +158,30 @@ const getActiveUser = () => getStoredSession()?.user ?? MOCK_USER;
 
 // ─── Rebecca's localStorage helpers for contributor flow ───
 
-const MOCK_RESPONSES_STORAGE_PREFIX = 'remember_mock_questionnaire_responses';
+const RESPONSES_STORAGE_PREFIX = 'remember_questionnaire_responses';
+const LEGACY_RESPONSES_STORAGE_PREFIX = 'remember_mock_questionnaire_responses';
 
-function getResponsesStorageKey(token) { return `${MOCK_RESPONSES_STORAGE_PREFIX}:${token}`; }
+function getResponsesStorageKey(token) { return `${RESPONSES_STORAGE_PREFIX}:${token}`; }
+function getLegacyResponsesStorageKey(token) { return `${LEGACY_RESPONSES_STORAGE_PREFIX}:${token}`; }
 
 function readStoredResponses(token) {
   if (!isBrowser()) return {};
-  const stored = window.localStorage.getItem(getResponsesStorageKey(token));
+  const storageKey = getResponsesStorageKey(token);
+  const legacyStorageKey = getLegacyResponsesStorageKey(token);
+  const stored = window.localStorage.getItem(storageKey) ?? window.localStorage.getItem(legacyStorageKey);
   if (!stored) return {};
-  try { return JSON.parse(stored); } catch { window.localStorage.removeItem(getResponsesStorageKey(token)); return {}; }
+  try {
+    const parsed = JSON.parse(stored);
+    if (!window.localStorage.getItem(storageKey)) {
+      window.localStorage.setItem(storageKey, stored);
+      window.localStorage.removeItem(legacyStorageKey);
+    }
+    return parsed;
+  } catch {
+    window.localStorage.removeItem(storageKey);
+    window.localStorage.removeItem(legacyStorageKey);
+    return {};
+  }
 }
 
 function writeStoredResponses(token, data) {
@@ -446,88 +513,71 @@ export async function getJobStatus(jobId) {
 /**
  * GET /contribute/:token
  * Validates invite token, returns memorial details for landing page.
- * Called by Sungjun's contributorService.js
- * CONFIRMED: real backend returns "invite" key not "link"
- * Sungjun needs to update contributorService.js to read invite.invite not invite.link
- * TODO: Replace with real fetch() on Day 9.
  */
 export async function getInviteToken(token) {
-  await delay(MOCK_DELAY);
-
-  if (token === 'invalid') throw new Error('Invalid invite link');
-
-  const memorial = mockMemorials[0];
-  const expiredAt = new Date();
-  expiredAt.setDate(expiredAt.getDate() - 1);
-
-  return {
-    memorial: {
-      id: memorial.id,
-      subject_name: memorial.subject_name || memorial.deceased_name,
-      cover_photo_url: memorial.cover_photo_url || memorial.profile_photo_url || null,
-      status: token === 'closed' ? 'closed' : 'active',
-      contributions_open: token !== 'closed',
-    },
-    // CONFIRMED by Ashwini: real backend uses "invite" key
-    // Sungjun must update contributorService.js: invite.link → invite.invite
-    invite: {
-      token: token,
-      is_active: token !== 'closed',
-      use_count: 3,
-      expires_at: token === 'expired' ? expiredAt.toISOString() : null,
-    },
-  };
+  return requestJson(`/contribute/${encodeURIComponent(token)}`);
 }
 
 /**
  * POST /contribute/:token/start
  * Creates contributor row, returns contributor session token.
- * Called by Sungjun's contributorService.js
- * TODO: Replace with real fetch() on Day 9.
+ * Body: { name: string }
  */
 export async function startContribution(token, name) {
-  await delay(MOCK_DELAY);
-  const timestamp = now();
-  return {
-    contributor: {
-      id: 'c1b2c3d4-0000-0000-0000-000000000001',
-      name,
-      status: 'in_progress',
-      created_at: timestamp,
-      updated_at: timestamp,
-    },
-    contributor_token: 'mock-contributor-session-token',
-  };
+  return requestJson(`/contribute/${encodeURIComponent(token)}/start`, {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
 }
 
 /**
  * POST /contribute/:token/relationship
  * Saves relationship type to contributors table.
- * Called by Sungjun's contributorService.js
- * TODO: Replace with real fetch() on Day 9.
+ * Body: { contributor_token, relationship_type, relationship_label? }
  */
 export async function saveRelationship(token, relationshipInput) {
-  await delay(MOCK_DELAY);
-  return {
-    success: true,
-    contributor: {
-      id: relationshipInput.contributor_id,
+  return requestJson(`/contribute/${encodeURIComponent(token)}/relationship`, {
+    method: "POST",
+    body: JSON.stringify({
+      contributor_token: relationshipInput.contributor_token,
       relationship_type: relationshipInput.relationship_type,
-      relationship_custom_label: relationshipInput.relationship_custom_label ?? null,
-      updated_at: now(),
-    },
-  };
+      relationship_label: relationshipInput.relationship_label ?? null,
+    }),
+  });
 }
 
 /**
  * POST /contribute/:token/responses
  * Saves questionnaire Q&A. Supports partial saves (autosave).
- * Saves to localStorage so review page can read real answers.
- * Called by Sungjun's contributorService.js
- * TODO: Replace with real fetch() on Day 9.
+ * Mirrors successful saves to localStorage only as a temporary resume/review
+ * fallback until the backend exposes saved questionnaire responses.
  */
-export async function saveResponses(token, responses) {
-  await delay(MOCK_DELAY);
+export async function saveResponses(token, responses, options = {}) {
+  const contributorToken =
+    options.contributorToken ?? responses?.[0]?.contributor_token ?? responses?.[0]?.contributor_id;
+
+  const apiResponses = responses.map((response) => ({
+    question_text: response.question_text ?? response.question_id,
+    response_text: response.response_text ?? response.answer_text ?? "",
+    order_index: response.order_index ?? response.question_order,
+  }));
+
+  const result = await requestJson(`/contribute/${encodeURIComponent(token)}/responses`, {
+    method: "POST",
+    signal: options.signal,
+    body: JSON.stringify({
+      contributor_token: contributorToken,
+      responses: apiResponses,
+    }),
+  });
+
+  if (result?.saved !== true) {
+    throw new ApiRequestError("The Remember API did not confirm the response was saved.", {
+      code: "unexpected_response",
+      data: result,
+    });
+  }
+
   const timestamp = now();
   const responsesByContributor = readStoredResponses(token);
   const savedResponses = [];
@@ -546,14 +596,12 @@ export async function saveResponses(token, responses) {
 }
 
 /**
- * GET /contribute/:token/responses
- * Returns saved questionnaire responses for one contributor session.
- * Reads from localStorage — matches what saveResponses() wrote.
- * Called by Sungjun's contributorService.js
- * TODO: Replace with real fetch() on Day 9.
+ * Returns same-browser draft responses for one contributor session.
+ *
+ * Dev note: backend-backed questionnaire resume is blocked until the API
+ * exposes a real saved responses endpoint. Do not call a fake GET route here.
  */
 export async function getResponses(token, contributorInput) {
-  await delay(MOCK_DELAY);
   const responsesByContributor = readStoredResponses(token);
   const contributorResponses = responsesByContributor[contributorInput.contributor_id] ?? {};
   return {
@@ -729,36 +777,30 @@ export async function deleteVoice(token, recordingId) {
 }
 
 /**
- * GET /contribute/:token/summary
- * Returns everything the contributor submitted — used on review screen.
- * Reads from localStorage instead of hardcoded data:
- *   name + relationship → from Sungjun's session key
- *   questionnaire answers → from saveResponses() key
- *   photos → from uploadPhotos() key
- *   voice → from uploadVoice() key
- * TODO: Replace with real fetch() on Day 9.
+ * Returns the same-browser contributor draft summary for the review screen.
+ *
+ * Backend-backed review/resume is blocked until the API exposes saved response
+ * and media read endpoints. Do not call fake GET contribution endpoints here.
  */
 export async function getContributorSummary(token) {
-  await delay(MOCK_DELAY);
-
   const session = readContributorSession(token);
   const photos = readStoredPhotos(token);
   const voice = readStoredVoice(token);
 
-  const contributorId = session?.contributorId || 'c1b2c3d4-0000-0000-0000-000000000001';
+  const contributorId = session?.contributorId ?? null;
   const responsesByContributor = readStoredResponses(token);
-  const contributorResponses = responsesByContributor[contributorId] ?? {};
+  const contributorResponses = contributorId ? responsesByContributor[contributorId] ?? {} : {};
   const responses = Object.values(contributorResponses)
     .sort((a, b) => (a.question_order ?? 0) - (b.question_order ?? 0))
     .map((r) => ({
-      question_text: r.question_id || r.question_text || 'Question',
+      question_text: r.question_text || r.question_id || 'Question',
       response_text: r.answer_text || r.response_text || '',
     }));
 
   return {
     contributor: {
       id: contributorId,
-      name: session?.contributorName || 'Contributor',
+      name: session?.contributorName || '',
       relationship_type: session?.relationship_type || '',
       relationship_label: session?.relationship_custom_label || null,
     },
@@ -770,12 +812,47 @@ export async function getContributorSummary(token) {
 
 /**
  * POST /contribute/:token/submit
- * Finalises the contribution — sets contributor status = submitted.
- * TODO: Replace with real fetch() on Day 9.
+ * Finalizes the contribution and marks the contributor submitted.
  */
-export async function submitContribution(token) {
-  await delay(MOCK_DELAY);
-  return { success: true, submitted_at: now() };
+export async function submitContribution(token, contributorToken) {
+  if (!contributorToken) {
+    throw new ApiRequestError("A contributor session is required before submitting.", {
+      code: "missing_contributor_token",
+    });
+  }
+
+  const result = await requestJson(`/contribute/${encodeURIComponent(token)}/submit`, {
+    method: "POST",
+    body: JSON.stringify({
+      contributor_token: contributorToken,
+    }),
+  });
+
+  const submittedContributor = result?.contributor;
+
+  if (
+    !submittedContributor?.id ||
+    submittedContributor.status !== "submitted" ||
+    !submittedContributor.submitted_at
+  ) {
+    throw new ApiRequestError("The Remember API did not confirm the contribution was submitted.", {
+      code: "unexpected_response",
+      data: result,
+    });
+  }
+
+  const session = readContributorSession(token);
+
+  if (session) {
+    writeStoredValue(`remember_contributor_session:${token}`, {
+      ...session,
+      status: submittedContributor.status,
+      submittedAt: submittedContributor.submitted_at,
+      updatedAt: submittedContributor.submitted_at,
+    });
+  }
+
+  return result;
 }
 
 // ─── REBECCA: OUTPUT TABS (viewer experience) ─────────────────────────────────

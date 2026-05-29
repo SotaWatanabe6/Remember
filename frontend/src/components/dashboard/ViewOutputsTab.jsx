@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getMemorialOutput } from "@/lib/api";
+import StorySlideshow from "@/components/output/StorySlideshow";
+import VoicesTab from "@/components/output/VoicesTab";
 import EmptyOutputPlaceholder from "./EmptyOutputPlaceholder.jsx";
 import OutputSubTabs from "./OutputSubTabs.jsx";
 
@@ -11,8 +14,39 @@ const outputPanelLabels = {
   collectionArchive: "Collection Archive",
 };
 
-export default function ViewOutputsTab() {
+export default function ViewOutputsTab({ memorialId }) {
   const [activeOutputTab, setActiveOutputTab] = useState("story");
+  const [output, setOutput] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadOutput() {
+      try {
+        const data = await getMemorialOutput(memorialId);
+        if (!isCancelled) {
+          setOutput(data);
+          setError(null);
+        }
+      } catch (err) {
+        if (!isCancelled) {
+          setError(err.message || "The memorial output could not be loaded.");
+        }
+      } finally {
+        if (!isCancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadOutput();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [memorialId]);
 
   return (
     <section
@@ -44,7 +78,13 @@ export default function ViewOutputsTab() {
         aria-label={outputPanelLabels[activeOutputTab]}
         className="mt-[34px] rounded-[10px] border border-[#90a1b9] bg-[rgba(144,161,185,0.12)] p-6 sm:p-10"
       >
-        <EmptyOutputPlaceholder activeOutputTab={activeOutputTab} />
+        {activeOutputTab === "story" ? (
+          <StorySlideshow output={output} story={output?.story} loading={loading} error={error} />
+        ) : activeOutputTab === "voices" ? (
+          <VoicesTab output={output} voices={output?.voices} loading={loading} error={error} />
+        ) : (
+          <EmptyOutputPlaceholder activeOutputTab={activeOutputTab} />
+        )}
       </div>
     </section>
   );

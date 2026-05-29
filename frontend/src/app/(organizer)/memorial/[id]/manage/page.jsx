@@ -612,9 +612,9 @@ export default function MemorialOutputPage() {
     }
   }
 
-  useEffect(() => { 
+  useEffect(() => {
     if (!id) return;
-    load(); 
+    queueMicrotask(load);
   }, [id]);
 
   return (

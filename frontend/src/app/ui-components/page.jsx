@@ -9,6 +9,7 @@ import DropDownMenu from "@/components/ui-components/drop-down/drop-down-menu";
 import CopyLink from "@/components/ui-components/links/copy-link";
 import LinkCopied from "@/components/ui-components/links/link-copied";
 import UploadArea from "@/components/ui-components/upload-area/upload-area";
+import CustomAudioPlayerDemo from "@/components/output/CustomAudioPlayerDemo";
 
 export default function UiComponentsPage() {
   return (
@@ -89,6 +90,13 @@ export default function UiComponentsPage() {
           <div>
             <UploadArea />
           </div>
+        </div>
+
+        {/* Audio Player */}
+        <div className="flex flex-col gap-4 mb-12">
+          <p className="text-h3">Audio Player</p>
+
+          <CustomAudioPlayerDemo />
         </div>
       </div>
     </section>

@@ -362,7 +362,7 @@ export default function VoicePage() {
               onMouseEnter={(e) => { e.currentTarget.style.color = '#423F39'; }}
               onMouseLeave={(e) => { e.currentTarget.style.color = '#97877B'; }}
             >
-              Skip — I don't have any voice recordings
+              Skip - I don&apos;t have any voice recordings
             </button>
           )}
         </div>
