@@ -417,7 +417,7 @@ function VoicesSection({ voices }) {
           {current?.transcript_text && (
             <p className="text-sm italic leading-relaxed"
               style={{ color: COLORS.textMuted }}>
-              {current.transcript_text}
+              &quot;{current.transcript_text}&quot;
             </p>
           )}
 
@@ -1145,18 +1145,64 @@ export default function MemorialOutputPage() {
   // };
 
   useEffect(() => {
+
     async function load() {
+      setLoading(true);
+      setError(null);
       try {
+        // Step 1 — fetch four output tabs from real backend
+        // Falls back to mock if backend fails
         const data = await getMemorialOutput(id);
         setOutput(data);
+
+        // Step 2 — fetch memorial header from real backend
+        // Falls back to mockMemorials if backend fails or not in DB
+        try {
+          const memorialData = await getMemorialById(id);
+          setMemorial({
+            id: memorialData.id || id,
+            subject_name: memorialData.subject_name || memorialData.deceased_name,
+            cover_photo_url: memorialData.cover_photo_url || memorialData.profile_photo_url || null,
+            date_of_birth: memorialData.date_of_birth || memorialData.birth_date || null,
+            date_of_passing: memorialData.date_of_passing || memorialData.death_date || null,
+            bio: memorialData.brief_biography || memorialData.short_description || null,
+          });
+        } catch {
+          // Fallback to mockMemorials
+          const mockData = mockMemorials.find((m) => m.id === id) ?? mockMemorials[0];
+          setMemorial({
+            id: mockData.id,
+            subject_name: mockData.subject_name || mockData.deceased_name,
+            cover_photo_url: mockData.cover_photo_url || mockData.profile_photo_url || null,
+            date_of_birth: mockData.date_of_birth || mockData.birth_date || null,
+            date_of_passing: mockData.date_of_passing || mockData.death_date || null,
+            bio: mockData.brief_biography || mockData.short_description || null,
+          });
+        }
       } catch (err) {
-        console.error('Failed to load output:', err);
+        setError(err.message);
       } finally {
         setLoading(false);
       }
-    }
+    }    
     load();
   }, [id]);
+  useEffect(() => {
+    queueMicrotask(load);
+  }, [id]);
+
+  // Fix full-page cream background — no white showing around edges
+  useEffect(() => {
+    const prevBody = document.body.style.backgroundColor;
+    const prevHtml = document.documentElement.style.backgroundColor;
+    document.body.style.backgroundColor = COLORS.bg;
+    document.documentElement.style.backgroundColor = COLORS.bg;
+    return () => {
+      document.body.style.backgroundColor = prevBody;
+      document.documentElement.style.backgroundColor = prevHtml;
+    };
+  }, []);
+
 
   return (
     <div className="min-h-screen w-full pb-20" style={{ backgroundColor: COLORS.bg }}>
@@ -1224,6 +1270,4 @@ function OutputError({ onRetry }) {
     </div>
   );
 }
-
-
 

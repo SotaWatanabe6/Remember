@@ -20,7 +20,7 @@ export default function OrganizerDashboardPage() {
       {activeTab === "review" ? (
         <ReviewContributionsTab contributions={dashboard.contributions} />
       ) : null}
-      {activeTab === "outputs" ? <ViewOutputsTab /> : null}
+      {activeTab === "outputs" ? <ViewOutputsTab memorialId={dashboard.memorial?.id} /> : null}
     </DashboardShell>
   );
 }
