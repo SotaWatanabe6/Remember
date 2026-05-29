@@ -15,7 +15,6 @@ import {
 import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS } from "@/lib/contribute/questionnaireQuestions.js";
 
 const CONTRIBUTOR_SESSION_STORAGE_PREFIX = "remember_contributor_session";
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 function getSessionStorageKey(inviteToken) {
   return `${CONTRIBUTOR_SESSION_STORAGE_PREFIX}:${inviteToken}`;
@@ -382,26 +381,7 @@ export async function getQuestionnaireResponses(inviteToken) {
     };
   });
 }
-export async function getMemorialContributors(memorialId, token) {
-  if (!memorialId) throw new Error("memorialId is required");
-  const res = await fetch(
-    `${API_BASE_URL}/memorials/${memorialId}/contributors`,
-    {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token.access_token}` } : {}),
-      },
-    }
-  );
 
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({}));
-    throw new Error(error.message || "Failed to fetch contributors");
-  }
-
-  return res.json();
-}
 
 export async function saveQuestionnaireResponse(inviteToken, response, options = {}) {
   const draft = await getContributorQuestionnaireDraft(inviteToken);

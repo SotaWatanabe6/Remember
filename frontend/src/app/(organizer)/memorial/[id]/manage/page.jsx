@@ -5,12 +5,12 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getMemorialOutput } from '@/services/memorialService';
-import { getMemorialContributors} from '@/services/contributorService'
+import { getMemorialOutput } from '@/lib/api';
+import { getContributors} from '@/lib/api';
 import { mockMemorials } from '@/data/mockMemorials.js';
-import ConstellationGraph from "../_components/constellation";
-import MemorialContributionsPage from "../_components/contribution-list";
-import MemorialContributionApproval from "../_components/contribution-awaiting";
+import ConstellationGraph from "@/components/output/constellation";
+import MemorialContributionsPage from "@/components/output/contribution-list";
+import MemorialContributionApproval from "@/components/output/contribution-awaiting";
 import {  ChevronLeft,
   ChevronRight } from "lucide-react";
 
@@ -440,7 +440,7 @@ function OutputsTab({ output }) {
       </CollapsibleSection>
       <CollapsibleSection title="Constellation">
         <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6 aspect-video flex items-center justify-center">
-          <ConstellationGraph memorial={output} />
+          <ConstellationGraph ai_output={output} />
         </div>
       </CollapsibleSection>
       <CollapsibleSection title="Voices">
@@ -565,12 +565,12 @@ export default function MemorialOutputPage() {
       setLoading(true);
       setError(null);
       try {
-        const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
-        if (typeof token === "undefined") {
-          console.log("Token retrieved:", token);
-          return ;
-        }
-        const contributor= await getMemorialContributors(memorialId,token);
+        // const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
+        // if (typeof token === "undefined") {
+        //   console.log("Token retrieved:", token);
+        //   return ;
+        // }
+        const contributor= await getContributors(memorialId);
         setContributors(contributor.contributors);
       } catch (err) {
         setError(err.message);

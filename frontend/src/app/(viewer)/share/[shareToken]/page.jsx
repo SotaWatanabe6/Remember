@@ -4,13 +4,16 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
+import MemorialContributionsPage from "@/components/output/contribution-list";
+import MemorialContributionApproval from "@/components/output/contribution-awaiting";
+import {  ChevronLeft, ChevronRight } from "lucide-react";
+import ConstellationGraph from "@/components/output/constellation";
+// ─── Tab bar (same as output page) ────────
 import { getShareToken, getMemorialById } from '@/lib/api';
 import { mockMemorials } from '@/data/mockMemorials.js';
 
 // Cream background matching output page
 const CREAM_BG = '#F0EAE2';
-
-// ─── Tab bar ─────────────────────────────────────────────────────────────────
 
 const TABS = ['Story', 'Constellation', 'Voices', 'All Photos'];
 
@@ -102,10 +105,10 @@ function StoryTab({ data }) {
   );
 }
 
-function ConstellationTab() {
+function ConstellationTab({ data }) {
   return (
     <div className="flex flex-col items-center justify-center py-24">
-      <p className="text-slate-400 text-sm">Constellation tab — built by Mendrika</p>
+      <ConstellationGraph data={data} />
     </div>
   );
 }
