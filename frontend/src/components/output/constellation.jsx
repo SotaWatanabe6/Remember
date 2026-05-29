@@ -62,11 +62,11 @@ export default function ConstellationGraph({ ai_output }) {
     const loadMemorial = async () => {        
 
       try {
-        const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
-        if (typeof token === "undefined") {
-          console.log("Token retrieved:", token);
-          return ;
-        }
+        // const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
+        // if (typeof token === "undefined") {
+        //   console.log("Token retrieved:", token);
+        //   return ;
+        // }
         const contributor = await getContributors(id);
         const memorialApi = await getMemorial(id);
         console.log(memorialApi);
@@ -119,7 +119,6 @@ export default function ConstellationGraph({ ai_output }) {
       // setHiddenItems(contributor.map(t => ({
       //   [t.id]: false,
       // })));
-      console.log(memorial);
       setNodes(contributor.map(t => ({
         id: t.id,
         name: t.name,
@@ -412,7 +411,7 @@ export default function ConstellationGraph({ ai_output }) {
                       </h3>
 
                       <p className="text-xs text-gray-500">
-                        {item?.contributions || "No"} tagged contributions
+                        {contributor.length || "No"} tagged contributions
                       </p>
 
                       <button className="mt-3 rounded bg-[#d9d9d9] px-6 py-1 text-xs">

@@ -16,7 +16,7 @@ export default function MemorialContributionsPage({ contributors }) {
               </h2>
 
               <p className="text-sm text-gray-700 mt-1">
-                2 contributions
+                {contributors.length} contributions
               </p>
 
               <p className="text-[12px] text-gray-600 mt-1">
