@@ -18,14 +18,17 @@ export default function ConstellationGraph({ ai_output }) {
   const [tab, setTab] = useState("Themes");
   const [hiddenItems, setHiddenItems] = useState({});
   const toggleEye = (id) => {
-    const filteredNodes = nodes.filter(n => n.id !== hiddenNodeId);
-    const filteredLinks = links.filter(
-      l => l.source.id !== hiddenNodeId && l.target.id !== hiddenNodeId
-    );
     setHiddenItems((prev) => ({
       ...prev,
       [id]: !prev[id],
     }));
+    const filteredNodes = nodes.filter(item => hiddenItems[item.id] !== false);
+    console.log("Filtered Nodes: ", hiddenItems);
+    const filteredLinks = links.filter(
+      l => hiddenItems[l.target.id] !== false
+    );
+    setNodes(filteredNodes);
+    setLinks(filteredLinks);
   };
   const [contributor, setContributors] = useState([]);
   const [memorial, setMemorial] = useState();
@@ -93,6 +96,9 @@ export default function ConstellationGraph({ ai_output }) {
   const handleChange = (e) => {
       setTab(e.target.value);
       if (e.target.value === "Themes") {
+      // setHiddenItems(ai_output.constellation.nodes.map(t => ({
+      //   [t.id]: false,
+      // })));        
         setNodes(ai_output.constellation.nodes.map(t => ({
           id: t.id,
           name: t.label,          // common for display
@@ -110,14 +116,17 @@ export default function ConstellationGraph({ ai_output }) {
         })));
     }
     else{
+      // setHiddenItems(contributor.map(t => ({
+      //   [t.id]: false,
+      // })));
       setNodes(contributor.map(t => ({
         id: t.id,
-        name: t.name,          // common for display
+        name: t.name,
         prominence: 0.7,
       })));    
       setNodes((prevItems) => [...prevItems, {
         id: memorial.user_id,
-        name: memorial.subject_name,          // common for display
+        name: memorial.subject_name,
         prominence: 0.9,        
       }]);
       setLinks(contributor.map(d => ({
@@ -387,19 +396,13 @@ export default function ConstellationGraph({ ai_output }) {
                   className="flex items-center justify-between rounded border border-gray-300 bg-white px-6 py-5"
                 >
                   <div className="flex items-center gap-6">
-                    <button onClick={() => toggleEye(item.id)}>
+                    <button className="cursor-pointer" onClick={() => toggleEye(item.id)}>
                       {isHidden ? (
                         <EyeOff size={20} />
                       ) : (
                         <Eye size={20} />
                       )}
                     </button>                    
-                    {/* {item.visible ? (
-                      <Eye size={20} />
-                    ) : (
-                      <EyeOff size={20} />
-                    )} */}
-
                     <div className="h-20 w-20 rounded-full bg-[#d9d9d9]" />
 
                     <div>
