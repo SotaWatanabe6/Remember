@@ -21,24 +21,32 @@ const normalizeMemorial = (memorial) => {
   const subjectName = memorial.subject_name || memorial.deceased_name || '';
   const dateOfBirth = memorial.date_of_birth || memorial.birth_date || null;
   const dateOfPassing = memorial.date_of_passing || memorial.death_date || null;
-  const description =
+  const biography =
+    memorial.biography ||
     memorial.description ||
     memorial.short_description ||
     memorial.brief_biography ||
     '';
+  const relatedPeople = memorial.related_people || memorial.relatedPeople || [];
 
   return {
     ...memorial,
     subject_name: subjectName,
     deceased_name: memorial.deceased_name || subjectName,
+    nickname: memorial.nickname || memorial.nick_name || "",
     date_of_birth: dateOfBirth,
     date_of_passing: dateOfPassing,
     birth_date: memorial.birth_date || dateOfBirth,
     death_date: memorial.death_date || dateOfPassing,
-    description,
-    short_description: memorial.short_description || description,
-    cover_photo_url: memorial.cover_photo_url || memorial.profile_photo_url || null,
-    profile_photo_url: memorial.profile_photo_url || memorial.cover_photo_url || null,
+    biography,
+    description: memorial.description || biography,
+    short_description: memorial.short_description || biography,
+    brief_biography: memorial.brief_biography || biography,
+    related_people: relatedPeople,
+    cover_photo_url:
+      memorial.cover_photo_url || memorial.profile_photo_url || null,
+    profile_photo_url:
+      memorial.profile_photo_url || memorial.cover_photo_url || null,
   };
 };
 
@@ -50,15 +58,22 @@ const normalizeMemorial = (memorial) => {
  */
 export async function createMemorial(memorialInput) {
   const response = await apiCreateMemorial({
-    subject_name: memorialInput.subject_name || memorialInput.deceased_name || '',
-    first_name: memorialInput.first_name || '',
-    last_name: memorialInput.last_name || '',
-    nickname: memorialInput.nickname || '',
-    date_of_birth: memorialInput.date_of_birth || memorialInput.birth_date || null,
-    date_of_passing: memorialInput.date_of_passing || memorialInput.death_date || null,
-    description: memorialInput.description || '',
-    related_people: memorialInput.related_people || [],
-    cover_photo_url: memorialInput.cover_photo_url || memorialInput.profile_photo_url || null,
+    subject_name:
+      memorialInput.subject_name || memorialInput.deceased_name || "",
+    nickname: memorialInput.nickname || "",
+    date_of_birth:
+      memorialInput.date_of_birth || memorialInput.birth_date || null,
+    date_of_passing:
+      memorialInput.date_of_passing || memorialInput.death_date || null,
+    biography:
+      memorialInput.biography ||
+      memorialInput.description ||
+      memorialInput.brief_biography ||
+      "",
+    related_people:
+      memorialInput.related_people || memorialInput.relatedPeople || [],
+    cover_photo_url:
+      memorialInput.cover_photo_url || memorialInput.profile_photo_url || null,
   });
   return normalizeMemorial(response.memorial);
 }

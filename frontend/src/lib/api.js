@@ -215,17 +215,15 @@ export async function getCurrentUser() {
  * POST /memorials
  * Creates a new memorial. Protected.
  * PHASE 4: Blessing wired to real backend — using correct port 3001
- * Includes extra fields from Blessing's design: first_name, last_name, nickname, description
+ * Sends backend-aligned fields: nickname, biography, related_people
  * Falls back to mock if backend fails
  */
 export async function createMemorial({
   subject_name,
-  first_name,
-  last_name,
   nickname,
   date_of_birth,
   date_of_passing,
-  description,
+  biography,
   related_people,
   cover_photo_url,
 }) {
@@ -238,13 +236,11 @@ export async function createMemorial({
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        subject_name: subject_name?.trim(),
-        first_name: (first_name || '').trim(),
-        last_name: (last_name || '').trim(),
+        subject_name: subject_name?.trim() || '',
         nickname: (nickname || '').trim(),
         date_of_birth: date_of_birth ?? null,
         date_of_passing: date_of_passing ?? null,
-        description: (description || '').trim(),
+        biography: (biography || '').trim(),
         related_people: related_people ?? [],
         cover_photo_url: cover_photo_url ?? null,
       }),
@@ -256,10 +252,15 @@ export async function createMemorial({
     await delay(MOCK_DELAY);
     const currentUser = getActiveUser();
     const createdAt = now();
+    const normalizedBiography = (biography || '').trim();
     const memorial = {
       id: makeId('memorial'),
       user_id: currentUser.id,
-      subject_name: subject_name?.trim(),
+      subject_name: subject_name?.trim() || '',
+      nickname: (nickname || '').trim(),
+      biography: normalizedBiography,
+      description: normalizedBiography,
+      related_people: related_people ?? [],
       date_of_birth: date_of_birth ?? null,
       date_of_passing: date_of_passing ?? null,
       cover_photo_url: cover_photo_url ?? null,
@@ -860,10 +861,10 @@ export async function getShareToken(shareToken) {
  */
 export async function getMemorialById(memorialId) {
   try {
-    const session = getStoredSession();
+    const token = await getAuthToken();
     const response = await fetch(`${API_URL}/memorials/${memorialId}`, {
       headers: {
-        Authorization: `Bearer ${session?.token || ''}`,
+        Authorization: `Bearer ${token}`,
       },
     });
 

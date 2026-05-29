@@ -265,8 +265,6 @@ export default function MemorialCreateForm() {
 
       const memorial = await createMemorial({
         subject_name: `${remembered.firstName} ${remembered.lastName}`.trim(),
-        first_name: remembered.firstName,
-        last_name: remembered.lastName,
         nickname: remembered.nickName,
         date_of_birth: remembered.yearOfBirth
           ? `${remembered.yearOfBirth}-01-01`
@@ -274,7 +272,7 @@ export default function MemorialCreateForm() {
         date_of_passing: remembered.yearOfPassing
           ? `${remembered.yearOfPassing}-01-01`
           : null,
-        description: remembered.briefBiography,
+        biography: remembered.briefBiography,
         related_people: remembered.relatedPeople,
         cover_photo_url: photoUrl,
       });
