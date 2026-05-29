@@ -9,7 +9,7 @@ import {
   getMemorial as apiGetMemorial,
 } from "../lib/api.js";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 // ─── normalizeMemorial ────────────────────────────────────────────────────────
 // Normalizes field name variants across real backend + mock data

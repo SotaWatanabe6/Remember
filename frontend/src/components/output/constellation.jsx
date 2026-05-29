@@ -67,8 +67,8 @@ export default function ConstellationGraph({ ai_output }) {
           console.log("Token retrieved:", token);
           return ;
         }
-        const contributor = await getContributors(id,token);
-        const memorialApi = await getMemorial(id,token);
+        const contributor = await getContributors(id);
+        const memorialApi = await getMemorial(id);
         console.log(memorialApi);
         setMemorial(memorialApi.memorial);
         setContributors(contributor.contributors);
@@ -119,6 +119,7 @@ export default function ConstellationGraph({ ai_output }) {
       // setHiddenItems(contributor.map(t => ({
       //   [t.id]: false,
       // })));
+      console.log(memorial);
       setNodes(contributor.map(t => ({
         id: t.id,
         name: t.name,
@@ -127,7 +128,7 @@ export default function ConstellationGraph({ ai_output }) {
       setNodes((prevItems) => [...prevItems, {
         id: memorial.user_id,
         name: memorial.subject_name,
-        prominence: 0.9,        
+        prominence: 1,        
       }]);
       setLinks(contributor.map(d => ({
         source: memorial.user_id,

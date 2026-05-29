@@ -565,12 +565,12 @@ export default function MemorialOutputPage() {
       setLoading(true);
       setError(null);
       try {
-        const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
-        if (typeof token === "undefined") {
-          console.log("Token retrieved:", token);
-          return ;
-        }
-        const contributor= await getContributors(memorialId,token);
+        // const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
+        // if (typeof token === "undefined") {
+        //   console.log("Token retrieved:", token);
+        //   return ;
+        // }
+        const contributor= await getContributors(memorialId);
         setContributors(contributor.contributors);
       } catch (err) {
         setError(err.message);

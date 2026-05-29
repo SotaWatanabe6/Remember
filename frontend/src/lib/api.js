@@ -10,7 +10,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient.js";
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 const MOCK_DELAY = 500;
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 // ─── Questionnaire responses localStorage ───────────
 
@@ -472,7 +472,7 @@ export async function submitContribution(token) {
 //   await delay(MOCK_DELAY);
 //   try {
 //     const response = await fetch(
-//       `${API_BASE_URL}/memorials/${memorialId}/output`,
+//       `${API_URL}/memorials/${memorialId}/output`,
 //       {
 //         method: "GET",
 //         headers: {
@@ -676,10 +676,10 @@ export async function submitContribution(token) {
 // }
 export async function getMemorialOutput(memorialId) {
   try {
-    const session = getStoredSession();
+    const token = await getAuthToken();
     const response = await fetch(`${API_URL}/memorials/${memorialId}/output`, {
       headers: {
-        Authorization: `Bearer ${session?.token || ''}`,
+        Authorization: `Bearer ${token}`,
       },
     });
 
@@ -939,27 +939,27 @@ export async function createMemorial({
     return response.json();
   } catch {
     // Fallback to mock
-    await delay(MOCK_DELAY);
-    const currentUser = getActiveUser();
-    const createdAt = now();
-    const normalizedBiography = (biography || '').trim();
-    const memorial = {
-      id: makeId('memorial'),
-      user_id: currentUser.id,
-      subject_name: subject_name?.trim() || '',
-      nickname: (nickname || '').trim(),
-      biography: normalizedBiography,
-      description: normalizedBiography,
-      related_people: related_people ?? [],
-      date_of_birth: date_of_birth ?? null,
-      date_of_passing: date_of_passing ?? null,
-      cover_photo_url: cover_photo_url ?? null,
-      status: 'collecting',
-      created_at: createdAt,
-      updated_at: createdAt,
-    };
-    writeStoredValue(MEMORIALS_STORAGE_KEY, [memorial, ...getStoredMemorials()]);
-    return { memorial };
+    // await delay(MOCK_DELAY);
+    // const currentUser = getActiveUser();
+    // const createdAt = now();
+    // const normalizedBiography = (biography || '').trim();
+    // const memorial = {
+    //   id: makeId('memorial'),
+    //   user_id: currentUser.id,
+    //   subject_name: subject_name?.trim() || '',
+    //   nickname: (nickname || '').trim(),
+    //   biography: normalizedBiography,
+    //   description: normalizedBiography,
+    //   related_people: related_people ?? [],
+    //   date_of_birth: date_of_birth ?? null,
+    //   date_of_passing: date_of_passing ?? null,
+    //   cover_photo_url: cover_photo_url ?? null,
+    //   status: 'collecting',
+    //   created_at: createdAt,
+    //   updated_at: createdAt,
+    // };
+    // writeStoredValue(MEMORIALS_STORAGE_KEY, [memorial, ...getStoredMemorials()]);
+    // return { memorial };
   }
 }
 
@@ -995,7 +995,7 @@ export async function getMemorials() {
 //   await delay(MOCK_DELAY);
 //   try {
 //     const response = await fetch(
-//       `${API_BASE_URL}/memorials/${id}`,
+//       `${API_URL}/memorials/${id}`,
 //       {
 //         method: "GET",
 //         headers: {
@@ -1028,7 +1028,7 @@ export async function getMemorial(memorialId) {
     if (!response.ok) throw new Error('Memorial not found');
 
     const data = await response.json();
-    return data.memorial;
+    return data;
   } catch {
     // Fallback to mockMemorials if backend fails
     return mockMemorials.find((m) => m.id === memorialId) ?? mockMemorials[0];
@@ -1112,7 +1112,7 @@ export async function getContributors(memorialId) {
 
   if (!memorialId) throw new Error("memorialId is required");
   const res = await fetch(
-    `${API_BASE_URL}/memorials/${memorialId}/contributors`,
+    `${API_URL}/memorials/${memorialId}/contributors`,
     {
       method: "GET",
       headers: {
@@ -1157,7 +1157,7 @@ export async function triggerGeneration(memorialId) {
   try {
     const token = await getAuthToken();
     const response = await fetch(
-      `${API_BASE_URL}/ai/memorials/${memorialId}/generate`,
+      `${API_URL}/ai/memorials/${memorialId}/generate`,
       {
         method: "POST",
         headers: {
@@ -1216,7 +1216,7 @@ export async function getJobStatus(jobId) {
 
   if (!memorialId) throw new Error("memorialId is required");
   const res = await fetch(
-    `${API_BASE_URL}/memorials/${memorialId}/contributors`,
+    `${API_URL}/memorials/${memorialId}/contributors`,
     {
       method: "GET",
       headers: {

@@ -12,7 +12,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getMemorialOutput, getMemorialById  } from '@/lib/api';
-import { getMemorialContributors } from '@/lib/api';
+import { getContributors } from '@/lib/api';
 import ConstellationGraph from "@/components/output/constellation";
 import MemorialContributionsPage from "@/components/output/contribution-list";
 import MemorialContributionApproval from "@/components/output/contribution-awaiting";
@@ -1118,12 +1118,12 @@ export default function MemorialOutputPage() {
       setLoading(true);
       setError(null);
       try {
-        const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
-        if (typeof token === "undefined") {
-          console.log("Token retrieved:", token);
-          return ;
-        }
-        const contributor= await getMemorialContributors(id,token);
+        // const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
+        // if (typeof token === "undefined") {
+        //   console.log("Token retrieved:", token);
+        //   return ;
+        // }
+        const contributor= await getContributors(id);
         setContributors(contributor.contributors);
       } catch (err) {
         setError(err.message);
@@ -1225,6 +1225,5 @@ function OutputError({ onRetry }) {
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
 
 
