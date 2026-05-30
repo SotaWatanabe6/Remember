@@ -461,24 +461,24 @@ export default function QuestionnaireFlow({ inviteToken }) {
   };
 
   const handleContinue = async () => {
-    if (!isLastQuestion) {
-      await moveToQuestion(currentIndex + 1);
-      return;
-    }
+  if (!isLastQuestion) {
+    await moveToQuestion(currentIndex + 1);
+    return;
+  }
 
-    setIsNavigating(true);
-    stopListening();
-    window.clearTimeout(saveTimerRef.current);
-    const didSave = await saveAnswer(
-      currentQuestion.id,
-      answersRef.current[currentQuestion.id] ?? createEmptyAnswer(),
-    );
-    if (!didSave) {
-      setIsNavigating(false);
-      return;
-    }
-    router.push(`/contribute/${inviteToken}/photos`);
-  };
+  setIsNavigating(true);
+  stopListening();
+  window.clearTimeout(saveTimerRef.current);
+  const didSave = await saveAnswer(
+    currentQuestion.id,
+    answersRef.current[currentQuestion.id] ?? createEmptyAnswer(),
+  );
+  if (!didSave) {
+    setIsNavigating(false);
+    return;
+  }
+  router.push(`/contribute/${inviteToken}/upload`);
+ };
 
   useEffect(() => {
     const flushCurrentAnswer = () => {

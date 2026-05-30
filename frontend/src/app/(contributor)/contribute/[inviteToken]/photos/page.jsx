@@ -1,26 +1,19 @@
 'use client';
 
-// frontend/src/app/(contributor)/contribute/[inviteToken]/photos/page.jsx
-
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { uploadPhotos, deletePhoto } from '@/lib/api';
+import { addPhotos, removePhoto, getStore } from '@/lib/contributionStore';
 
 const FONT = "'Cormorant Garamond', Georgia, serif";
 
 const COLORS = {
   bg: '#F0EAE2',
-  family: '#AF5F42',
-  friend: '#45556C',
-  colleague: '#59763C',
   text: '#1a1a1a',
   textMuted: '#6b6b6b',
   cardBg: '#E8E0D8',
   border: '#D4CAC0',
 };
-
-// ─── Nav ──────
 
 function ContributorNav({ backHref }) {
   return (
@@ -39,8 +32,6 @@ function ContributorNav({ backHref }) {
     </nav>
   );
 }
-
-// ─── Drop Zone ──────
 
 function DropZone({ onFiles }) {
   const inputRef = useRef(null);
@@ -86,9 +77,7 @@ function DropZone({ onFiles }) {
   );
 }
 
-// ─── Photo Thumbnail ──────
-
-function PhotoThumb({ asset, onDelete, uploading }) {
+function PhotoThumb({ asset, onDelete }) {
   return (
     <div className="relative aspect-square overflow-hidden rounded-xl" style={{ backgroundColor: '#E8E0D8' }}>
       {asset.previewUrl ? (
@@ -97,97 +86,44 @@ function PhotoThumb({ asset, onDelete, uploading }) {
         <div className="h-full w-full" style={{ backgroundColor: '#D4CAC0' }} />
       )}
 
-      {/* Upload progress bar */}
-      {uploading && (
-        <div className="absolute bottom-0 left-0 right-0 h-1" style={{ backgroundColor: '#D4CAC0' }}>
-          <div className="h-full w-1/2 animate-pulse rounded-full" style={{ backgroundColor: '#4A7FA5' }} />
-        </div>
-      )}
-
-      {/* Edit / Delete */}
-      {!uploading && (
-        <div className="absolute right-2 top-2 flex gap-1.5">
-          <button
-            className="rounded-full p-1.5 shadow-sm transition-colors"
-            style={{ backgroundColor: 'rgba(240,234,226,0.9)' }}
-            aria-label="Edit caption"
-          >
-            <svg width="12" height="12" fill="none" stroke="#5F5A52" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a4 4 0 01-1.414.828l-3 1 1-3a4 4 0 01.828-1.414z" />
-            </svg>
-          </button>
-          <button
-            onClick={() => onDelete(asset.id)}
-            className="rounded-full p-1.5 shadow-sm transition-colors"
-            style={{ backgroundColor: 'rgba(240,234,226,0.9)' }}
-            aria-label="Delete photo"
-          >
-            <svg width="12" height="12" fill="none" stroke="#C0503A" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6m2 0a1 1 0 00-1-1h-4a1 1 0 00-1 1H5" />
-            </svg>
-          </button>
-        </div>
-      )}
+      <div className="absolute right-2 top-2 flex gap-1.5">
+        <button
+          className="rounded-full p-1.5 shadow-sm transition-colors"
+          style={{ backgroundColor: 'rgba(240,234,226,0.9)' }}
+          aria-label="Edit caption"
+        >
+          <svg width="12" height="12" fill="none" stroke="#5F5A52" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a4 4 0 01-1.414.828l-3 1 1-3a4 4 0 01.828-1.414z" />
+          </svg>
+        </button>
+        <button
+          onClick={() => onDelete(asset.id)}
+          className="rounded-full p-1.5 shadow-sm transition-colors"
+          style={{ backgroundColor: 'rgba(240,234,226,0.9)' }}
+          aria-label="Delete photo"
+        >
+          <svg width="12" height="12" fill="none" stroke="#C0503A" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6m2 0a1 1 0 00-1-1h-4a1 1 0 00-1 1H5" />
+          </svg>
+        </button>
+      </div>
     </div>
   );
 }
-
-// ─── Page ──────
 
 export default function PhotosPage() {
   const router = useRouter();
   const { inviteToken } = useParams();
 
   const [assets, setAssets] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [uploadingIds, setUploadingIds] = useState(new Set());
+  const [caption, setCaption] = useState('');
 
-  const handleFiles = useCallback(async (files) => {
-    const previews = files.map((file, i) => ({
-      id: `pending-${Date.now()}-${i}`,
-      file_name: file.name,
-      previewUrl: URL.createObjectURL(file),
-      pending: true,
-    }));
-    setAssets((prev) => [...prev, ...previews]);
-    setUploading(true);
+  // Load existing photos from store on mount
+  useEffect(() => {
+    setAssets(getStore().photos);
+  }, []);
 
-    const pendingIds = new Set(previews.map((p) => p.id));
-    setUploadingIds(pendingIds);
-
-    try {
-      const result = await uploadPhotos(inviteToken, files);
-      setAssets((prev) => {
-        const kept = prev.filter((a) => !a.pending);
-        const newAssets = result.assets.map((a, i) => ({
-          ...a,
-          previewUrl: previews[i]?.previewUrl || null,
-        }));
-        return [...kept, ...newAssets];
-      });
-    } catch (err) {
-      setAssets((prev) => prev.filter((a) => !a.pending));
-      console.error('Upload failed:', err);
-    } finally {
-      setUploading(false);
-      setUploadingIds(new Set());
-    }
-  }, [inviteToken]);
-
-  async function handleDelete(assetId) {
-    try {
-      await deletePhoto(inviteToken, assetId);
-      setAssets((prev) => prev.filter((a) => a.id !== assetId));
-    } catch (err) {
-      console.error('Delete failed:', err);
-    }
-  }
-
-  function handleContinue() {
-    router.push(`/contribute/${inviteToken}/voice`);
-  }
-
-  // Fix full-page cream background — no white showing around edges
+  // Fix full-page cream background
   useEffect(() => {
     const prevBody = document.body.style.backgroundColor;
     const prevHtml = document.documentElement.style.backgroundColor;
@@ -198,7 +134,20 @@ export default function PhotosPage() {
       document.documentElement.style.backgroundColor = prevHtml;
     };
   }, []);
-  
+
+  const handleFiles = useCallback((files) => {
+    const newAssets = addPhotos(files, caption.trim() || null);
+    setAssets((prev) => [...prev, ...newAssets]);
+  }, [caption]);
+
+  function handleDelete(assetId) {
+    removePhoto(assetId);
+    setAssets((prev) => prev.filter((a) => a.id !== assetId));
+  }
+
+  function handleContinue() {
+    router.push(`/contribute/${inviteToken}/voice`);
+  }
 
   return (
     <main
@@ -207,9 +156,8 @@ export default function PhotosPage() {
     >
       <div className="mx-auto flex w-full max-w-[680px] flex-col gap-10">
 
-        <ContributorNav backHref={`/contribute/${inviteToken}/questions`} />
+        <ContributorNav backHref={`/contribute/${inviteToken}/upload`} />
 
-        {/* Heading */}
         <div className="text-center">
           <h1 className="text-[44px] font-bold leading-tight" style={{ color: '#423F39', letterSpacing: '-0.01em' }}>
             Upload your memories
@@ -217,15 +165,31 @@ export default function PhotosPage() {
           <p className="mt-2 text-[17px]" style={{ color: '#5F5A52' }}>Upload photos below.</p>
         </div>
 
-        {/* Drop zone */}
         <DropZone onFiles={handleFiles} />
 
-        {/* Uploaded photos grid */}
+        {/* Caption input */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="caption" className="text-sm font-medium" style={{ color: '#5F5A52' }}>
+            Caption <span style={{ color: '#8F8A82' }} className="font-normal">(optional)</span>
+          </label>
+          <input
+            id="caption"
+            type="text"
+            placeholder="e.g. John's 50th birthday party"
+            value={caption}
+            onChange={(e) => setCaption(e.target.value)}
+            className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2"
+            style={{
+              border: '1px solid #D4CAC0',
+              backgroundColor: '#E8E0D8',
+              color: '#423F39',
+              fontFamily: FONT,
+            }}
+          />
+        </div>
+
         {assets.length > 0 && (
-          <div
-            className="rounded-2xl p-6"
-            style={{ border: '1px solid #D4CAC0' }}
-          >
+          <div className="rounded-2xl p-6" style={{ border: '1px solid #D4CAC0' }}>
             <p className="mb-4 text-[20px] font-semibold" style={{ color: '#423F39' }}>
               Uploaded photos
             </p>
@@ -235,14 +199,12 @@ export default function PhotosPage() {
                   key={asset.id}
                   asset={asset}
                   onDelete={handleDelete}
-                  uploading={uploadingIds.has(asset.id)}
                 />
               ))}
             </div>
           </div>
         )}
 
-        {/* Continue */}
         <button
           onClick={handleContinue}
           className="w-full rounded-full py-4 text-[16px] transition-opacity hover:opacity-80 active:opacity-70"

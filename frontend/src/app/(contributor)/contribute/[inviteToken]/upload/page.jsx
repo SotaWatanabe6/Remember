@@ -1,9 +1,5 @@
 'use client';
 
-// frontend/src/app/(contributor)/contribute/[inviteToken]/upload/page.jsx
-// Media type selector — contributor picks Photo, Audio, or Story (text)
-// Navigates to the appropriate upload page based on selection
-
 import { useRouter, useParams } from 'next/navigation';
 import { useEffect } from 'react';
 import Link from 'next/link';
@@ -12,11 +8,6 @@ const FONT = "'Cormorant Garamond', Georgia, serif";
 
 const COLORS = {
   bg: '#F0EAE2',
-  family: '#AF5F42',
-  friend: '#45556C',
-  colleague: '#59763C',
-  text: '#1a1a1a',
-  textMuted: '#6b6b6b',
   cardBg: '#E8E0D8',
   border: '#D4CAC0',
 };
@@ -70,20 +61,18 @@ const MEDIA_TYPES = [
   },
 ];
 
-export default function UploadSelectorPage() {
+export default function ContributorUploadPage() {
   const router = useRouter();
   const { inviteToken } = useParams();
 
   function handleSelect(type) {
     if (type === 'photo') router.push(`/contribute/${inviteToken}/photos`);
     if (type === 'audio') router.push(`/contribute/${inviteToken}/voice`);
-    if (type === 'story') router.push(`/contribute/${inviteToken}/story`);
+    // story not yet implemented
   }
 
-  // Day 9: replace with real memorial data
   const deceasedName = 'John';
 
-  // Fix full-page cream background — no white showing around edges
   useEffect(() => {
     const prevBody = document.body.style.backgroundColor;
     const prevHtml = document.documentElement.style.backgroundColor;
@@ -94,7 +83,6 @@ export default function UploadSelectorPage() {
       document.documentElement.style.backgroundColor = prevHtml;
     };
   }, []);
-    
 
   return (
     <main
@@ -105,7 +93,6 @@ export default function UploadSelectorPage() {
 
         <ContributorNav backHref={`/contribute/${inviteToken}/questions`} />
 
-        {/* Heading */}
         <div className="text-center pt-4">
           <h1
             className="text-[48px] font-bold leading-tight"
@@ -118,7 +105,6 @@ export default function UploadSelectorPage() {
           </p>
         </div>
 
-        {/* Three media type cards */}
         <div className="grid grid-cols-3 gap-4">
           {MEDIA_TYPES.map((type) => (
             <button
