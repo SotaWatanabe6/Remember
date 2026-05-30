@@ -10,7 +10,6 @@ const authRoutes = require('./routes/auth')
 const memorialRoutes = require('./routes/memorials')
 const contributeRoutes = require('./routes/contribute')
 const aiRoutes = require('./routes/ai')
-const uploadRouter = require('./routes/upload')
 const { errorHandler } = require('./middleware/errorHandler')
 
 const app = express()
@@ -42,11 +41,9 @@ app.get('/health', (req, res) => {
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/auth', authRoutes)
 app.use('/memorials', memorialRoutes)
-app.use('/contribute', contributeRoutes)
+app.use('/contribute', uploadLimiter, contributeRoutes)
 app.use('/ai', aiRoutes)
 
-// Upload route with rate limiting
-app.use('/api', uploadLimiter, uploadRouter)
 
 // ── Global error handler ──────────────────────────────────────────────────────
 app.use(errorHandler)
