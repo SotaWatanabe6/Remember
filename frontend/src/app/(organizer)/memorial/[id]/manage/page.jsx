@@ -120,59 +120,63 @@ function ArchiveTab() {
 
 function ContributionsTab({contributorslist}) {
   const [value, setValue] = useState("contributors");
-  const submissions = [
-    {
-      id: 1,
-      user: "Jane Smith",
-      contribution: "10 contributions",
-      summary:
-        "This can be an AI generated summary of the contribution, either mentioning surfaced themes or flagged submissions that may be sensitive or inappropriate.",
-    },
-    {
-      id: 2,
-      user: "Michael Johnson",
-      contribution: "7 contributions",
-      summary:
-        "AI generated summaries can highlight themes, relationships, and potentially sensitive submissions for moderators to review quickly.",
-    },
-    {
-      id: 3,
-      user: "Emily Davis",
-      contribution: "4 contributions",
-      summary:
-        "This summary may contain surfaced insights generated automatically from uploaded stories, photos, and audio.",
-    },
-    {
-      id: 4,
-      user: "Chris Brown",
-      contribution: "15 contributions",
-      summary:
-        "AI can help identify emotional themes and summarize media content for easier moderation workflows.",
-    },
-    {
-      id: 5,
-      user: "Sarah Wilson",
-      contribution: "3 contributions",
-      summary:
-        "Potentially sensitive content or highlighted themes may appear here after automatic AI analysis.",
-    },
-  ];
+  console.log(contributorslist);
+  const contributors = contributorslist.filter(obj => obj.status == 'submitted');
+  const awaitinglist = contributorslist.filter(obj => obj.status == 'in_progress') 
+  // const submissions = [
+  //   {
+  //     id: 1,
+  //     user: "Jane Smith",
+  //     contribution: "10 contributions",
+  //     summary:
+  //       "This can be an AI generated summary of the contribution, either mentioning surfaced themes or flagged submissions that may be sensitive or inappropriate.",
+  //   },
+  //   {
+  //     id: 2,
+  //     user: "Michael Johnson",
+  //     contribution: "7 contributions",
+  //     summary:
+  //       "AI generated summaries can highlight themes, relationships, and potentially sensitive submissions for moderators to review quickly.",
+  //   },
+  //   {
+  //     id: 3,
+  //     user: "Emily Davis",
+  //     contribution: "4 contributions",
+  //     summary:
+  //       "This summary may contain surfaced insights generated automatically from uploaded stories, photos, and audio.",
+  //   },
+  //   {
+  //     id: 4,
+  //     user: "Chris Brown",
+  //     contribution: "15 contributions",
+  //     summary:
+  //       "AI can help identify emotional themes and summarize media content for easier moderation workflows.",
+  //   },
+  //   {
+  //     id: 5,
+  //     user: "Sarah Wilson",
+  //     contribution: "3 contributions",
+  //     summary:
+  //       "Potentially sensitive content or highlighted themes may appear here after automatic AI analysis.",
+  //   },
+  // ];
+
   const handleChange = (e) => {
     setValue(e.target.value);
   };
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  const current = submissions[currentIndex];
+  const current = awaitinglist[currentIndex];
 
   const handlePrev = () => {
       setCurrentIndex((prev) =>
-      prev === 0 ? submissions.length - 1 : prev - 1
+      prev === 0 ? awaitinglist.length - 1 : prev - 1
       );
   };
 
   const handleNext = () => {
       setCurrentIndex((prev) =>
-      prev === submissions.length - 1 ? 0 : prev + 1
+      prev === awaitinglist.length - 1 ? 0 : prev + 1
       );
   };      
   return (
@@ -195,7 +199,7 @@ function ContributionsTab({contributorslist}) {
               </button>
 
               <span>
-                {currentIndex + 1}/{submissions.length}
+                {currentIndex + 1}/{awaitinglist.length}
               </span>
 
               <button
@@ -211,9 +215,9 @@ function ContributionsTab({contributorslist}) {
         </div>    
         {
           value === "contributors" ? (
-            <MemorialContributionsPage contributors={contributorslist} />
+            <MemorialContributionsPage contributors={contributors} />
           ) : value === "awaiting" ? (
-            <MemorialContributionApproval contributors={current} />
+            <MemorialContributionApproval contributors={current} gallery={awaitinglist.length}/>
           ) : null
         }
       </div>
