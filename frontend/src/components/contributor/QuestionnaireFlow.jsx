@@ -105,6 +105,25 @@ function buildAnswersByQuestion(responses) {
   }, {});
 }
 
+function buildLastSavedAnswers(responses) {
+  return responses.reduce((savedAnswers, response) => {
+    savedAnswers[response.question_id] = serializeAnswer({
+      answer_text: response.answer_text ?? "",
+      input_mode: response.input_mode === "speech" ? "speech" : "text",
+    });
+    return savedAnswers;
+  }, {});
+}
+
+function getResumeQuestionIndex(answersByQuestion) {
+  const firstUnansweredIndex = CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.findIndex((question) => {
+    const answer = answersByQuestion[question.id]?.answer_text ?? "";
+    return !answer.trim();
+  });
+
+  return firstUnansweredIndex === -1 ? CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.length : firstUnansweredIndex;
+}
+
 export default function QuestionnaireFlow({ inviteToken }) {
   const router = useRouter();
   const [draft, setDraft] = useState(null);
@@ -124,6 +143,8 @@ export default function QuestionnaireFlow({ inviteToken }) {
   const currentQuestionIdRef = useRef(CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS[0]?.id);
   const lastSavedAnswersRef = useRef({});
   const saveTimerRef = useRef(null);
+  const saveRequestVersionsRef = useRef({});
+  const saveAbortControllersRef = useRef({});
   const recognitionRef = useRef(null);
 
   const currentQuestion = CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS[currentIndex];
@@ -151,6 +172,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
 
   useEffect(() => {
     let isMounted = true;
+    const saveAbortControllers = saveAbortControllersRef.current;
 
     async function loadQuestionnaire() {
       setIsLoading(true);
@@ -176,16 +198,18 @@ export default function QuestionnaireFlow({ inviteToken }) {
 
         const restoredAnswers = buildAnswersByQuestion(savedResponses);
         setAnswers(restoredAnswers);
-        lastSavedAnswersRef.current = savedResponses.reduce((savedAnswers, response) => {
-          savedAnswers[response.question_id] = serializeAnswer({
-            answer_text: response.answer_text ?? "",
-            input_mode: response.input_mode === "speech" ? "speech" : "text",
-          });
-          return savedAnswers;
-        }, {});
+        lastSavedAnswersRef.current = buildLastSavedAnswers(savedResponses);
+
+        const resumeIndex = getResumeQuestionIndex(restoredAnswers);
+        if (resumeIndex >= CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.length) {
+          router.replace(`/contribute/${inviteToken}/photos`);
+          return;
+        }
+
+        setCurrentIndex(resumeIndex);
 
         const currentSavedAnswer =
-          lastSavedAnswersRef.current[CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS[0].id];
+          lastSavedAnswersRef.current[CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS[resumeIndex].id];
         setAutosaveStatus(currentSavedAnswer ? "saved" : "idle");
       } catch {
         if (isMounted) {
@@ -204,8 +228,9 @@ export default function QuestionnaireFlow({ inviteToken }) {
       isMounted = false;
       window.clearTimeout(saveTimerRef.current);
       recognitionRef.current?.stop();
+      Object.values(saveAbortControllers).forEach((controller) => controller.abort());
     };
-  }, [inviteToken]);
+  }, [inviteToken, router]);
 
   const saveAnswer = useCallback(
     async (questionId, answerSnapshot) => {
@@ -224,25 +249,39 @@ export default function QuestionnaireFlow({ inviteToken }) {
         if (currentQuestionIdRef.current === questionId) {
           setAutosaveStatus("saved");
         }
-        return;
+        return true;
       }
 
       if (currentQuestionIdRef.current === questionId) {
         setAutosaveStatus("saving");
       }
 
+      saveAbortControllersRef.current[questionId]?.abort();
+      const controller = new AbortController();
+      saveAbortControllersRef.current[questionId] = controller;
+      const requestVersion = (saveRequestVersionsRef.current[questionId] ?? 0) + 1;
+      saveRequestVersionsRef.current[questionId] = requestVersion;
+
       try {
         const savedResponse = await saveQuestionnaireResponse(inviteToken, {
           questionId,
+          questionText: CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS[questionIndex].prompt,
           questionOrder: questionIndex + 1,
           answerText: answerToSave.answer_text ?? "",
           inputMode: answerToSave.input_mode ?? "text",
+        }, {
+          signal: controller.signal,
         });
 
-        lastSavedAnswersRef.current[questionId] = serializeAnswer({
+        if (saveRequestVersionsRef.current[questionId] !== requestVersion) {
+          return true;
+        }
+
+        const savedSerializedAnswer = serializeAnswer({
           answer_text: savedResponse.answer_text ?? answerToSave.answer_text ?? "",
           input_mode: savedResponse.input_mode ?? answerToSave.input_mode ?? "text",
         });
+        lastSavedAnswersRef.current[questionId] = savedSerializedAnswer;
 
         setAnswers((currentAnswers) => ({
           ...currentAnswers,
@@ -253,11 +292,26 @@ export default function QuestionnaireFlow({ inviteToken }) {
         }));
 
         if (currentQuestionIdRef.current === questionId) {
-          setAutosaveStatus("saved");
+          const currentSerializedAnswer = serializeAnswer(
+            answersRef.current[questionId] ?? createEmptyAnswer(),
+          );
+          setAutosaveStatus(
+            currentSerializedAnswer === savedSerializedAnswer ? "saved" : "saving",
+          );
         }
-      } catch {
+        return true;
+      } catch (error) {
+        if (error?.code === "aborted") {
+          return false;
+        }
+
         if (currentQuestionIdRef.current === questionId) {
           setAutosaveStatus("error");
+        }
+        return false;
+      } finally {
+        if (saveAbortControllersRef.current[questionId] === controller) {
+          delete saveAbortControllersRef.current[questionId];
         }
       }
     },
@@ -394,23 +448,64 @@ export default function QuestionnaireFlow({ inviteToken }) {
     setIsNavigating(true);
     stopListening();
     window.clearTimeout(saveTimerRef.current);
-    await saveAnswer(currentQuestion.id, answersRef.current[currentQuestion.id] ?? createEmptyAnswer());
+    const didSave = await saveAnswer(
+      currentQuestion.id,
+      answersRef.current[currentQuestion.id] ?? createEmptyAnswer(),
+    );
+    if (!didSave) {
+      setIsNavigating(false);
+      return;
+    }
     setCurrentIndex(nextIndex);
     setIsNavigating(false);
   };
 
   const handleContinue = async () => {
-    if (!isLastQuestion) {
-      await moveToQuestion(currentIndex + 1);
-      return;
-    }
+  if (!isLastQuestion) {
+    await moveToQuestion(currentIndex + 1);
+    return;
+  }
 
-    setIsNavigating(true);
-    stopListening();
-    window.clearTimeout(saveTimerRef.current);
-    await saveAnswer(currentQuestion.id, answersRef.current[currentQuestion.id] ?? createEmptyAnswer());
-    router.push(`/contribute/${inviteToken}/upload`);
-  };
+  setIsNavigating(true);
+  stopListening();
+  window.clearTimeout(saveTimerRef.current);
+  const didSave = await saveAnswer(
+    currentQuestion.id,
+    answersRef.current[currentQuestion.id] ?? createEmptyAnswer(),
+  );
+  if (!didSave) {
+    setIsNavigating(false);
+    return;
+  }
+  router.push(`/contribute/${inviteToken}/upload`);
+ };
+
+  useEffect(() => {
+    const flushCurrentAnswer = () => {
+      window.clearTimeout(saveTimerRef.current);
+      const questionId = currentQuestionIdRef.current;
+
+      if (!questionId) {
+        return;
+      }
+
+      saveAnswer(questionId, answersRef.current[questionId] ?? createEmptyAnswer());
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        flushCurrentAnswer();
+      }
+    };
+
+    window.addEventListener("pagehide", flushCurrentAnswer);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("pagehide", flushCurrentAnswer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [saveAnswer]);
 
   if (isLoading) {
     return <LoadingState />;

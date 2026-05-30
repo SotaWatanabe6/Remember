@@ -21,6 +21,18 @@ const inviteErrorCopy = {
     title: "Contributions are closed",
     body: "This memorial is not accepting new contributions right now. Thank you for wanting to share a memory.",
   },
+  network_error: {
+    title: "We could not open this invitation",
+    body: "Please check your connection and try again in a moment. If this continues, the memorial organizer can confirm the invitation link.",
+  },
+  missing_data: {
+    title: "This invitation is missing memorial details",
+    body: "The invitation was found, but the memorial information is incomplete. Please ask the organizer to review the memorial and invitation.",
+  },
+  error: {
+    title: "We could not open this invitation",
+    body: "Something went wrong while checking this invitation. Please try again in a moment.",
+  },
 };
 
 function InviteErrorState({ status }) {
@@ -127,8 +139,12 @@ export default function ContributorInviteLanding({ inviteToken }) {
     try {
       await beginContributorDraft(inviteToken, trimmedContributorName);
       router.push(`/contribute/${inviteToken}/relationship`);
-    } catch {
-      setSubmitError("We could not begin your contribution. Please try again.");
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "We could not begin your contribution. Please try again.",
+      );
       setIsSubmitting(false);
     }
   };

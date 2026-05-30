@@ -180,7 +180,7 @@ router.post('/memorials/:id/generate', authMiddleware, async (req, res) => {
       .from('memorials')
       .select('id, status')
       .eq('id', req.params.id)
-      .eq('user_id', req.user.sub)
+      .eq('user_id', req.user.id)
       .single()
 
     if (memError || !memorial) return res.status(403).json({ error: 'Not authorized' })

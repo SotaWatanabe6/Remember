@@ -1,16 +1,15 @@
-// frontend/src/app/(viewer)/memorial/[id]/output/page.jsx
+// frontend/src/app/(organizer)/memorial/[id]/manage/page.jsx
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getMemorialOutput } from '@/services/memorialService';
-import { getMemorialContributors} from '@/services/contributorService'
+import { getMemorialOutput, getContributors, getMemorial } from '@/lib/api';
 import { mockMemorials } from '@/data/mockMemorials.js';
-import ConstellationGraph from "../_components/constellation";
-import MemorialContributionsPage from "../_components/contribution-list";
-import MemorialContributionApproval from "../_components/contribution-awaiting";
+import ConstellationGraph from "@/components/output/constellation";
+import MemorialContributionsPage from "@/components/output/contribution-list";
+import MemorialContributionApproval from "@/components/output/contribution-awaiting";
 import {  ChevronLeft,
   ChevronRight } from "lucide-react";
 
@@ -440,7 +439,7 @@ function OutputsTab({ output }) {
       </CollapsibleSection>
       <CollapsibleSection title="Constellation">
         <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6 aspect-video flex items-center justify-center">
-          <ConstellationGraph memorial={output} />
+          <ConstellationGraph ai_output={output} />
         </div>
       </CollapsibleSection>
       <CollapsibleSection title="Voices">
@@ -565,12 +564,12 @@ export default function MemorialOutputPage() {
       setLoading(true);
       setError(null);
       try {
-        const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
-        if (typeof token === "undefined") {
-          console.log("Token retrieved:", token);
-          return ;
-        }
-        const contributor= await getMemorialContributors(memorialId,token);
+        // const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
+        // if (typeof token === "undefined") {
+        //   console.log("Token retrieved:", token);
+        //   return ;
+        // }
+        const contributor= await getContributors(memorialId);
         setContributors(contributor.contributors);
       } catch (err) {
         setError(err.message);
@@ -584,38 +583,51 @@ export default function MemorialOutputPage() {
 
   // Read from mockMemorials.js — single source of truth for mock data
   // Day 9: replace with real fetch from GET /memorials/:id
-  const mockData = mockMemorials.find((m) => m.id === id) ?? mockMemorials[0];
-  const memorial = {
-    id: mockData.id,
-    subject_name: mockData.subject_name || mockData.deceased_name,
-    cover_photo_url: mockData.cover_photo_url || mockData.profile_photo_url || null,
-    date_of_birth: mockData.date_of_birth || mockData.birth_date || null,
-    date_of_passing: mockData.date_of_passing || mockData.death_date || null,
-    bio: mockData.brief_biography || mockData.short_description || null,
-  };
+  const [memorial, setMemorial] = useState(null);
 
-  const load = async () => {        
+  useEffect(() => {
+    if (!id) return;
+    getMemorial(id).then((data) => {
+      const m = data?.memorial ?? data;
+      if (!m) return;
+      setMemorial({
+        id: m.id,
+        subject_name: m.subject_name || m.deceased_name,
+        cover_photo_url: m.cover_photo_url || m.profile_photo_url || null,
+        date_of_birth: m.date_of_birth || m.birth_date || null,
+        date_of_passing: m.date_of_passing || m.death_date || null,
+        bio: m.brief_biography || m.short_description || null,
+      });
+    }).catch(() => {
+      const mockData = mockMemorials.find((m) => m.id === id) ?? mockMemorials[0];
+      setMemorial({
+        id: mockData.id,
+        subject_name: mockData.subject_name || mockData.deceased_name,
+        cover_photo_url: mockData.cover_photo_url || mockData.profile_photo_url || null,
+        date_of_birth: mockData.date_of_birth || mockData.birth_date || null,
+        date_of_passing: mockData.date_of_passing || mockData.death_date || null,
+        bio: mockData.brief_biography || mockData.short_description || null,
+      });
+    });
+  }, [id]);
+
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
-      if (typeof token === "undefined") {
-        console.log("Token retrieved:", token);
-        return ;
-      }
-      const data = await getMemorialOutput(id, token);
+      const data = await getMemorialOutput(id);  // ← no token argument
       setOutput(data);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }
-
-  useEffect(() => { 
-    if (!id) return;
-    load(); 
   }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    load();
+  }, [id, load]);
 
   return (
     <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
