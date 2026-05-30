@@ -106,12 +106,23 @@ function StoryTab({ data }) {
 }
 
 function ConstellationTab({ data }) {
+  if (!data) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <p className="text-neutral-950 text-base font-medium">No constellation yet</p>
+        <p className="text-slate-500 text-sm mt-1">
+          The constellation will appear here once the memorial has been generated.
+        </p>
+      </div>
+    );
+  }
   return (
-    <div className="flex flex-col items-center justify-center py-24">
-      <ConstellationGraph data={data} />
+    <div className="py-4">
+      <ConstellationGraph ai_output={{ constellation: data }} />
     </div>
   );
 }
+
 
 function VoicesTab({ data }) {
   if (!data || data.length === 0) {

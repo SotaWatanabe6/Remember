@@ -9,7 +9,7 @@ import {
   getMemorial as apiGetMemorial,
 } from "../lib/api.js";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 // ─── normalizeMemorial ────────────────────────────────────────────────────────
 // Normalizes field name variants across real backend + mock data
@@ -117,7 +117,7 @@ export async function getMemorialOutput(id, token) {
     return await response.json();
   } catch (error) {
     console.error('Error fetching memorial output:', error);
-    throw error;
+    return { story: [], constellation: { nodes: [], edges: [] }, voices: [], photos: [] };
   }
 }
 
