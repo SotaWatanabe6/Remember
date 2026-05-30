@@ -1,7 +1,13 @@
 export default function MemorialContributionsPage({ contributors }) {
   return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {contributors?.map((contributor) => (
+        {
+          contributors?.length === 0 ? (
+            <div className="col-span-full text-center text-gray-500">
+              No contributions yet.
+            </div>
+          ):(
+            contributors?.map((contributor) => (
           <div
             key={contributor.id}
             className="border border-gray-300 rounded-md p-5 flex items-center gap-5 bg-white"
@@ -35,7 +41,10 @@ export default function MemorialContributionsPage({ contributors }) {
               </button>
             </div>
           </div>
-        ))}   
+        ))
+          )
+        }
+
       </div>
   );
 }
