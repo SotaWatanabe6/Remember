@@ -3,6 +3,9 @@ const express = require('express')
 const router = express.Router()
 const supabase = require('../supabase')
 
+const multer = require('multer')
+const upload = multer()
+
 // GET /contribute/:token — validate invite token
 router.get('/:token', async (req, res) => {
   try {
@@ -198,7 +201,7 @@ router.post('/:token/submit', async (req, res) => {
 })
 
 // POST /contribute/:token/photos
-router.post('/:token/photos', async (req, res) => {
+router.post('/:token/photos', upload.array('files[]'), async (req, res) => {
   try {
     const { contributor_token } = req.body
     if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
@@ -211,16 +214,12 @@ router.post('/:token/photos', async (req, res) => {
 
     if (!contributor) return res.status(404).json({ error: 'Contributor not found' })
 
-    // For MVP — just return success, Daniel's upload.js handles actual file storage
     await supabase
       .from('contributors')
       .update({ photos_done: true })
       .eq('id', contributor_token)
 
-    res.status(201).json({
-      uploaded: 0,
-      files: []
-    })
+    res.status(201).json({ uploaded: 0, files: [] })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -228,7 +227,7 @@ router.post('/:token/photos', async (req, res) => {
 
 
 // POST /contribute/:token/voice
-router.post('/:token/voice', async (req, res) => {
+router.post('/:token/voice', upload.single('file'), async (req, res) => {
   try {
     const { contributor_token, contributor_title } = req.body
     if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
@@ -248,11 +247,7 @@ router.post('/:token/voice', async (req, res) => {
       .eq('id', contributor_token)
 
     res.status(201).json({
-      recording: {
-        id: null,
-        contributor_title,
-        storage_path: null
-      }
+      recording: { id: null, contributor_title, storage_path: null }
     })
   } catch (err) {
     res.status(500).json({ error: err.message })

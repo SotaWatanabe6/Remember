@@ -1,12 +1,11 @@
-// frontend/src/app/(viewer)/memorial/[id]/output/page.jsx
+// frontend/src/app/(organizer)/memorial/[id]/manage/page.jsx
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getMemorialOutput } from '@/lib/api';
-import { getContributors} from '@/lib/api';
+import { getMemorialOutput, getContributors, getMemorial } from '@/lib/api';
 import { mockMemorials } from '@/data/mockMemorials.js';
 import ConstellationGraph from "@/components/output/constellation";
 import MemorialContributionsPage from "@/components/output/contribution-list";
@@ -584,38 +583,51 @@ export default function MemorialOutputPage() {
 
   // Read from mockMemorials.js — single source of truth for mock data
   // Day 9: replace with real fetch from GET /memorials/:id
-  const mockData = mockMemorials.find((m) => m.id === id) ?? mockMemorials[0];
-  const memorial = {
-    id: mockData.id,
-    subject_name: mockData.subject_name || mockData.deceased_name,
-    cover_photo_url: mockData.cover_photo_url || mockData.profile_photo_url || null,
-    date_of_birth: mockData.date_of_birth || mockData.birth_date || null,
-    date_of_passing: mockData.date_of_passing || mockData.death_date || null,
-    bio: mockData.brief_biography || mockData.short_description || null,
-  };
+  const [memorial, setMemorial] = useState(null);
 
-  const load = async () => {        
+  useEffect(() => {
+    if (!id) return;
+    getMemorial(id).then((data) => {
+      const m = data?.memorial ?? data;
+      if (!m) return;
+      setMemorial({
+        id: m.id,
+        subject_name: m.subject_name || m.deceased_name,
+        cover_photo_url: m.cover_photo_url || m.profile_photo_url || null,
+        date_of_birth: m.date_of_birth || m.birth_date || null,
+        date_of_passing: m.date_of_passing || m.death_date || null,
+        bio: m.brief_biography || m.short_description || null,
+      });
+    }).catch(() => {
+      const mockData = mockMemorials.find((m) => m.id === id) ?? mockMemorials[0];
+      setMemorial({
+        id: mockData.id,
+        subject_name: mockData.subject_name || mockData.deceased_name,
+        cover_photo_url: mockData.cover_photo_url || mockData.profile_photo_url || null,
+        date_of_birth: mockData.date_of_birth || mockData.birth_date || null,
+        date_of_passing: mockData.date_of_passing || mockData.death_date || null,
+        bio: mockData.brief_biography || mockData.short_description || null,
+      });
+    });
+  }, [id]);
+
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
-      if (typeof token === "undefined") {
-        console.log("Token retrieved:", token);
-        return ;
-      }
-      const data = await getMemorialOutput(id, token);
+      const data = await getMemorialOutput(id);  // ← no token argument
       setOutput(data);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
-    queueMicrotask(load);
-  }, [id]);
+    load();
+  }, [id, load]);
 
   return (
     <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">

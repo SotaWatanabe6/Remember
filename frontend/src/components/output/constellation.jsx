@@ -124,11 +124,13 @@ export default function ConstellationGraph({ ai_output }) {
         name: t.name,
         prominence: 0.7,
       })));    
-      setNodes((prevItems) => [...prevItems, {
-        id: memorial.user_id,
-        name: memorial.subject_name,
-        prominence: 1,        
-      }]);
+      if (memorial) {
+        setNodes((prevItems) => [...prevItems, {
+          id: memorial.user_id,
+          name: memorial.subject_name,
+          prominence: 1,
+        }]);
+      }
       setLinks(contributor.map(d => ({
         source: memorial.user_id,
         target: d.id,
