@@ -94,6 +94,15 @@ function isLocalFrontendApiUrl() {
   }
 }
 
+function isLocalApiUrl(baseUrl = API_URL) {
+  try {
+    const url = new URL(baseUrl);
+    return url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
 // ─── Helper to get real Supabase JWT token ────────────────────────────────────
 // Used by Blessing's memorial endpoints — gets real session from Supabase Auth
 // Falls back to mock session token if Supabase session not available
@@ -543,29 +552,79 @@ export async function createShareLink(memorialId) {
 /**
  * POST /ai/memorials/:id/generate
  * Triggers AI generation for a memorial. Protected.
- * TODO: Replace with real fetch() on Day 9.
+ * Calls the real backend with a local-dev mock fallback when the API is unreachable.
  */
-export async function triggerGeneration(memorialId) {
-  await delay(MOCK_DELAY);
-  return {
-    job: {
-      id: makeId('job-uuid'),
-      status: 'queued',
-      progress: 0,
-      current_step: 'Starting...',
-      error_message: null,
-    },
+export async function triggerGeneration(memorialId, token) {
+  const accessToken = token?.access_token || token || getStoredSession()?.token || '';
+  const requestOptions = {
+    method: 'POST',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
   };
+
+  try {
+    return await requestJson(`/ai/memorials/${encodeURIComponent(memorialId)}/generate`, requestOptions);
+  } catch (error) {
+    if (
+      error instanceof ApiRequestError &&
+      [401, 403].includes(error.status) &&
+      process.env.NODE_ENV !== 'production' &&
+      isLocalApiUrl()
+    ) {
+      await delay(MOCK_DELAY);
+      _mockProgress = 0;
+      return createMockGenerationJob();
+    }
+
+    if (error instanceof ApiRequestError && error.status === 404 && isLocalFrontendApiUrl()) {
+      try {
+        return await requestJson(`/ai/memorials/${encodeURIComponent(memorialId)}/generate`, {
+          ...requestOptions,
+          baseUrl: LOCAL_BACKEND_API_URL,
+        });
+      } catch (backendError) {
+        if (
+          backendError instanceof ApiRequestError &&
+          backendError.status > 0 &&
+          backendError.status !== 404
+        ) {
+          throw backendError;
+        }
+        if (process.env.NODE_ENV === 'production') throw backendError;
+      }
+
+      await delay(MOCK_DELAY);
+      _mockProgress = 0;
+      return createMockGenerationJob();
+    }
+
+    if (error instanceof ApiRequestError && error.status > 0) throw error;
+    if (process.env.NODE_ENV === 'production') throw error;
+
+    await delay(MOCK_DELAY);
+    _mockProgress = 0;
+    return createMockGenerationJob();
+  }
 }
 
 /**
  * GET /ai/jobs/:id/status
  * Polls job status. Call on an interval — progress increments each call.
- * TODO: Replace with real fetch() on Day 9.
+ * Calls the real backend with a local-dev mock fallback when the API is unreachable.
  */
 let _mockProgress = 0;
-export async function getJobStatus(jobId) {
-  await delay(MOCK_DELAY);
+function createMockGenerationJob(status = 'queued', progress = 0, currentStep = 'Starting...') {
+  return {
+    job: {
+      id: makeId('job-uuid'),
+      status,
+      progress,
+      current_step: currentStep,
+      error_message: null,
+    },
+  };
+}
+
+function createMockJobStatus(jobId) {
   _mockProgress = Math.min(_mockProgress + 20, 100);
   const steps = [
     'Starting...',
@@ -575,6 +634,7 @@ export async function getJobStatus(jobId) {
     'Building the story arc...',
   ];
   const stepIndex = Math.floor((_mockProgress / 100) * steps.length);
+
   return {
     job: {
       id: jobId,
@@ -584,6 +644,54 @@ export async function getJobStatus(jobId) {
       error_message: null,
     },
   };
+}
+
+export async function getJobStatus(jobId, token) {
+  const accessToken = token?.access_token || token || getStoredSession()?.token || '';
+  const requestOptions = {
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+  };
+
+  try {
+    return await requestJson(`/ai/jobs/${encodeURIComponent(jobId)}/status`, requestOptions);
+  } catch (error) {
+    if (
+      error instanceof ApiRequestError &&
+      [401, 403, 404].includes(error.status) &&
+      process.env.NODE_ENV !== 'production' &&
+      isLocalApiUrl()
+    ) {
+      await delay(MOCK_DELAY);
+      return createMockJobStatus(jobId);
+    }
+
+    if (error instanceof ApiRequestError && error.status === 404 && isLocalFrontendApiUrl()) {
+      try {
+        return await requestJson(`/ai/jobs/${encodeURIComponent(jobId)}/status`, {
+          ...requestOptions,
+          baseUrl: LOCAL_BACKEND_API_URL,
+        });
+      } catch (backendError) {
+        if (
+          backendError instanceof ApiRequestError &&
+          backendError.status > 0 &&
+          backendError.status !== 404
+        ) {
+          throw backendError;
+        }
+        if (process.env.NODE_ENV === 'production') throw backendError;
+      }
+
+      await delay(MOCK_DELAY);
+      return createMockJobStatus(jobId);
+    }
+
+    if (error instanceof ApiRequestError && error.status > 0) throw error;
+    if (process.env.NODE_ENV === 'production') throw error;
+
+    await delay(MOCK_DELAY);
+    return createMockJobStatus(jobId);
+  }
 }
 
 // ─── REBECCA + SUNGJUN: CONTRIBUTE FLOW ──────────────────────────────────────

@@ -5,7 +5,7 @@
 import { useCallback, useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getMemorialOutput } from '@/services/memorialService';
+import { generateMemorialOutput, getGenerationJobStatus, getMemorialOutput } from '@/services/memorialService';
 import { getMemorialContributors} from '@/services/contributorService'
 import { mockMemorials } from '@/data/mockMemorials.js';
 import ConstellationGraph from "../_components/constellation";
@@ -17,6 +17,19 @@ import {  ChevronLeft,
   ChevronRight } from "lucide-react";
 
 const SUPABASE_AUTH_TOKEN_KEY = "sb-tbpdhybqbjucoxdizlgw-auth-token";
+const GENERATION_POLL_INTERVAL_MS = 1500;
+const GENERATION_MAX_POLL_ATTEMPTS = 60;
+const GENERATION_SUCCESS_STATUSES = new Set(["complete", "completed", "succeeded", "success"]);
+const GENERATION_FAILURE_STATUSES = new Set(["failed", "error"]);
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function isLocalDevAuthError(error) {
+  if (process.env.NODE_ENV === 'production') return false;
+
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error || "").toLowerCase();
+  return message.includes("not authorized") || message.includes("401") || message.includes("403");
+}
 
 function getStoredAuthToken() {
   if (typeof window === "undefined") return null;
@@ -433,7 +446,14 @@ function AllPhotosSection({ albums }) {
 
 // ─── PRIORITY 3: Pre-generation empty state for Outputs tab ──────────────────
 
-function PreGenerationEmpty() {
+function PreGenerationEmpty({
+  canGenerate,
+  disabledMessage,
+  generationError,
+  generationJob,
+  generating,
+  onGenerate,
+}) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <div className="h-16 w-16 rounded-full bg-neutral-100 flex items-center justify-center mb-4">
@@ -441,17 +461,57 @@ function PreGenerationEmpty() {
           <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
         </svg>
       </div>
-      <p className="text-neutral-950 text-base font-medium">Generation hasn t run yet</p>
+      <p className="text-neutral-950 text-base font-medium">Generation hasn&apos;t run yet</p>
       <p className="text-slate-500 text-sm mt-1 max-w-xs leading-relaxed">
         Once you have contributions, click Generate to create the Story, Constellation, Voices, and Photos.
       </p>
+      <button
+        type="button"
+        onClick={onGenerate}
+        disabled={!canGenerate || generating}
+        className="mt-6 flex h-[50px] w-[207px] items-center justify-center rounded-full bg-neutral-950 px-6 text-sm font-semibold text-white transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-45"
+      >
+        {generating ? "Generating..." : "Generate"}
+      </button>
+      {generating && (
+        <div className="mt-4 w-full max-w-xs" aria-live="polite">
+          <div className="h-1.5 overflow-hidden rounded-full bg-neutral-100">
+            <div
+              className="h-full rounded-full bg-neutral-950 transition-all duration-300"
+              style={{ width: `${Math.max(10, generationJob?.progress ?? 10)}%` }}
+            />
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            {generationJob?.current_step || "Preparing generation..."}
+          </p>
+        </div>
+      )}
+      {!generating && disabledMessage && (
+        <p className="mt-3 max-w-xs text-xs text-slate-500">{disabledMessage}</p>
+      )}
+      {generationError && (
+        <p className="mt-3 max-w-xs text-sm text-red-600" role="alert">
+          {generationError}
+        </p>
+      )}
     </div>
   );
 }
 
 // ─── Outputs Tab ──────────────────────────────────────────────────────────────
 
-function OutputsTab({ output, loading, error, onRetry }) {
+function OutputsTab({
+  canGenerate,
+  disabledMessage,
+  generationError,
+  generationJob,
+  generating,
+  onGenerate,
+  output,
+  loading,
+  error,
+  onRetry,
+}) {
   // PRIORITY 3: Show pre-generation empty state if no output yet
 
   if (loading) {
@@ -471,7 +531,14 @@ function OutputsTab({ output, loading, error, onRetry }) {
   if (!output) {
     return (
       <div className="pt-6">
-        <PreGenerationEmpty />
+        <PreGenerationEmpty
+          canGenerate={canGenerate}
+          disabledMessage={disabledMessage}
+          generationError={generationError}
+          generationJob={generationJob}
+          generating={generating}
+          onGenerate={onGenerate}
+        />
       </div>
     );
   }
@@ -616,6 +683,9 @@ export default function MemorialOutputPage() {
   const [showShare, setShowShare] = useState(false);
   const memorialId = id;
   const [contributors, setContributors] = useState([]);
+  const [generating, setGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState(null);
+  const [generationJob, setGenerationJob] = useState(null);
 
   // Read from mockMemorials.js — single source of truth for mock data
   // Day 9: replace with real fetch from GET /memorials/:id
@@ -645,22 +715,89 @@ export default function MemorialOutputPage() {
     }
   }, [memorialId]);
 
-  const loadOutput = useCallback(async () => {
+  const loadOutput = useCallback(async (options = {}) => {
     if (!id) return;
 
     setOutputLoading(true);
     setOutputError(null);
     try {
       const token = getStoredAuthToken();
-      const data = await getMemorialOutput(id, token);
+      const data = await getMemorialOutput(id, token, options);
       setOutput(data);
+      return data;
     } catch (err) {
       setOutputError(err instanceof Error ? err.message : "Failed to fetch memorial output");
       setOutput(null);
+      return null;
     } finally {
       setOutputLoading(false);
     }
   }, [id]);
+
+  const handleGenerate = useCallback(async () => {
+    if (!memorialId || generating) return;
+
+    setGenerating(true);
+    setGenerationError(null);
+    setGenerationJob(null);
+
+    const token = getStoredAuthToken();
+
+    try {
+      const generation = await generateMemorialOutput(memorialId, token);
+      const initialJob = generation?.job ?? null;
+      setGenerationJob(initialJob);
+
+      if (initialJob?.id) {
+        let latestJob = initialJob;
+
+        for (let attempt = 0; attempt < GENERATION_MAX_POLL_ATTEMPTS; attempt += 1) {
+          const status = String(latestJob?.status || "").toLowerCase();
+
+          if (GENERATION_SUCCESS_STATUSES.has(status)) break;
+          if (GENERATION_FAILURE_STATUSES.has(status)) {
+            throw new Error(latestJob?.error_message || "Generation failed. Please try again.");
+          }
+
+          await sleep(GENERATION_POLL_INTERVAL_MS);
+          const jobStatus = await getGenerationJobStatus(initialJob.id, token);
+          latestJob = jobStatus?.job ?? latestJob;
+          setGenerationJob(latestJob);
+        }
+
+        const finalStatus = String(latestJob?.status || "").toLowerCase();
+        if (!GENERATION_SUCCESS_STATUSES.has(finalStatus)) {
+          throw new Error("Generation is taking longer than expected. Please try refreshing the outputs shortly.");
+        }
+      }
+
+      await loadOutput({ fallbackToMock: process.env.NODE_ENV !== 'production' });
+    } catch (err) {
+      if (isLocalDevAuthError(err)) {
+        await loadOutput({ fallbackToMock: true });
+        setGenerationError(null);
+        return;
+      }
+
+      setGenerationError(err instanceof Error ? err.message : "Generation failed. Please try again.");
+    } finally {
+      setGenerating(false);
+    }
+  }, [generating, loadOutput, memorialId]);
+
+  const submittedContributionCount = contributors.filter((contributor) => {
+    const status = String(contributor?.status || "").toLowerCase();
+    return status === "submitted" || Boolean(contributor?.submitted_at);
+  }).length;
+
+  const canGenerate = !contributorsLoading && !contributorsError && submittedContributionCount > 0;
+  const generationDisabledMessage = contributorsLoading
+    ? "Checking submitted contributions..."
+    : contributorsError
+      ? "Contributor data could not be loaded, so generation is unavailable right now."
+      : submittedContributionCount === 0
+        ? "Generation is available after at least one contributor submits a memory."
+        : "";
 
   useEffect(() => {
     queueMicrotask(loadContributors);
@@ -697,6 +834,12 @@ export default function MemorialOutputPage() {
           )}
           {activeTab === 'Outputs' && (
             <OutputsTab
+              canGenerate={canGenerate}
+              disabledMessage={generationDisabledMessage}
+              generationError={generationError}
+              generationJob={generationJob}
+              generating={generating}
+              onGenerate={handleGenerate}
               output={output}
               loading={outputLoading}
               error={outputError}
