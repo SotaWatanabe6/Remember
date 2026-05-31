@@ -5,7 +5,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getMemorialOutput, getContributors, getMemorial } from '@/lib/api';
+import { getMemorialOutput, getContributors, getMemorial,createShareLink,createInviteLink } from '@/lib/api';
 import { mockMemorials } from '@/data/mockMemorials.js';
 import ConstellationGraph from "@/components/output/constellation";
 import MemorialContributionsPage from "@/components/output/contribution-list";
@@ -465,11 +465,17 @@ function ShareModal({ onClose, memorialId }) {
   const [copiedViewer, setCopiedViewer] = useState(false);
 
   async function copyLink(url, type) {
-    await navigator.clipboard.writeText(url);
     if (type === 'contributor') {
+      const contributor_link=await createInviteLink(memorialId);
+      console.log(contributor_link);
+      await navigator.clipboard.writeText(contributor_link.invite_link.url);
       setCopiedContributor(true);
       setTimeout(() => setCopiedContributor(false), 2000);
     } else {
+      // const viewer_link=process.env.NEXT_PUBLIC_APP_URL+"/memorial/"+memorialId+"/output";
+      const viewer_link=await createShareLink(memorialId);
+      console.log(viewer_link);
+      await navigator.clipboard.writeText(viewer_link.share_link.url);
       setCopiedViewer(true);
       setTimeout(() => setCopiedViewer(false), 2000);
     }

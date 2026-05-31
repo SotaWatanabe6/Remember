@@ -82,6 +82,7 @@ export default function ConstellationGraph({ ai_output }) {
         // }
         const contributor = await getContributors(id);
         const memorialApi = await getMemorial(id);
+        
         setMemorial(memorialApi.memorial);
         setContributors(contributor.contributors);
         setRelationshipCounts(Object.entries(
@@ -137,7 +138,8 @@ export default function ConstellationGraph({ ai_output }) {
         name: t.name,
         type: t.relationship_type,
         prominence: 0.7,
-      })));    
+      })));   
+ 
       if (memorial && contributor.length !== 0) {
         setNodes((prevItems) => [...prevItems, {
           id: memorial.user_id,
@@ -185,6 +187,7 @@ export default function ConstellationGraph({ ai_output }) {
     };
     let displayNode=[];
     let displayLink=[];
+    console.log("memorial "+ memorial);    
     if (tab === "Themes") {
 
       displayNode=nodes.filter(
