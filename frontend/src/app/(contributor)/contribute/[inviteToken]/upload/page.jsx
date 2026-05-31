@@ -1,34 +1,19 @@
 'use client';
 
-// frontend/src/app/(contributor)/contribute/[inviteToken]/upload/page.jsx
-// Media type selector — contributor picks Photo, Audio, or Story (text)
-// Navigates to the appropriate upload page based on selection
+// src/app/(contributor)/contribute/[inviteToken]/upload/page.jsx
 
 import { useRouter, useParams } from 'next/navigation';
-import { useEffect } from 'react';
 import Link from 'next/link';
 
-const FONT = "'Cormorant Garamond', Georgia, serif";
-
-const COLORS = {
-  bg: '#F0EAE2',
-  family: '#AF5F42',
-  friend: '#45556C',
-  colleague: '#59763C',
-  text: '#1a1a1a',
-  textMuted: '#6b6b6b',
-  cardBg: '#E8E0D8',
-  border: '#D4CAC0',
-};
+// ─── Nav ──────────────────────────────────────────────────────────────────────
 
 function ContributorNav({ backHref }) {
   return (
     <nav className="flex h-10 items-center justify-between">
-      <span style={{ fontFamily: FONT }} className="text-2xl leading-8 text-[#423F39]">Remember</span>
+      <span className="text-r-text text-2xl leading-8">Remember</span>
       <Link
         href={backHref}
-        style={{ fontFamily: FONT }}
-        className="flex items-center gap-1.5 text-base text-[#5F5A52] hover:text-[#423F39] transition-colors"
+        className="flex items-center gap-1.5 text-body-2 text-r-secondary transition-colors"
       >
         <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -38,6 +23,8 @@ function ContributorNav({ backHref }) {
     </nav>
   );
 }
+
+// ─── Media types ──────────────────────────────────────────────────────────────
 
 const MEDIA_TYPES = [
   {
@@ -70,6 +57,8 @@ const MEDIA_TYPES = [
   },
 ];
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function UploadSelectorPage() {
   const router = useRouter();
   const { inviteToken } = useParams();
@@ -83,58 +72,37 @@ export default function UploadSelectorPage() {
   // Day 9: replace with real memorial data
   const deceasedName = 'John';
 
-  // Fix full-page cream background — no white showing around edges
-  useEffect(() => {
-    const prevBody = document.body.style.backgroundColor;
-    const prevHtml = document.documentElement.style.backgroundColor;
-    document.body.style.backgroundColor = COLORS.bg;
-    document.documentElement.style.backgroundColor = COLORS.bg;
-    return () => {
-      document.body.style.backgroundColor = prevBody;
-      document.documentElement.style.backgroundColor = prevHtml;
-    };
-  }, []);
-    
-
   return (
-    <main
-      className="min-h-screen px-6 py-10 sm:px-[50px]"
-      style={{ backgroundColor: '#F0EAE2', fontFamily: FONT, color: '#423F39' }}
-    >
-      <div className="mx-auto flex w-full max-w-[960px] flex-col gap-10">
+    <main className="min-h-screen px-6 py-10 sm:px-[50px] bg-r-bg text-r-text">
+      <div className="page-shell-wide">
 
         <ContributorNav backHref={`/contribute/${inviteToken}/questions`} />
 
-        {/* Heading */}
         <div className="text-center pt-4">
-          <h1
-            className="text-[48px] font-bold leading-tight"
-            style={{ color: '#423F39', letterSpacing: '-0.01em' }}
-          >
-            Upload your memories
-          </h1>
-          <p className="mt-3 text-[18px]" style={{ color: '#5F5A52' }}>
+          <h1 className="text-h1 text-r-text">Upload your memories</h1>
+          <p className="mt-3 text-body-2 text-r-secondary">
             Select the media type to begin uploading your fondest memories of {deceasedName}.
           </p>
         </div>
 
-        {/* Three media type cards */}
         <div className="grid grid-cols-3 gap-4">
           {MEDIA_TYPES.map((type) => (
             <button
               key={type.id}
               onClick={() => handleSelect(type.id)}
-              className="flex flex-col items-center justify-center gap-4 rounded-2xl py-16 px-6 text-center transition-colors"
-              style={{
-                border: '1px solid #D4CAC0',
-                backgroundColor: 'transparent',
-                fontFamily: FONT,
+              className="flex flex-col items-center justify-center gap-4 rounded-2xl py-16 px-6 text-center transition-colors border border-r-border bg-transparent"
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--color-r-card)';
+                e.currentTarget.style.borderColor = 'var(--color-r-border-focus)';
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#E8E0D8'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.borderColor = 'var(--color-r-border)';
+              }}
             >
-              <span style={{ color: '#97877B' }}>{type.icon}</span>
-              <span className="text-[20px] font-normal" style={{ color: '#97877B' }}>{type.label}</span>
+              {/* SVG inherits text-r-muted color via currentColor */}
+              <span className="text-r-muted">{type.icon}</span>
+              <span className="text-body-1 text-r-muted">{type.label}</span>
             </button>
           ))}
         </div>
