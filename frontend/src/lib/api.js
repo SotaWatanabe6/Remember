@@ -19,9 +19,13 @@ const MOCK_INVITE_TOKEN = 'mock_invite_abc123';
 // API base URL — reads from env for production, falls back to localhost for dev
 // Set NEXT_PUBLIC_API_URL in Vercel dashboard for production deployment
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const LOCAL_BACKEND_API_URL = 'http://localhost:3001';
 
 export const MAX_AUDIO_FILE_SIZE_MB = 50;
 export const MAX_AUDIO_FILE_SIZE_BYTES = MAX_AUDIO_FILE_SIZE_MB * 1024 * 1024;
+export const MAX_PHOTO_FILE_SIZE_MB = 50;
+export const MAX_PHOTO_FILE_SIZE_BYTES = MAX_PHOTO_FILE_SIZE_MB * 1024 * 1024;
+const ALLOWED_PHOTO_EXTENSIONS = ['heic', 'heif', 'jpg', 'jpeg', 'png', 'webp'];
 export const ALLOWED_AUDIO_EXTENSIONS = ['m4a', 'mp3', 'wav', 'webm'];
 const AUDIO_MIME_BY_EXTENSION = {
   m4a: 'audio/mp4',
@@ -41,15 +45,16 @@ export class ApiRequestError extends Error {
 }
 
 async function requestJson(path, options = {}) {
+  const { baseUrl = API_URL, ...fetchOptions } = options;
   let response;
 
   try {
-    response = await fetch(`${API_URL.replace(/\/$/, "")}${path}`, {
-      ...options,
+    response = await fetch(`${baseUrl.replace(/\/$/, "")}${path}`, {
+      ...fetchOptions,
       headers: {
         Accept: "application/json",
-        ...(options.body ? { "Content-Type": "application/json" } : {}),
-        ...options.headers,
+        ...(fetchOptions.body ? { "Content-Type": "application/json" } : {}),
+        ...fetchOptions.headers,
       },
     });
   } catch (error) {
@@ -78,6 +83,15 @@ async function requestJson(path, options = {}) {
   }
 
   return data;
+}
+
+function isLocalFrontendApiUrl() {
+  try {
+    const url = new URL(API_URL);
+    return (url.hostname === 'localhost' || url.hostname === '127.0.0.1') && url.port === '3000';
+  } catch {
+    return false;
+  }
 }
 
 // ─── Helper to get real Supabase JWT token ────────────────────────────────────
@@ -261,6 +275,22 @@ function writeStoredVoice(token, recordings) {
 function readContributorSession(token) {
   if (!isBrowser()) return null;
   try { return JSON.parse(window.localStorage.getItem(`remember_contributor_session:${token}`) || 'null'); } catch { return null; }
+}
+
+function validatePhotoFile(file) {
+  const extension = getFileExtension(file.name);
+  const hasSupportedMime = file.type?.startsWith('image/');
+  const hasSupportedExtension = ALLOWED_PHOTO_EXTENSIONS.includes(extension);
+
+  if (!hasSupportedMime && !hasSupportedExtension) {
+    return 'Only JPG, PNG, WebP, HEIC, or HEIF photos can be uploaded.';
+  }
+
+  if (file.size > MAX_PHOTO_FILE_SIZE_BYTES) {
+    return `Photos must be smaller than ${MAX_PHOTO_FILE_SIZE_MB} MB.`;
+  }
+
+  return null;
 }
 
 // ─── BLESSING: AUTH ───────────────────────────────────────────────────────────
@@ -604,6 +634,18 @@ export async function startContribution(token, name) {
  * Body: { contributor_token, relationship_type, relationship_label? }
  */
 export async function saveRelationship(token, relationshipInput) {
+  if (isLocalMockInviteToken(token)) {
+    await delay(MOCK_DELAY / 2);
+
+    return {
+      contributor: {
+        id: relationshipInput.contributor_token,
+        relationship_type: relationshipInput.relationship_type,
+        relationship_label: relationshipInput.relationship_label ?? null,
+      },
+    };
+  }
+
   return requestJson(`/contribute/${encodeURIComponent(token)}/relationship`, {
     method: "POST",
     body: JSON.stringify({
@@ -624,11 +666,47 @@ export async function saveResponses(token, responses, options = {}) {
   const contributorToken =
     options.contributorToken ?? responses?.[0]?.contributor_token ?? responses?.[0]?.contributor_id;
 
+  if (!contributorToken) {
+    throw new ApiRequestError("A contributor session is required before saving responses.", {
+      code: "missing_contributor_token",
+    });
+  }
+
   const apiResponses = responses.map((response) => ({
     question_text: response.question_text ?? response.question_id,
     response_text: response.response_text ?? response.answer_text ?? "",
     order_index: response.order_index ?? response.question_order,
   }));
+
+  if (isLocalMockInviteToken(token)) {
+    await delay(MOCK_DELAY / 2);
+
+    const timestamp = now();
+    const responsesByContributor = readStoredResponses(token);
+    const savedResponses = [];
+
+    responses.forEach((response) => {
+      const contributorId = response?.contributor_id ?? contributorToken;
+      const questionId = response?.question_id;
+
+      if (!contributorId || !questionId) return;
+
+      const contributorResponses = responsesByContributor[contributorId] ?? {};
+      const savedResponse = {
+        ...response,
+        contributor_id: contributorId,
+        contributor_token: contributorToken,
+        invite_token: token,
+        saved_at: timestamp,
+      };
+      contributorResponses[questionId] = savedResponse;
+      responsesByContributor[contributorId] = contributorResponses;
+      savedResponses.push(savedResponse);
+    });
+
+    writeStoredResponses(token, responsesByContributor);
+    return { success: true, saved: savedResponses.length, responses: savedResponses };
+  }
 
   const result = await requestJson(`/contribute/${encodeURIComponent(token)}/responses`, {
     method: "POST",
@@ -693,6 +771,56 @@ export async function uploadPhotos(token, files) {
     throw new ApiRequestError("A contributor session is required before uploading photos.", {
       code: "missing_contributor_token",
     });
+  }
+
+  if (isLocalMockInviteToken(token)) {
+    await delay(MOCK_DELAY / 2);
+
+    const errors = [];
+    const validFiles = [];
+
+    files.forEach((file) => {
+      const validationError = validatePhotoFile(file);
+
+      if (validationError) {
+        errors.push({ file_name: file.name || 'photo', error: validationError });
+        return;
+      }
+
+      validFiles.push(file);
+    });
+
+    if (!validFiles.length) {
+      throw new ApiRequestError(errors[0]?.error || 'At least one photo file is required.', {
+        status: 400,
+        code: 'photo_validation_failed',
+        data: { errors },
+      });
+    }
+
+    const timestamp = Date.now();
+    const localAssets = validFiles.map((file, index) => ({
+      id: `photo-${timestamp}-${index}-${Math.random().toString(36).slice(2)}`,
+      file_name: file.name || `Photo ${index + 1}`,
+      file_type: file.type || '',
+      file_size_bytes: file.size || 0,
+      storage_path: null,
+      storage_bucket: 'local-mock',
+      taken_at: null,
+      caption: null,
+      previewUrl: null,
+    }));
+
+    const existing = readStoredPhotos(token);
+    writeStoredPhotos(token, [...existing, ...localAssets]);
+
+    return {
+      success: true,
+      uploaded: localAssets.length,
+      assets: localAssets,
+      errors,
+      partialFailure: errors.length > 0,
+    };
   }
 
   const formData = new FormData();
@@ -957,12 +1085,51 @@ export async function submitContribution(token, contributorToken) {
     });
   }
 
-  const result = await requestJson(`/contribute/${encodeURIComponent(token)}/submit`, {
+  if (isLocalMockInviteToken(token)) {
+    await delay(MOCK_DELAY / 2);
+
+    const submittedAt = now();
+    const session = readContributorSession(token);
+    const contributor = {
+      id: session?.contributorId ?? contributorToken,
+      status: "submitted",
+      submitted_at: submittedAt,
+    };
+
+    if (session) {
+      writeStoredValue(`remember_contributor_session:${token}`, {
+        ...session,
+        status: contributor.status,
+        submittedAt: contributor.submitted_at,
+        updatedAt: contributor.submitted_at,
+      });
+    }
+
+    return { contributor };
+  }
+
+  const submitPath = `/contribute/${encodeURIComponent(token)}/submit`;
+  const submitOptions = {
     method: "POST",
     body: JSON.stringify({
       contributor_token: contributorToken,
     }),
-  });
+  };
+
+  let result;
+
+  try {
+    result = await requestJson(submitPath, submitOptions);
+  } catch (error) {
+    if (error instanceof ApiRequestError && error.status === 404 && isLocalFrontendApiUrl()) {
+      result = await requestJson(submitPath, {
+        ...submitOptions,
+        baseUrl: LOCAL_BACKEND_API_URL,
+      });
+    } else {
+      throw error;
+    }
+  }
 
   const submittedContributor = result?.contributor;
 
