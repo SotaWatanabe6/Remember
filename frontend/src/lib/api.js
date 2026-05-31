@@ -191,12 +191,22 @@ function writeStoredResponses(token, data) {
 
 function readStoredPhotos(token) {
   if (!isBrowser()) return [];
-  try { return JSON.parse(window.localStorage.getItem(`remember_photos:${token}`) || '[]'); } catch { return []; }
+  try {
+    const photos = JSON.parse(window.localStorage.getItem(`remember_photos:${token}`) || '[]');
+    return photos.map((photo) => ({
+      ...photo,
+      previewUrl: photo.previewUrl?.startsWith?.('blob:') ? null : photo.previewUrl ?? null,
+    }));
+  } catch { return []; }
 }
 
 function writeStoredPhotos(token, photos) {
   if (!isBrowser()) return;
-  window.localStorage.setItem(`remember_photos:${token}`, JSON.stringify(photos));
+  const persistedPhotos = photos.map((photo) => ({
+    ...photo,
+    previewUrl: photo.previewUrl?.startsWith?.('blob:') ? null : photo.previewUrl ?? null,
+  }));
+  window.localStorage.setItem(`remember_photos:${token}`, JSON.stringify(persistedPhotos));
 }
 
 function readStoredVoice(token) {
@@ -613,72 +623,90 @@ export async function getResponses(token, contributorInput) {
 
 /**
  * POST /contribute/:token/photos
- * PHASE 4: Calls real backend at http://localhost:3001
- * MVP: Backend marks photos_done=true but returns { uploaded: 0, files: [] }
- * Real file storage is Daniel's upload system — not yet merged
- * Fix: always generate local preview URLs from File objects for UI display
- * Day 9: when Daniel's system is merged, files[] will have real IDs + storage_paths
+ * Uploads contributor photos through the backend media endpoint.
+ * The caller owns temporary preview URLs; persisted draft data only stores
+ * backend-confirmed asset records so refreshes do not revive stale blob URLs.
  */
 export async function uploadPhotos(token, files) {
   const session = readContributorSession(token);
   const contributorToken = session?.contributorToken || session?.contributorId;
 
-  // Always create local preview assets from File objects
-  // These show in the review page regardless of backend response
-  const localAssets = files.map((file, i) => ({
-    id: `photo-${Date.now()}-${i}`,
-    file_name: file.name,
-    file_type: file.type,
-    file_size_bytes: file.size,
-    storage_path: null, // populated by Daniel's upload system later
-    storage_bucket: 'memorial-assets',
-    taken_at: null,
-    caption: null,
-    previewUrl: typeof URL !== 'undefined' ? URL.createObjectURL(file) : null,
-  }));
+  if (!contributorToken) {
+    throw new ApiRequestError("A contributor session is required before uploading photos.", {
+      code: "missing_contributor_token",
+    });
+  }
+
+  const formData = new FormData();
+  files.forEach((file) => formData.append('files[]', file));
+  formData.append('contributor_token', contributorToken);
+
+  let response;
 
   try {
-    // Call real backend — marks photos_done=true in contributors table
-    // MVP endpoint returns { uploaded: 0, files: [] } — Daniel's system handles real storage
-    const formData = new FormData();
-    files.forEach((file) => formData.append('files[]', file));
-    if (contributorToken) formData.append('contributor_token', contributorToken);
-
-    const response = await fetch(`${API_URL}/contribute/${token}/photos`, {
+    response = await fetch(`${API_URL}/contribute/${encodeURIComponent(token)}/photos`, {
       method: 'POST',
       body: formData,
     });
-
-    if (response.ok) {
-      const data = await response.json();
-      // If backend returns real file data (Daniel's system merged) use it
-      // Otherwise use local assets for preview
-      const backendAssets = (data.files || []).filter(f => f.id && f.file_name);
-      const finalAssets = backendAssets.length > 0
-        ? backendAssets.map((f, i) => ({
-            id: f.id,
-            file_name: f.file_name,
-            storage_path: f.storage_path,
-            storage_bucket: 'memorial-assets',
-            taken_at: null,
-            caption: null,
-            previewUrl: files[i] ? URL.createObjectURL(files[i]) : null,
-          }))
-        : localAssets;
-
-      const existing = readStoredPhotos(token);
-      writeStoredPhotos(token, [...existing, ...finalAssets]);
-      return { success: true, uploaded: finalAssets.length, assets: finalAssets };
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new ApiRequestError("The upload was cancelled.", {
+        code: "aborted",
+      });
     }
-    throw new Error('Backend returned error');
 
-  } catch {
-    // Fallback — backend not running or endpoint not added yet
-    // Still saves local previews so review page works
-    const existing = readStoredPhotos(token);
-    writeStoredPhotos(token, [...existing, ...localAssets]);
-    return { success: true, uploaded: files.length, assets: localAssets };
+    throw new ApiRequestError("Could not reach the Remember API to upload photos.", {
+      code: "network_error",
+    });
   }
+
+  const contentType = response.headers.get("content-type") ?? "";
+  const data = contentType.includes("application/json")
+    ? await response.json().catch(() => null)
+    : null;
+
+  if (!response.ok) {
+    throw new ApiRequestError(data?.error || `Photo upload failed with status ${response.status}.`, {
+      status: response.status,
+      code: "photo_upload_failed",
+      data,
+    });
+  }
+
+  const backendAssets = Array.isArray(data?.files)
+    ? data.files.filter((file) => file?.id && file?.file_name)
+    : [];
+
+  if (!backendAssets.length) {
+    throw new ApiRequestError("The Remember API responded, but did not confirm that any photos were saved.", {
+      status: response.status,
+      code: "upload_not_confirmed",
+      data,
+    });
+  }
+
+  const finalAssets = backendAssets.map((file, index) => ({
+    id: file.id,
+    file_name: file.file_name,
+    file_type: file.file_type ?? files[index]?.type ?? "",
+    file_size_bytes: file.file_size_bytes ?? files[index]?.size ?? 0,
+    storage_path: file.storage_path,
+    storage_bucket: file.storage_bucket ?? 'memorial-assets',
+    taken_at: file.taken_at ?? null,
+    caption: file.caption ?? null,
+    previewUrl: null,
+  }));
+
+  const existing = readStoredPhotos(token);
+  writeStoredPhotos(token, [...existing, ...finalAssets]);
+
+  return {
+    success: true,
+    uploaded: finalAssets.length,
+    assets: finalAssets,
+    errors: Array.isArray(data?.errors) ? data.errors : [],
+    partialFailure: Array.isArray(data?.errors) && data.errors.length > 0,
+  };
 }
 
 /**
@@ -754,11 +782,19 @@ export async function uploadVoice(token, file, contributorTitle) {
 
 /**
  * DELETE /contribute/:token/photos/:assetId
- * Removes a photo before submission. Also removes from localStorage.
- * TODO: Replace with real fetch() on Day 9.
+ * Removes a photo before submission and mirrors the local draft state.
  */
 export async function deletePhoto(token, assetId) {
-  await delay(MOCK_DELAY);
+  const session = readContributorSession(token);
+  const contributorToken = session?.contributorToken || session?.contributorId;
+
+  if (contributorToken && !String(assetId).startsWith('photo-')) {
+    await requestJson(`/contribute/${encodeURIComponent(token)}/photos/${encodeURIComponent(assetId)}`, {
+      method: "DELETE",
+      body: JSON.stringify({ contributor_token: contributorToken }),
+    });
+  }
+
   const existing = readStoredPhotos(token);
   writeStoredPhotos(token, existing.filter((p) => p.id !== assetId));
   return { success: true };

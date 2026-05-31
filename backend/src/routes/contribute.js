@@ -1,7 +1,83 @@
 require('dotenv').config()
 const express = require('express')
+const { randomUUID } = require('crypto')
+const { Readable } = require('stream')
 const router = express.Router()
 const supabase = require('../supabase')
+
+const PHOTO_STORAGE_BUCKET =
+  process.env.CONTRIBUTOR_PHOTO_BUCKET ||
+  process.env.MEMORIAL_ASSETS_BUCKET ||
+  process.env.STORAGE_BUCKET ||
+  'memorial-assets'
+const MAX_PHOTO_BYTES = 50 * 1024 * 1024
+const ALLOWED_PHOTO_EXTENSIONS = new Set(['heic', 'heif', 'jpg', 'jpeg', 'png', 'webp'])
+const PHOTO_MIME_BY_EXTENSION = {
+  heic: 'image/heic',
+  heif: 'image/heif',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp'
+}
+
+function getFileExtension(fileName = '') {
+  return fileName.split('.').pop()?.toLowerCase() || ''
+}
+
+function sanitizeFileName(fileName = 'photo') {
+  const cleaned = fileName
+    .normalize('NFKD')
+    .replace(/[^\w.\-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+
+  return cleaned || 'photo'
+}
+
+function getPhotoMimeType(file) {
+  const extension = getFileExtension(file.name)
+  if (file.type?.startsWith('image/')) return file.type
+  return PHOTO_MIME_BY_EXTENSION[extension] || ''
+}
+
+function validatePhotoFile(file) {
+  const extension = getFileExtension(file.name)
+  const mimeType = getPhotoMimeType(file)
+
+  if (!mimeType || !ALLOWED_PHOTO_EXTENSIONS.has(extension)) {
+    return 'Only JPG, PNG, WebP, HEIC, or HEIF photos can be uploaded.'
+  }
+
+  if (file.size > MAX_PHOTO_BYTES) {
+    return 'Photos must be smaller than 50 MB.'
+  }
+
+  return null
+}
+
+function isFormDataFile(value) {
+  return value && typeof value.name === 'string' && typeof value.arrayBuffer === 'function'
+}
+
+async function parseMultipartFormData(req) {
+  const contentType = req.headers['content-type'] || ''
+
+  if (!contentType.includes('multipart/form-data')) {
+    const error = new Error('Photo upload must use multipart/form-data.')
+    error.status = 415
+    throw error
+  }
+
+  const request = new Request('http://remember.local/upload', {
+    method: req.method,
+    headers: req.headers,
+    body: Readable.toWeb(req),
+    duplex: 'half'
+  })
+
+  return request.formData()
+}
 
 // GET /contribute/:token — validate invite token
 router.get('/:token', async (req, res) => {
@@ -200,27 +276,167 @@ router.post('/:token/submit', async (req, res) => {
 // POST /contribute/:token/photos
 router.post('/:token/photos', async (req, res) => {
   try {
-    const { contributor_token } = req.body
+    const formData = await parseMultipartFormData(req)
+    const contributor_token = formData.get('contributor_token')
+    const submittedFiles = [
+      ...formData.getAll('files[]'),
+      ...formData.getAll('files'),
+      ...formData.getAll('photos')
+    ].filter(isFormDataFile)
+
     if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
+    if (!submittedFiles.length) return res.status(400).json({ error: 'At least one photo file is required.' })
+
+    const { data: invite, error: inviteError } = await supabase
+      .from('invite_links')
+      .select('id, memorial_id, is_active')
+      .eq('token', req.params.token)
+      .single()
+
+    if (inviteError || !invite || !invite.is_active) {
+      return res.status(410).json({ error: 'This link is no longer active.' })
+    }
 
     const { data: contributor } = await supabase
       .from('contributors')
-      .select('memorial_id')
+      .select('id, memorial_id')
       .eq('id', contributor_token)
       .single()
 
     if (!contributor) return res.status(404).json({ error: 'Contributor not found' })
+    if (contributor.memorial_id !== invite.memorial_id) {
+      return res.status(403).json({ error: 'Contributor does not belong to this invitation.' })
+    }
 
-    // For MVP — just return success, Daniel's upload.js handles actual file storage
+    const uploadedFiles = []
+    const uploadErrors = []
+
+    for (const file of submittedFiles) {
+      const validationError = validatePhotoFile(file)
+      if (validationError) {
+        uploadErrors.push({ file_name: file.name || 'photo', error: validationError })
+        continue
+      }
+
+      const safeFileName = sanitizeFileName(file.name)
+      const storagePath = `memorials/${contributor.memorial_id}/contributions/${contributor.id}/photos/${randomUUID()}-${safeFileName}`
+      const mimeType = getPhotoMimeType(file)
+      const fileBuffer = Buffer.from(await file.arrayBuffer())
+
+      const { error: uploadError } = await supabase.storage
+        .from(PHOTO_STORAGE_BUCKET)
+        .upload(storagePath, fileBuffer, {
+          contentType: mimeType,
+          upsert: false
+        })
+
+      if (uploadError) {
+        uploadErrors.push({ file_name: file.name || 'photo', error: uploadError.message })
+        continue
+      }
+
+      const { data: mediaAsset, error: mediaError } = await supabase
+        .from('media_assets')
+        .insert({
+          memorial_id: contributor.memorial_id,
+          contributor_id: contributor.id,
+          storage_path: storagePath,
+          storage_bucket: PHOTO_STORAGE_BUCKET,
+          file_name: file.name || safeFileName,
+          file_type: mimeType,
+          file_size_bytes: file.size || null,
+          taken_at: null,
+          caption: null
+        })
+        .select('id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption')
+        .single()
+
+      if (mediaError) {
+        await supabase.storage.from(PHOTO_STORAGE_BUCKET).remove([storagePath])
+        uploadErrors.push({ file_name: file.name || 'photo', error: mediaError.message })
+        continue
+      }
+
+      uploadedFiles.push(mediaAsset)
+    }
+
+    if (!uploadedFiles.length) {
+      return res.status(400).json({
+        error: 'No photos were uploaded.',
+        uploaded: 0,
+        files: [],
+        errors: uploadErrors
+      })
+    }
+
     await supabase
       .from('contributors')
-      .update({ photos_done: true })
-      .eq('id', contributor_token)
+      .update({ photos_done: true, updated_at: new Date().toISOString() })
+      .eq('id', contributor.id)
 
-    res.status(201).json({
-      uploaded: 0,
-      files: []
+    res.status(uploadErrors.length ? 207 : 201).json({
+      uploaded: uploadedFiles.length,
+      files: uploadedFiles,
+      errors: uploadErrors
     })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message })
+  }
+})
+
+// DELETE /contribute/:token/photos/:assetId
+router.delete('/:token/photos/:assetId', async (req, res) => {
+  try {
+    const { contributor_token } = req.body
+
+    if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
+
+    const { data: invite, error: inviteError } = await supabase
+      .from('invite_links')
+      .select('id, memorial_id, is_active')
+      .eq('token', req.params.token)
+      .single()
+
+    if (inviteError || !invite || !invite.is_active) {
+      return res.status(410).json({ error: 'This link is no longer active.' })
+    }
+
+    const { data: asset, error: assetError } = await supabase
+      .from('media_assets')
+      .select('id, contributor_id, memorial_id, storage_path, storage_bucket')
+      .eq('id', req.params.assetId)
+      .eq('contributor_id', contributor_token)
+      .eq('memorial_id', invite.memorial_id)
+      .single()
+
+    if (assetError || !asset) return res.status(404).json({ error: 'Photo not found' })
+
+    const { error: storageError } = await supabase.storage
+      .from(asset.storage_bucket || PHOTO_STORAGE_BUCKET)
+      .remove([asset.storage_path])
+
+    if (storageError) return res.status(400).json({ error: storageError.message })
+
+    const { error: deleteError } = await supabase
+      .from('media_assets')
+      .delete()
+      .eq('id', asset.id)
+
+    if (deleteError) return res.status(400).json({ error: deleteError.message })
+
+    const { count } = await supabase
+      .from('media_assets')
+      .select('id', { count: 'exact', head: true })
+      .eq('contributor_id', contributor_token)
+
+    if (count === 0) {
+      await supabase
+        .from('contributors')
+        .update({ photos_done: false, updated_at: new Date().toISOString() })
+        .eq('id', contributor_token)
+    }
+
+    res.json({ deleted: true })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
