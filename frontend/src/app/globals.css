@@ -1,175 +1,320 @@
-/* globals.css - Tailwind v4 typography tokens */
-
 @import "tailwindcss";
 
-:root {
+/* ─────────────────────────────────────────────────────────────
+   THEME TOKENS (Tailwind v4)
+───────────────────────────────────────────────────────────── */
 
-
-  /* =========================
-     Font Family
-  ========================== */
-  --font-sans: "Inter", sans-serif;
+@theme {
 
   /* =========================
-     Font Weights
+     FONT FAMILY
   ========================== */
+
+  --font-family-display:
+    var(--font-boska),
+    ui-serif,
+    Georgia,
+    serif;
+
+  --font-family-body:
+    var(--font-switzer),
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+
+  /* =========================
+     FONT WEIGHTS
+  ========================== */
+
   --font-weight-regular: 400;
   --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
 
   /* =========================
-     Typography Scale
+     TYPOGRAPHY SCALE
   ========================== */
 
-  /* Header 1 */
   --text-h1-size: 40px;
   --text-h1-line-height: 48px;
-  --text-h1-weight: var(--font-weight-medium);
 
-  /* Header 2 */
   --text-h2-size: 36px;
   --text-h2-line-height: 44px;
-  --text-h2-weight: var(--font-weight-medium);
 
-  /* Header 3 */
   --text-h3-size: 24px;
   --text-h3-line-height: 32px;
-  --text-h3-weight: var(--font-weight-medium);
 
-  /* Header 4 */
   --text-h4-size: 14px;
   --text-h4-line-height: 20px;
-  --text-h4-weight: var(--font-weight-medium);
 
-  /* Body */
   --text-body-size: 20px;
   --text-body-line-height: 30px;
-  --text-body-weight: var(--font-weight-regular);
 
-  /* Body 2 */
   --text-body-2-size: 16px;
   --text-body-2-line-height: 24px;
-  --text-body-2-weight: var(--font-weight-regular);
 
-  /* Caption */
   --text-caption-size: 12px;
   --text-caption-line-height: 16px;
-  --text-caption-weight: var(--font-weight-regular);
 
-
-/* =========================
-    Colors
-  ========================== */
-
-  /* buttons */
-  --button-color: #0A0A0A;
-
-  /* boxes */
-  --selection-box-color:#818487;
-
-  /* text */
-  --text-color-1:#0A0A0A;
-  --text-color-2: #45556C;
-  
-  /* Links */
-  --link-color-light:#B8CAE0;
-  --link-color-dark:#4B78AD;
-
-
-/* drop-down */
---drop-down-border-color:#CAD5E2;
-
-
+  --text-display-size: 64px;
+  --text-display-line-height: 72px;
 
   /* =========================
-    Spacing
+     COLORS (tokens only)
   ========================== */
 
-  --page-pad-x:50px;
+  --button-color: #0a0a0a;
+  --selection-box-color: #818487;
 
+  --text-color-1: #423f39;
+  --text-color-2: #5f5a52;
+  --text-color-muted: #97877b;
+
+  --background-soft: #f5f2ed;
+  --background-main: #ddd6cf;
+
+  --shape-fill: #788764;
+  --tag-color: #b4bc96;
+  --soft-green: #cfd3bf;
+
+  --link-color-light: #b8cae0;
+  --link-color-dark: #4b78ad;
+
+  --drop-down-border-color: #cad5e2;
+
+  --border-soft: #cfc4b7;
+
+  /* =========================
+     SPACING
+  ========================== */
+
+  --page-pad-x: clamp(1rem, 3vw, 3rem);
+  --page-pad-y: clamp(1.5rem, 5vw, 4rem);
+  --section-gap: clamp(2rem, 5vw, 5rem);
+  --content-gap: clamp(1rem, 2vw, 1.5rem);
+  --card-padding: clamp(1rem, 2vw, 1.5rem);
+  --inline-gap: clamp(0.5rem, 1vw, 1rem);
+
+  /* =========================
+     RADIUS
+  ========================== */
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 32px;
+
+  /* =========================
+     SHADOWS
+  ========================== */
+
+  --shadow-auth:
+    0 1.27px 1.905px rgb(0 0 0 / 0.1),
+    0 1.27px 1.27px rgb(0 0 0 / 0.1);
+
+  --shadow-soft:
+    0 4px 20px rgb(0 0 0 / 0.05);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   BASE LAYER (global defaults)
+───────────────────────────────────────────────────────────── */
+
+@layer base {
+  html {
+    font-family: var(--font-family-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    min-width: 320px;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-family-body);
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    border-color: var(--border);
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   ROOT VARIABLES (runtime theme values)
+───────────────────────────────────────────────────────────── */
+
+:root {
   --background: #ffffff;
   --foreground: #0a0a0a;
+
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+
+  --primary: #0a0a0a;
+  --primary-foreground: #ffffff;
+
+  --secondary: #f5f2ed;
+  --secondary-foreground: #0a0a0a;
+
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+
+  --accent: #ddd6cf;
+  --accent-foreground: #0a0a0a;
+
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+
+  --ring: #d1d5db;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  --shadow-auth: 0 1.27px 1.905px rgb(0 0 0 / 0.10), 0 1.27px 1.27px rgb(0 0 0 / 0.10);
+/* ─────────────────────────────────────────────────────────────
+   DARK MODE
+───────────────────────────────────────────────────────────── */
+
+.dark {
+  --background: #171717;
+  --foreground: #fafafa;
+
+  --card: #1f1f1f;
+  --card-foreground: #fafafa;
+
+  --primary: #fafafa;
+  --primary-foreground: #171717;
+
+  --secondary: #262626;
+  --secondary-foreground: #fafafa;
+
+  --muted: #262626;
+  --muted-foreground: #a3a3a3;
+
+  --accent: #404040;
+  --accent-foreground: #fafafa;
+
+  --border: rgb(255 255 255 / 10%);
+  --input: rgb(255 255 255 / 15%);
+
+  --ring: #525252;
 }
 
-/* =========================
-   Base Styles
-========================== */
+/* ─────────────────────────────────────────────────────────────
+   COMPONENTS (reusable multi-property classes)
+───────────────────────────────────────────────────────────── */
 
-body {
-  min-width: 320px;
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans);
-  text-rendering: optimizeLegibility;
-  font-synthesis: none;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer components {
+
+  /* =========================
+     DISPLAY
+  ========================== */
+
+  .display {
+    font-family: var(--font-family-display);
+    font-size: var(--text-display-size);
+    line-height: var(--text-display-line-height);
+    font-weight: var(--font-weight-bold);
+    color: var(--text-color-1);
+  }
+
+  /* =========================
+     HEADINGS
+  ========================== */
+
+  .header-1 {
+    font-family: var(--font-family-display);
+    font-size: var(--text-h1-size);
+    line-height: var(--text-h1-line-height);
+    font-weight: var(--font-weight-bold);
+    color: var(--text-color-1);
+    letter-spacing: 0.05em;
+  }
+
+  .header-2{
+    font-family: var(--font-family-display);
+    font-size: var(--text-h2-size);
+    line-height: var(--text-h2-line-height);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-color-2);
+    font-style: italic;
+    letter-spacing: 0.05em;
+  }
+
+  .header-3 {
+    font-family: var(--font-family-body);
+    font-size: var(--text-h3-size);
+    line-height: var(--text-h3-line-height);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-color-1);
+  }
+
+  .header-4 {
+    font-family: var(--font-family-body);
+    font-size: var(--text-h4-size);
+    line-height: var(--text-h4-line-height);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-color-muted);
+  }
+
+  /* =========================
+     BODY TEXT
+  ========================== */
+
+  .body-1 {
+    font-family: var(--font-family-body);
+    font-size: var(--text-body-size);
+    line-height: var(--text-body-line-height);
+    font-weight: var(--font-weight-regular);
+    color: var(--text-color-2);
+  }
+
+  .body-2 {
+    font-family: var(--font-family-body);
+    font-size: var(--text-body-2-size);
+    line-height: var(--text-body-2-line-height);
+    font-weight: var(--font-weight-regular);
+    color: var(--text-color-1);
+  }
+
+  .caption {
+    font-family: var(--font-family-body);
+    font-size: var(--text-caption-size);
+    line-height: var(--text-caption-line-height);
+    font-weight: var(--font-weight-regular);
+    color: var(--text-color-2);
+  }
 }
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
-}
+/* ─────────────────────────────────────────────────────────────
+   UTILITIES (single-purpose helpers)
+───────────────────────────────────────────────────────────── */
 
-/* =========================
-   Typography Utility Classes
-========================== */
+@layer utilities {
 
-.text-h1 {
-  font-size: var(--text-h1-size);
-  line-height: var(--text-h1-line-height);
-  font-weight: var(--text-h1-weight);
-}
+  .on-dark {
+    color: #fbf9f6;
+  }
 
-.text-h2 {
-  font-size: var(--text-h2-size);
-  line-height: var(--text-h2-line-height);
-  font-weight: var(--text-h2-weight);
-}
+  .text-primary {
+    color: var(--text-color-1);
+  }
 
-.text-h3 {
-  font-size: var(--text-h3-size);
-  line-height: var(--text-h3-line-height);
-  font-weight: var(--text-h3-weight);
-}
+  .text-secondary {
+    color: var(--text-color-2);
+  }
 
-.text-h4 {
-  font-size: var(--text-h4-size);
-  line-height: var(--text-h4-line-height);
-  font-weight: var(--text-h4-weight);
-}
-
-.text-body-1 {
-  font-size: var(--text-body-size);
-  line-height: var(--text-body-line-height);
-  font-weight: var(--text-body-weight);
-}
-
-.text-body-2 {
-  font-size: var(--text-body-2-size);
-  line-height: var(--text-body-2-line-height);
-  font-weight: var(--text-body-2-weight);
-}
-
-.text-caption {
-  font-size: var(--text-caption-size);
-  line-height: var(--text-caption-line-height);
-  font-weight: var(--text-caption-weight);
-}
-
-
-/* =========================
-   Spacing Utility Classes
-========================== */
-.page-pad-x{
+  .text-muted {
+    color: var(--text-color-muted);
+  }
+  
 
 }
