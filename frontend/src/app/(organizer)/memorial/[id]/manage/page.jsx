@@ -1,4 +1,4 @@
-// frontend/src/app/(viewer)/memorial/[id]/output/page.jsx
+// frontend/src/app/(organizer)/memorial/[id]/manage/page.jsx
 
 'use client';
 
@@ -11,6 +11,8 @@ import { mockMemorials } from '@/data/mockMemorials.js';
 import ConstellationGraph from "../_components/constellation";
 import MemorialContributionsPage from "../_components/contribution-list";
 import MemorialContributionApproval from "../_components/contribution-awaiting";
+import StorySlideshow from "@/components/output/StorySlideshow";
+import VoicesTab from "@/components/output/VoicesTab";
 import {  ChevronLeft,
   ChevronRight } from "lucide-react";
 
@@ -477,9 +479,7 @@ function OutputsTab({ output, loading, error, onRetry }) {
   return (
     <div className="flex flex-col divide-y divide-neutral-100 pt-4">
       <CollapsibleSection title="Story">
-        <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6">
-          <p className="text-sm text-slate-400">Story — built by Sungjun</p>
-        </div>
+        <StorySlideshow output={output} story={output?.story} />
       </CollapsibleSection>
       <CollapsibleSection title="Constellation">
         <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6 aspect-video flex items-center justify-center">
@@ -487,9 +487,7 @@ function OutputsTab({ output, loading, error, onRetry }) {
         </div>
       </CollapsibleSection>
       <CollapsibleSection title="Voices">
-        <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6">
-          <p className="text-sm text-slate-400">Voices — built by Sungjun</p>
-        </div>
+        <VoicesTab output={output} voices={output?.voices} />
       </CollapsibleSection>
       <CollapsibleSection title="All Photos" defaultOpen={true}>
         <AllPhotosSection albums={output?.photos} />
