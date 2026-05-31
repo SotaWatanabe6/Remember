@@ -2,10 +2,11 @@
 
 // src/app/(contributor)/contribute/[inviteToken]/voice/page.jsx
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { uploadVoice, deleteVoice } from '@/lib/api';
+// Sungjun's contributionStore — voice saved locally, uploaded on submit
+import { addVoice, removeVoice, updateVoiceTitle, getStore } from '@/lib/contributionStore';
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
 
@@ -34,7 +35,7 @@ function formatDuration(seconds) {
 
 // ─── Audio Row ────────────────────────────────────────────────────────────────
 // borderTop stays inline (individual border side)
-// play button bg stays inline (dark brown — no utility class defined)
+// play button bg stays inline (dark brown)
 // progress bar stays inline (dynamic width)
 
 function AudioRow({ recording, onDelete, onEditTitle }) {
@@ -102,10 +103,11 @@ function AudioRow({ recording, onDelete, onEditTitle }) {
           </div>
           <span className="shrink-0 text-caption text-r-muted">{formatDuration(recording.duration_seconds)}</span>
         </div>
-        {recording.audio_url && (
+        {/* previewUrl from store (main's approach) instead of audio_url from backend */}
+        {recording.previewUrl && (
           <audio
             ref={audioRef}
-            src={recording.audio_url}
+            src={recording.previewUrl}
             onTimeUpdate={onTimeUpdate}
             onEnded={() => { setPlaying(false); setProgress(0); }}
           />
@@ -184,7 +186,16 @@ export default function VoicePage() {
   const fileInputRef = useRef(null);
   const [recordings, setRecordings] = useState([]);
   const [pendingFile, setPendingFile] = useState(null);
-  const [uploading, setUploading] = useState(false);
+
+  // Load existing recordings from store on mount
+  useEffect(() => {
+    const stored = getStore().voice.map((r) => ({
+      ...r,
+      contributor_title: r.title,
+      duration_seconds: 0,
+    }));
+    setRecordings(stored);
+  }, []);
 
   function handleFileChange(e) {
     const file = e.target.files?.[0];
@@ -192,31 +203,25 @@ export default function VoicePage() {
     e.target.value = '';
   }
 
-  async function handleTitleConfirm(title) {
+  // Store operations are synchronous — no async upload, no uploading state
+  function handleTitleConfirm(title) {
     if (!pendingFile) return;
-    const file = pendingFile;
+    const recording = addVoice(pendingFile, title);
+    setRecordings((prev) => [...prev, {
+      ...recording,
+      contributor_title: recording.title,
+      duration_seconds: 0,
+    }]);
     setPendingFile(null);
-    setUploading(true);
-    try {
-      const result = await uploadVoice(inviteToken, file, title);
-      setRecordings((prev) => [...prev, result.recording]);
-    } catch (err) {
-      console.error('Voice upload failed:', err);
-    } finally {
-      setUploading(false);
-    }
   }
 
-  async function handleDelete(recordingId) {
-    try {
-      await deleteVoice(inviteToken, recordingId);
-      setRecordings((prev) => prev.filter((r) => r.id !== recordingId));
-    } catch (err) {
-      console.error('Delete failed:', err);
-    }
+  function handleDelete(recordingId) {
+    removeVoice(recordingId);
+    setRecordings((prev) => prev.filter((r) => r.id !== recordingId));
   }
 
   function handleEditTitle(id, newTitle) {
+    updateVoiceTitle(id, newTitle);
     setRecordings((prev) => prev.map((r) => (r.id === id ? { ...r, contributor_title: newTitle } : r)));
   }
 
@@ -231,48 +236,31 @@ export default function VoicePage() {
 
         <div className="text-center">
           <h1 className="text-h1 text-r-text">Upload your memories</h1>
-          <p className="mt-2 text-body-2 text-r-secondary">Record or upload a voice memo.</p>
+          <p className="mt-2 text-body-2 text-r-secondary">Upload a voice memo below.</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          {/* Record audio card */}
-          <button
-            className="flex flex-col items-center justify-center gap-3 rounded-2xl py-12 transition-colors border border-r-border bg-transparent"
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-r-card)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-          >
-            <svg width="28" height="28" fill="none" stroke="var(--color-r-secondary)" strokeWidth="1.6" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" />
-            </svg>
-            <span className="text-body-2 text-r-muted">Record audio</span>
-          </button>
+        {/* Single upload zone — record button removed per main's design decision */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="flex w-full flex-col items-center justify-center gap-3 rounded-2xl py-16 transition-colors bg-transparent"
+          style={{ border: '1.5px dashed var(--color-r-border)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-r-card)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+        >
+          <svg width="28" height="28" fill="none" stroke="var(--color-r-secondary)" strokeWidth="1.6" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 10l-4-4m0 0L8 10m4-4v12" />
+          </svg>
+          <span className="text-body-2 text-r-muted">Click to upload or drag and drop</span>
+          <span className="text-caption text-r-muted">MP3, WAV, M4A, OGG up to 50MB</span>
+        </button>
 
-          {/* Upload card — 1.5px dashed border stays inline (non-standard width) */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="flex flex-col items-center justify-center gap-3 rounded-2xl py-12 transition-colors disabled:opacity-50 bg-transparent"
-            style={{ border: '1.5px dashed var(--color-r-border)' }}
-            onMouseEnter={(e) => { if (!uploading) e.currentTarget.style.backgroundColor = 'var(--color-r-card)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-          >
-            {uploading ? (
-              <svg className="animate-spin" width="28" height="28" fill="none" stroke="var(--color-r-secondary)" strokeWidth="1.6" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-              </svg>
-            ) : (
-              <svg width="28" height="28" fill="none" stroke="var(--color-r-secondary)" strokeWidth="1.6" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 10l-4-4m0 0L8 10m4-4v12" />
-              </svg>
-            )}
-            <span className="text-body-2 text-r-muted">
-              {uploading ? 'Uploading…' : 'Click to upload or drag and drop'}
-            </span>
-          </button>
-
-          <input ref={fileInputRef} type="file" accept="audio/*,.m4a,.mp3,.wav,.ogg" className="hidden" onChange={handleFileChange} />
-        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="audio/*,.m4a,.mp3,.wav,.ogg"
+          className="hidden"
+          onChange={handleFileChange}
+        />
 
         {recordings.length > 0 && (
           <div className="rounded-2xl p-6 border border-r-border">

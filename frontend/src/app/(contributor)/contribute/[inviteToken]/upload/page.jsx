@@ -69,7 +69,7 @@ export default function UploadSelectorPage() {
     if (type === 'story') router.push(`/contribute/${inviteToken}/story`);
   }
 
-  // Day 9: replace with real memorial data
+  // Day 9: replace with real memorial name from session
   const deceasedName = 'John';
 
   return (
@@ -100,7 +100,6 @@ export default function UploadSelectorPage() {
                 e.currentTarget.style.borderColor = 'var(--color-r-border)';
               }}
             >
-              {/* SVG inherits text-r-muted color via currentColor */}
               <span className="text-r-muted">{type.icon}</span>
               <span className="text-body-1 text-r-muted">{type.label}</span>
             </button>

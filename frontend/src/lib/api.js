@@ -11,6 +11,7 @@
 // Field names match DB schema: subject_name, date_of_birth, date_of_passing, cover_photo_url
 import { mockMemorials } from "@/data/mockMemorials.js";
 import { getSupabaseClient } from "@/lib/supabaseClient.js";
+import { getStore, clearStore } from "@/lib/contributionStore";
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 const MOCK_DELAY = 500;
@@ -715,9 +716,8 @@ export async function uploadVoice(token, file, contributorTitle) {
  * Removes photo from localStorage before submission.
  */
 export async function deletePhoto(token, assetId) {
-  await delay(MOCK_DELAY);
-  const existing = readStoredPhotos(token);
-  writeStoredPhotos(token, existing.filter((p) => p.id !== assetId));
+  const { removePhoto } = await import("@/lib/contributionStore");
+  removePhoto(assetId);
   return { success: true };
 }
 
@@ -725,10 +725,10 @@ export async function deletePhoto(token, assetId) {
  * DELETE /contribute/:token/voice/:recordingId
  * Removes voice recording from localStorage before submission.
  */
+
 export async function deleteVoice(token, recordingId) {
-  await delay(MOCK_DELAY);
-  const existing = readStoredVoice(token);
-  writeStoredVoice(token, existing.filter((r) => r.id !== recordingId));
+  const { removeVoice } = await import("@/lib/contributionStore");
+  removeVoice(recordingId);
   return { success: true };
 }
 
@@ -738,25 +738,41 @@ export async function deleteVoice(token, recordingId) {
  * responses from saveResponses mirror, photos/voice from upload functions.
  */
 export async function getContributorSummary(token) {
-  const session = readContributorSession(token);
-  const photos = readStoredPhotos(token);
-  const voice = readStoredVoice(token);
+  await delay(MOCK_DELAY);
 
-  const contributorId = session?.contributorId ?? null;
+  const session = readContributorSession(token);
+  const store = getStore();
+
+  const photos = store.photos.map((p) => ({
+    id: p.id,
+    file_name: p.file.name,
+    previewUrl: p.previewUrl,
+    caption: p.caption,
+  }));
+
+  const voice = store.voice.map((r) => ({
+    id: r.id,
+    contributor_title: r.title,
+    file_name: r.file.name,
+    previewUrl: r.previewUrl,
+    duration_seconds: 0,
+  }));
+
+  const contributorId = session?.contributorId || "c1b2c3d4-0000-0000-0000-000000000001";
   const responsesByContributor = readStoredResponses(token);
-  const contributorResponses = contributorId ? responsesByContributor[contributorId] ?? {} : {};
+  const contributorResponses = responsesByContributor[contributorId] ?? {};
   const responses = Object.values(contributorResponses)
     .sort((a, b) => (a.question_order ?? 0) - (b.question_order ?? 0))
     .map((r) => ({
-      question_text: r.question_text || r.question_id || 'Question',
-      response_text: r.answer_text || r.response_text || '',
+      question_text: r.question_id || r.question_text || "Question",
+      response_text: r.answer_text || r.response_text || "",
     }));
 
   return {
     contributor: {
       id: contributorId,
-      name: session?.contributorName || '',
-      relationship_type: session?.relationship_type || '',
+      name: session?.contributorName || "Contributor",
+      relationship_type: session?.relationship_type || "",
       relationship_label: session?.relationship_custom_label || null,
     },
     responses,
@@ -769,43 +785,54 @@ export async function getContributorSummary(token) {
  * POST /contribute/:token/submit
  * Finalizes the contribution. Requires contributorToken from Sungjun's session.
  */
-export async function submitContribution(token, contributorToken) {
-  if (!contributorToken) {
-    throw new ApiRequestError("A contributor session is required before submitting.", {
-      code: "missing_contributor_token",
+export async function submitContribution(token) {
+  const store = getStore();
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+
+  // ─── PLACEHOLDERS — replace with real session values from Sungjun ───
+  const contributor_token = "00000000-0000-0000-0000-000000000002";
+  // ────────────────────────────────────────────────────────────────────
+
+  // 1. Upload photos
+  if (store.photos.length > 0) {
+    const photoForm = new FormData();
+    photoForm.append('contributor_token', contributor_token);
+    store.photos.forEach((photo) => {
+      photoForm.append('files[]', photo.file, photo.file.name);
     });
+    if (store.photos[0]?.caption) {
+      photoForm.append('caption', store.photos[0].caption);
+    }
+    const photoRes = await fetch(`${BACKEND_URL}/contribute/${token}/photos`, {
+      method: 'POST',
+      body: photoForm,
+    });
+    if (!photoRes.ok) throw new Error('Photo upload failed');
   }
 
-  const result = await requestJson(`/contribute/${encodeURIComponent(token)}/submit`, {
-    method: "POST",
-    body: JSON.stringify({ contributor_token: contributorToken }),
+  // 2. Upload voice
+  for (const rec of store.voice) {
+    const voiceForm = new FormData();
+    voiceForm.append('contributor_token', contributor_token);
+    voiceForm.append('file', rec.file, rec.file.name);
+    voiceForm.append('contributor_title', rec.title);
+    const voiceRes = await fetch(`${BACKEND_URL}/contribute/${token}/voice`, {
+      method: 'POST',
+      body: voiceForm,
+    });
+    if (!voiceRes.ok) throw new Error('Voice upload failed');
+  }
+
+  // 3. Mark as submitted
+  const submitRes = await fetch(`${BACKEND_URL}/contribute/${token}/submit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contributor_token }),
   });
+  if (!submitRes.ok) throw new Error('Submission failed');
 
-  const submittedContributor = result?.contributor;
-
-  if (
-    !submittedContributor?.id ||
-    submittedContributor.status !== "submitted" ||
-    !submittedContributor.submitted_at
-  ) {
-    throw new ApiRequestError("The Remember API did not confirm the contribution was submitted.", {
-      code: "unexpected_response",
-      data: result,
-    });
-  }
-
-  // Update localStorage session with submitted status
-  const session = readContributorSession(token);
-  if (session) {
-    writeStoredValue(`remember_contributor_session:${token}`, {
-      ...session,
-      status: submittedContributor.status,
-      submittedAt: submittedContributor.submitted_at,
-      updatedAt: submittedContributor.submitted_at,
-    });
-  }
-
-  return result;
+  clearStore();
+  return submitRes.json();
 }
 
 // ─── REBECCA: OUTPUT TABS (viewer experience) ─────────────────────────────────
