@@ -13,6 +13,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getMemorialOutput, getMemorialById } from '@/lib/api';
 import { mockMemorials } from '@/data/mockMemorials.js';
+import StorySlideshow from '@/components/output/StorySlideshow';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -61,13 +62,10 @@ function BottomNav({ active, onChange }) {
 
 // ─── Slideshow placeholder ────────────────────────────────────────────────────
 
-function SlideshowSection() {
+function SlideshowSection({ output }) {
   return (
-    <div className="flex flex-col items-center justify-center py-32 text-center">
-      <p className="text-[#1a1a1a] text-lg font-medium">Slideshow</p>
-      <p className="text-[#6b6b6b] text-sm mt-2 max-w-xs">
-        The memorial slideshow will appear here once generated.
-      </p>
+    <div className="mx-auto max-w-[960px]">
+      <StorySlideshow output={output} story={output?.story} />
     </div>
   );
 }
@@ -977,7 +975,7 @@ export default function MemorialOutputPage() {
           <OutputError onRetry={load} />
         ) : (
           <>
-            {activeTab === 'Slideshow' && <SlideshowSection />}
+            {activeTab === 'Slideshow' && <SlideshowSection output={output} />}
             {activeTab === 'Constellations' && <ConstellationsSection />}
             {activeTab === 'Voices' && <VoicesSection voices={output?.voices} />}
             {activeTab === 'Photo Archive' && <PhotoArchiveSection output={output} />}

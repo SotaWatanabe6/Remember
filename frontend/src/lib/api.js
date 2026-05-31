@@ -857,6 +857,90 @@ export async function submitContribution(token, contributorToken) {
 
 // ─── REBECCA: OUTPUT TABS (viewer experience) ─────────────────────────────────
 
+const mockStoryPhotoUrls = {
+  kitchenTable: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?auto=format&fit=crop&w=1800&q=80',
+  quietDevotion: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1800&q=80',
+  everydayJoy: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1800&q=80',
+};
+
+const mockVoiceAudioUrl = 'https://interactive-examples.mdn.mozilla.net/media/cc0-audio/t-rex-roar.mp3';
+
+function getMockMemorialOutput() {
+  return {
+    story: [
+      {
+        order_index: 1,
+        photo_id: 'photo-uuid-1',
+        photo_url: mockStoryPhotoUrls.kitchenTable,
+        matched_quote: 'He always made everyone feel like the most important person in the room.',
+        contributor_name: 'Sarah',
+        relationship_type: 'friend',
+        theme_label: 'Warmth',
+      },
+      {
+        order_index: 2,
+        photo_id: 'photo-uuid-2',
+        photo_url: mockStoryPhotoUrls.quietDevotion,
+        matched_quote: 'Dad would wake up at 5am just to make sure everyone had a packed lunch.',
+        contributor_name: 'Michael',
+        relationship_type: 'family',
+        theme_label: 'Quiet Devotion',
+      },
+      {
+        order_index: 3,
+        photo_id: 'photo-uuid-3',
+        photo_url: mockStoryPhotoUrls.everydayJoy,
+        matched_quote: 'The way he laughed — you could hear it from three rooms away.',
+        contributor_name: 'Tom',
+        relationship_type: 'friend',
+        theme_label: 'Joy',
+      },
+    ],
+    constellation: {
+      nodes: [
+        { id: 'theme-uuid-1', label: 'The Morning Routines', category: 'daily_life', summary: 'Three contributors independently described rituals around morning.', prominence_score: 0.85, quotes: [{ text: 'He made coffee for everyone before they even woke up.', contributor_name: 'Sarah', relationship_type: 'friend' }], photo_ids: [] },
+        { id: 'theme-uuid-2', label: 'Warmth at the Table', category: 'relationships', summary: 'Multiple contributors recalled the feeling of being welcomed.', prominence_score: 0.72, quotes: [{ text: 'His table always had room for one more.', contributor_name: 'Tom', relationship_type: 'friend' }], photo_ids: [] },
+      ],
+      edges: [{ source: 'theme-uuid-1', target: 'theme-uuid-2', relationship_type: 'family', weight: 2 }],
+    },
+    voices: [
+      {
+        id: 'voice-uuid-1',
+        contributor_title: 'Voicemail from Christmas 2019',
+        key_quote: 'I just called to say I love you all. Merry Christmas.',
+        ai_category: 'Everyday Love',
+        ai_tags: ['holiday', 'love', 'family'],
+        contributor_name: 'Sarah',
+        relationship_type: 'family',
+        transcript_text: "Hey it's dad, just calling to say Merry Christmas. Hope you're all having a good one. I just called to say I love you all. Merry Christmas. See you for dinner.",
+        transcript_segments: [
+          { start: 0, end: 12, text: "Hey it's dad, just calling to say Merry Christmas." },
+          { start: 12, end: 29, text: "Hope you're all having a good one. I just called to say I love you all." },
+          { start: 29, end: 47.3, text: 'Merry Christmas. See you for dinner.' },
+        ],
+        audio_url: mockVoiceAudioUrl,
+        duration_seconds: 47.3,
+      },
+      {
+        id: 'voice-uuid-2',
+        contributor_title: 'Voice note about the garden - June 2022',
+        key_quote: "The tomatoes are finally coming in. I've been waiting all summer for these.",
+        ai_category: 'Everyday Joy',
+        ai_tags: ['garden', 'summer', 'patience'],
+        contributor_name: 'Tom',
+        relationship_type: 'friend',
+        transcript_text: "Just wanted to record this. The tomatoes are finally coming in. I've been waiting all summer for these. Beautiful. Your grandmother would have loved them.",
+        audio_url: mockVoiceAudioUrl,
+        duration_seconds: 28.1,
+      },
+    ],
+    photos: [
+      { album_name: 'The Kitchen Table Years', cover_photo_url: null, photos: [{ id: 'photo-uuid-1', url: null, caption: null, taken_at: '2019-12-25', contributor_name: 'Sarah' }, { id: 'photo-uuid-2', url: null, caption: 'Summer BBQ', taken_at: '2018-07-04', contributor_name: 'Michael' }] },
+      { album_name: 'The Garden in Every Season', cover_photo_url: null, photos: [{ id: 'photo-uuid-3', url: null, caption: null, taken_at: '2022-06-15', contributor_name: 'Tom' }] },
+    ],
+  };
+}
+
 /**
  * GET /memorials/:id/output
  * Returns complete four-tab JSON for the memorial output page.
@@ -879,27 +963,7 @@ export async function getMemorialOutput(memorialId) {
   } catch {
     // Fallback to mock if backend fails or memorial not in DB yet
     await delay(MOCK_DELAY);
-    return {
-      story: [
-        { order_index: 1, photo_url: null, matched_quote: 'He always made everyone feel like the most important person in the room.', contributor_name: 'Sarah', relationship_type: 'friend', theme_label: 'Warmth' },
-        { order_index: 2, photo_url: null, matched_quote: 'Dad would wake up at 5am just to make sure everyone had a packed lunch.', contributor_name: 'Michael', relationship_type: 'family', theme_label: 'Quiet Devotion' },
-        { order_index: 3, photo_url: null, matched_quote: 'The way he laughed — you could hear it from three rooms away.', contributor_name: 'Tom', relationship_type: 'friend', theme_label: 'Joy' },
-      ],
-      constellation: {
-        nodes: [
-          { id: 'theme-uuid-1', label: 'The Morning Routines', category: 'daily_life', summary: 'Three contributors independently described rituals around morning.', prominence_score: 0.85, quotes: [{ text: 'He made coffee for everyone before they even woke up.', contributor_name: 'Sarah', relationship_type: 'friend' }], photo_ids: [] },
-          { id: 'theme-uuid-2', label: 'Warmth at the Table', category: 'relationships', summary: 'Multiple contributors recalled the feeling of being welcomed.', prominence_score: 0.72, quotes: [{ text: 'His table always had room for one more.', contributor_name: 'Tom', relationship_type: 'friend' }], photo_ids: [] },
-        ],
-        edges: [{ source: 'theme-uuid-1', target: 'theme-uuid-2', relationship_type: 'family', weight: 2 }],
-      },
-      voices: [
-        { id: 'voice-uuid-1', contributor_title: 'Voicemail from Christmas 2019', key_quote: 'I just called to say I love you all.', ai_category: 'Everyday Love', ai_tags: ['holiday', 'love'], transcript_text: "Hey it's dad, just calling to say Merry Christmas.", audio_url: null, duration_seconds: 47.3 },
-      ],
-      photos: [
-        { album_name: 'The Kitchen Table Years', cover_photo_url: null, photos: [{ id: 'photo-uuid-1', url: null, caption: null, taken_at: '2019-12-25', contributor_name: 'Sarah' }, { id: 'photo-uuid-2', url: null, caption: 'Summer BBQ', taken_at: '2018-07-04', contributor_name: 'Michael' }] },
-        { album_name: 'The Garden in Every Season', cover_photo_url: null, photos: [{ id: 'photo-uuid-3', url: null, caption: null, taken_at: '2022-06-15', contributor_name: 'Tom' }] },
-      ],
-    };
+    return getMockMemorialOutput();
   }
 }
 
@@ -914,19 +978,28 @@ export async function getMemorialOutput(memorialId) {
 export async function getShareToken(shareToken) {
   if (shareToken === 'invalid') throw new Error('This share link is invalid or has expired');
 
-  const response = await fetch(`${API_URL}/share/${shareToken}`);
+  try {
+    const response = await fetch(`${API_URL}/share/${shareToken}`);
 
-  if (!response.ok) {
-    if (response.status === 404) throw new Error('This share link is invalid or has expired');
-    throw new Error('Failed to load memorial');
+    if (!response.ok) {
+      if (response.status === 404) throw new Error('This share link is invalid or has expired');
+      throw new Error('Failed to load memorial');
+    }
+
+    const data = await response.json();
+
+    // Backend returns just { story, constellation, voices, photos }
+    // Memorial header data fetched separately in the share page component
+    // using GET /memorials/:id — see share/page.jsx
+    return data;
+  } catch (error) {
+    if (shareToken === 'invalid' || error.message === 'This share link is invalid or has expired') {
+      throw error;
+    }
+
+    await delay(MOCK_DELAY);
+    return getMockMemorialOutput();
   }
-
-  const data = await response.json();
-
-  // Backend returns just { story, constellation, voices, photos }
-  // Memorial header data fetched separately in the share page component
-  // using GET /memorials/:id — see share/page.jsx
-  return data;
 }
 
 /**

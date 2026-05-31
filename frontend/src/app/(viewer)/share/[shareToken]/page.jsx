@@ -2,10 +2,12 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { getShareToken, getMemorialById } from '@/lib/api';
 import { mockMemorials } from '@/data/mockMemorials.js';
+import StorySlideshow from '@/components/output/StorySlideshow';
+import VoicesTab from '@/components/output/VoicesTab';
 
 // Cream background matching output page
 const CREAM_BG = '#F0EAE2';
@@ -84,48 +86,10 @@ function MemorialHeader({ memorial }) {
 
 // ─── Placeholder tabs ─────────────────────────────────────────────────────────
 
-function StoryTab({ data }) {
-  if (!data || data.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <p className="text-neutral-950 text-base font-medium">No story generated yet</p>
-        <p className="text-slate-500 text-sm mt-1">
-          The story will appear here once the memorial has been generated.
-        </p>
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-col items-center justify-center py-24">
-      <p className="text-slate-400 text-sm">Story tab — built by Sungjun</p>
-    </div>
-  );
-}
-
 function ConstellationTab() {
   return (
     <div className="flex flex-col items-center justify-center py-24">
       <p className="text-slate-400 text-sm">Constellation tab — built by Mendrika</p>
-    </div>
-  );
-}
-
-function VoicesTab({ data }) {
-  if (!data || data.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <p className="text-neutral-950 text-base font-medium">
-          No voice recordings were submitted for this memorial
-        </p>
-        <p className="text-slate-500 text-sm mt-1">
-          Voice recordings will appear here once contributors have submitted.
-        </p>
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-col items-center justify-center py-24">
-      <p className="text-slate-400 text-sm">Voices tab — built by Sungjun</p>
     </div>
   );
 }
@@ -424,9 +388,9 @@ export default function SharePage() {
 
             {/* Tab content */}
             <div>
-              {activeTab === 'Story' && <StoryTab data={output?.story} />}
+              {activeTab === 'Story' && <StorySlideshow output={output} story={output?.story} />}
               {activeTab === 'Constellation' && <ConstellationTab data={output?.constellation} />}
-              {activeTab === 'Voices' && <VoicesTab data={output?.voices} />}
+              {activeTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} />}
               {activeTab === 'All Photos' && <AllPhotosTab albums={normalizePhotos(output?.photos)} />}
             </div>
           </>

@@ -7,6 +7,7 @@ import {
   createMemorial as apiCreateMemorial,
   getMemorials as apiGetMemorials,
   getMemorial as apiGetMemorial,
+  getMemorialOutput as apiGetMemorialOutput,
 } from "../lib/api.js";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -113,11 +114,13 @@ export async function getMemorialOutput(id, token) {
         Authorization: `Bearer ${token?.access_token || token || ''}`,
       },
     });
+
+    if (response.status === 404) return null;
     if (!response.ok) throw new Error(`Failed to fetch memorial output: ${response.status}`);
+
     return await response.json();
-  } catch (error) {
-    console.error('Error fetching memorial output:', error);
-    throw error;
+  } catch {
+    return apiGetMemorialOutput(id);
   }
 }
 

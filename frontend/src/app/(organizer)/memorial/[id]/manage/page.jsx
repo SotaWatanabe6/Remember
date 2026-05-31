@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getMemorialOutput } from '@/services/memorialService';
@@ -13,6 +13,22 @@ import MemorialContributionsPage from "../_components/contribution-list";
 import MemorialContributionApproval from "../_components/contribution-awaiting";
 import {  ChevronLeft,
   ChevronRight } from "lucide-react";
+
+const SUPABASE_AUTH_TOKEN_KEY = "sb-tbpdhybqbjucoxdizlgw-auth-token";
+
+function getStoredAuthToken() {
+  if (typeof window === "undefined") return null;
+
+  const stored = window.localStorage.getItem(SUPABASE_AUTH_TOKEN_KEY);
+  if (!stored) return null;
+
+  try {
+    const parsed = JSON.parse(stored);
+    return parsed?.access_token || parsed?.currentSession?.access_token || parsed;
+  } catch {
+    return stored;
+  }
+}
 
 // ─── Memorial Header ──────────────────────────────────────────────────────────
 
@@ -119,7 +135,7 @@ function ArchiveTab() {
 
 // ─── Contributions Tab ────────────────────────────────────────────────────────
 
-function ContributionsTab({contributorslist}) {
+function ContributionsTab({ contributorslist, loading, error, onRetry }) {
   const [value, setValue] = useState("contributors");
   const submissions = [
     {
@@ -211,7 +227,20 @@ function ContributionsTab({contributorslist}) {
           }
         </div>    
         {
-          value === "contributors" ? (
+          value === "contributors" && loading ? (
+            <TabLoading />
+          ) : value === "contributors" && error ? (
+            <TabError
+              title="Unable to load contributors"
+              message="Contributor details could not be loaded. You can still use the other tabs."
+              onRetry={onRetry}
+            />
+          ) : value === "contributors" && contributorslist.length === 0 ? (
+            <TabEmpty
+              title="No contributors yet"
+              message="Contributors will appear here once people begin sharing memories."
+            />
+          ) : value === "contributors" ? (
             <MemorialContributionsPage contributors={contributorslist} />
           ) : value === "awaiting" ? (
             <MemorialContributionApproval contributors={current} />
@@ -273,6 +302,7 @@ function AllPhotosSection({ albums }) {
   const [openAlbum, setOpenAlbum] = useState(null);
   const [lightboxPhoto, setLightboxPhoto] = useState(null);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const albumList = Array.isArray(albums) ? albums : albums?.albums ?? [];
   const currentAlbumPhotos = openAlbum?.photos || [];
 
   function openLightbox(photo, index) { setLightboxPhoto(photo); setLightboxIndex(index); }
@@ -285,7 +315,7 @@ function AllPhotosSection({ albums }) {
     setLightboxIndex(i); setLightboxPhoto(currentAlbumPhotos[i]);
   }
   // ── PRIORITY 3: Empty state — no photos submitted yet ──
-  if (!albums || albums.length === 0) {
+  if (albumList.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <div className="h-16 w-16 rounded-full bg-neutral-100 flex items-center justify-center mb-4">
@@ -311,14 +341,14 @@ function AllPhotosSection({ albums }) {
             <button className="p-1 hover:text-neutral-950">
               <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
             </button>
-            <span className="text-xs">1/{albums.length}</span>
+            <span className="text-xs">1/{albumList.length}</span>
             <button className="p-1 hover:text-neutral-950">
               <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
             </button>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-4 mb-8">
-          {albums?.albums?.map((album, i) => (
+          {albumList.map((album, i) => (
             <button
               key={i}
               onClick={() => setOpenAlbum(openAlbum?.album_name === album.album_name ? null : album)}
@@ -419,9 +449,22 @@ function PreGenerationEmpty() {
 
 // ─── Outputs Tab ──────────────────────────────────────────────────────────────
 
-function OutputsTab({ output }) {
+function OutputsTab({ output, loading, error, onRetry }) {
   // PRIORITY 3: Show pre-generation empty state if no output yet
 
+  if (loading) {
+    return <TabLoading />;
+  }
+
+  if (error) {
+    return (
+      <TabError
+        title="Unable to load outputs"
+        message="The generated memorial output could not be loaded. Archive and Contributions are still available."
+        onRetry={onRetry}
+      />
+    );
+  }
 
   if (!output) {
     return (
@@ -524,9 +567,25 @@ function ShareModal({ onClose, memorialId }) {
   );
 }
 
-// ─── PRIORITY 4: Error state ──────────────────────────────────────────────────
+function TabLoading() {
+  return (
+    <div className="flex justify-center py-16">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-950" />
+    </div>
+  );
+}
 
-function OutputError({ onRetry }) {
+function TabEmpty({ title, message }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="h-16 w-16 rounded-full bg-neutral-100 flex items-center justify-center mb-4" />
+      <p className="text-neutral-950 text-base font-medium">{title}</p>
+      <p className="text-slate-500 text-sm mt-1 max-w-xs">{message}</p>
+    </div>
+  );
+}
+
+function TabError({ title, message, onRetry }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <div className="h-16 w-16 rounded-full bg-red-50 flex items-center justify-center mb-4">
@@ -534,8 +593,8 @@ function OutputError({ onRetry }) {
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
       </div>
-      <p className="text-neutral-950 text-base font-medium">Unable to load memorial</p>
-      <p className="text-slate-500 text-sm mt-1 max-w-xs">Something went wrong loading this memorial. Please try again.</p>
+      <p className="text-neutral-950 text-base font-medium">{title}</p>
+      <p className="text-slate-500 text-sm mt-1 max-w-xs">{message}</p>
       <button
         onClick={onRetry}
         className="mt-4 rounded-full bg-neutral-950 px-6 py-2.5 text-sm font-semibold text-white hover:opacity-80 transition-opacity"
@@ -552,35 +611,13 @@ export default function MemorialOutputPage() {
   const { id } = useParams();
   const [activeTab, setActiveTab] = useState('Outputs');
   const [output, setOutput] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [outputLoading, setOutputLoading] = useState(true);
+  const [outputError, setOutputError] = useState(null);
+  const [contributorsLoading, setContributorsLoading] = useState(true);
+  const [contributorsError, setContributorsError] = useState(null);
   const [showShare, setShowShare] = useState(false);
   const memorialId = id;
   const [contributors, setContributors] = useState([]);
-  
-  useEffect(() => {    
-    if (!memorialId) return;
-    
-    const loadMemorial = async () => {        
-      setLoading(true);
-      setError(null);
-      try {
-        const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
-        if (typeof token === "undefined") {
-          console.log("Token retrieved:", token);
-          return ;
-        }
-        const contributor= await getMemorialContributors(memorialId,token);
-        setContributors(contributor.contributors);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }      
-    }
-    loadMemorial();
-
-  }, [memorialId]);  
 
   // Read from mockMemorials.js — single source of truth for mock data
   // Day 9: replace with real fetch from GET /memorials/:id
@@ -594,28 +631,46 @@ export default function MemorialOutputPage() {
     bio: mockData.brief_biography || mockData.short_description || null,
   };
 
-  const load = async () => {        
-    setLoading(true);
-    setError(null);
+  const loadContributors = useCallback(async () => {
+    if (!memorialId) return;
+
+    setContributorsLoading(true);
+    setContributorsError(null);
     try {
-      const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
-      if (typeof token === "undefined") {
-        console.log("Token retrieved:", token);
-        return ;
-      }
+      const contributor = await getMemorialContributors(memorialId, getStoredAuthToken());
+      setContributors(contributor.contributors ?? []);
+    } catch (err) {
+      setContributorsError(err instanceof Error ? err.message : "Failed to fetch contributors");
+      setContributors([]);
+    } finally {
+      setContributorsLoading(false);
+    }
+  }, [memorialId]);
+
+  const loadOutput = useCallback(async () => {
+    if (!id) return;
+
+    setOutputLoading(true);
+    setOutputError(null);
+    try {
+      const token = getStoredAuthToken();
       const data = await getMemorialOutput(id, token);
       setOutput(data);
     } catch (err) {
-      setError(err.message);
+      setOutputError(err instanceof Error ? err.message : "Failed to fetch memorial output");
+      setOutput(null);
     } finally {
-      setLoading(false);
+      setOutputLoading(false);
     }
-  }
+  }, [id]);
 
   useEffect(() => {
-    if (!id) return;
-    queueMicrotask(load);
-  }, [id]);
+    queueMicrotask(loadContributors);
+  }, [loadContributors]);
+
+  useEffect(() => {
+    queueMicrotask(loadOutput);
+  }, [loadOutput]);
 
   return (
     <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
@@ -633,19 +688,22 @@ export default function MemorialOutputPage() {
         <TabBar active={activeTab} onChange={setActiveTab} />
 
         <div>
-          {loading ? (
-            <div className="flex justify-center py-16">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-950" />
-            </div>
-          ) : error ? (
-            // PRIORITY 4: Error state with retry button
-            <OutputError onRetry={load} />
-          ) : (
-            <>
-              {activeTab === 'Archive' && <ArchiveTab />}
-              {activeTab === 'Contributions' && <ContributionsTab contributorslist={contributors} />}
-              {activeTab === 'Outputs' && <OutputsTab output={output} />}
-            </>
+          {activeTab === 'Archive' && <ArchiveTab />}
+          {activeTab === 'Contributions' && (
+            <ContributionsTab
+              contributorslist={contributors}
+              loading={contributorsLoading}
+              error={contributorsError}
+              onRetry={loadContributors}
+            />
+          )}
+          {activeTab === 'Outputs' && (
+            <OutputsTab
+              output={output}
+              loading={outputLoading}
+              error={outputError}
+              onRetry={loadOutput}
+            />
           )}
         </div>
 
