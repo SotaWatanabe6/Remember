@@ -13,6 +13,7 @@ import MemorialContributionsPage from "../_components/contribution-list";
 import MemorialContributionApproval from "../_components/contribution-awaiting";
 import StorySlideshow from "@/components/output/StorySlideshow";
 import VoicesTab from "@/components/output/VoicesTab";
+import ProcessingTextSequence from "@/components/dashboard/ProcessingTextSequence";
 import {  ChevronLeft,
   ChevronRight } from "lucide-react";
 
@@ -481,9 +482,10 @@ function PreGenerationEmpty({
               style={{ width: `${Math.max(10, generationJob?.progress ?? 10)}%` }}
             />
           </div>
-          <p className="mt-2 text-xs text-slate-500">
+          <p className="mt-2 text-xs font-medium text-slate-600">
             {generationJob?.current_step || "Preparing generation..."}
           </p>
+          <ProcessingTextSequence />
         </div>
       )}
       {!generating && disabledMessage && (
