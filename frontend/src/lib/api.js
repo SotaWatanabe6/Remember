@@ -137,6 +137,32 @@ const MOCK_INVITE_LINK = {
   created_at: now(),
 };
 
+const MOCK_CONTRIBUTOR_MEMORIAL_ID = 'mock-memorial-robert-kim';
+
+const isLocalMockInviteToken = (token) =>
+  process.env.NODE_ENV !== 'production' && token === MOCK_INVITE_TOKEN;
+
+function getMockContributorInvite() {
+  // Local dev mock invite token. Remove once real invite generation is implemented.
+  return {
+    invite: {
+      id: MOCK_INVITE_LINK.id,
+      token: MOCK_INVITE_TOKEN,
+      invite_token: MOCK_INVITE_TOKEN,
+      is_active: true,
+      active: true,
+      use_count: 0,
+      expires_at: null,
+      max_uses: null,
+    },
+    memorial: {
+      id: MOCK_CONTRIBUTOR_MEMORIAL_ID,
+      subject_name: 'Robert Kim',
+      cover_photo_url: null,
+    },
+  };
+}
+
 const readStoredValue = (key, fallback) => {
   if (!isBrowser()) return fallback;
   const val = window.localStorage.getItem(key);
@@ -537,6 +563,11 @@ export async function getJobStatus(jobId) {
  * Validates invite token, returns memorial details for landing page.
  */
 export async function getInviteToken(token) {
+  if (isLocalMockInviteToken(token)) {
+    await delay(MOCK_DELAY / 2);
+    return getMockContributorInvite();
+  }
+
   return requestJson(`/contribute/${encodeURIComponent(token)}`);
 }
 
@@ -546,6 +577,21 @@ export async function getInviteToken(token) {
  * Body: { name: string }
  */
 export async function startContribution(token, name) {
+  if (isLocalMockInviteToken(token)) {
+    await delay(MOCK_DELAY / 2);
+    const contributorId = makeId('mock-contributor');
+
+    return {
+      contributor: {
+        id: contributorId,
+        memorial_id: MOCK_CONTRIBUTOR_MEMORIAL_ID,
+        name: name.trim(),
+        status: 'in_progress',
+      },
+      contributor_token: `mock-contributor-token-${contributorId}`,
+    };
+  }
+
   return requestJson(`/contribute/${encodeURIComponent(token)}/start`, {
     method: "POST",
     body: JSON.stringify({ name }),
