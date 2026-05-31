@@ -50,7 +50,7 @@ router.post('/:id/invite-link', authMiddleware, async (req, res) => {
     const { data: memorial, error: memError } = await supabase.from('memorials').select('id').eq('id', req.params.id).eq('user_id', req.user.id).single()
     if (memError || !memorial) return res.status(403).json({ error: 'Not authorized' })
     const { data: existing } = await supabase.from('invite_links').select('*').eq('memorial_id', req.params.id).eq('is_active', true).single()
-    if (existing) return res.json({ invite_link: { ...existing, url: `${process.env.FRONTEND_URL}/contribute/${existing.token}` } })
+    if (existing) return res.json({ invite_link: { ...existing, url: `${process.env.NEXT_PUBLIC_APP_URL}/contribute/${existing.token}` } })
     const token = crypto.randomBytes(8).toString('hex')
     const { expires_at, max_uses } = req.body
     const { data, error } = await supabase.from('invite_links').insert({
@@ -58,7 +58,7 @@ router.post('/:id/invite-link', authMiddleware, async (req, res) => {
       is_active: true, expires_at: expires_at || null, max_uses: max_uses || null, use_count: 0
     }).select().single()
     if (error) return res.status(400).json({ error: error.message })
-    res.status(201).json({ invite_link: { ...data, url: `${process.env.FRONTEND_URL}/contribute/${token}` } })
+    res.status(201).json({ invite_link: { ...data, url: `${process.env.NEXT_PUBLIC_APP_URL}/contribute/${token}` } })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
@@ -98,7 +98,8 @@ router.post('/:id/share', authMiddleware, async (req, res) => {
     const token = crypto.randomBytes(12).toString('hex')
     const { data, error } = await supabase.from('invite_links').insert({ memorial_id: req.params.id, token, created_by: req.user.id, is_active: true }).select().single()
     if (error) return res.status(400).json({ error: error.message })
-    res.status(201).json({ share_link: { token: data.token, url: `${process.env.FRONTEND_URL}/share/${data.token}` } })
+      console.log(data);
+    res.status(201).json({ share_link: { token: data.token, url: `${process.env.NEXT_PUBLIC_APP_URL}/share/${data.token}` } })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
