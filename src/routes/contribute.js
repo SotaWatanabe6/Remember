@@ -10,8 +10,15 @@ const PHOTO_STORAGE_BUCKET =
   process.env.MEMORIAL_ASSETS_BUCKET ||
   process.env.STORAGE_BUCKET ||
   'memorial-assets'
+const VOICE_STORAGE_BUCKET =
+  process.env.CONTRIBUTOR_VOICE_BUCKET ||
+  process.env.MEMORIAL_ASSETS_BUCKET ||
+  process.env.STORAGE_BUCKET ||
+  'memorial-assets'
 const MAX_PHOTO_BYTES = 50 * 1024 * 1024
+const MAX_AUDIO_BYTES = 50 * 1024 * 1024
 const ALLOWED_PHOTO_EXTENSIONS = new Set(['heic', 'heif', 'jpg', 'jpeg', 'png', 'webp'])
+const ALLOWED_AUDIO_EXTENSIONS = new Set(['m4a', 'mp3', 'wav', 'webm'])
 const PHOTO_MIME_BY_EXTENSION = {
   heic: 'image/heic',
   heif: 'image/heif',
@@ -19,6 +26,12 @@ const PHOTO_MIME_BY_EXTENSION = {
   jpeg: 'image/jpeg',
   png: 'image/png',
   webp: 'image/webp'
+}
+const AUDIO_MIME_BY_EXTENSION = {
+  m4a: 'audio/mp4',
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  webm: 'audio/webm'
 }
 
 function getFileExtension(fileName = '') {
@@ -41,6 +54,12 @@ function getPhotoMimeType(file) {
   return PHOTO_MIME_BY_EXTENSION[extension] || ''
 }
 
+function getAudioMimeType(file) {
+  const extension = getFileExtension(file.name)
+  if (file.type?.startsWith('audio/')) return file.type
+  return AUDIO_MIME_BY_EXTENSION[extension] || ''
+}
+
 function validatePhotoFile(file) {
   const extension = getFileExtension(file.name)
   const mimeType = getPhotoMimeType(file)
@@ -51,6 +70,21 @@ function validatePhotoFile(file) {
 
   if (file.size > MAX_PHOTO_BYTES) {
     return 'Photos must be smaller than 50 MB.'
+  }
+
+  return null
+}
+
+function validateVoiceFile(file) {
+  const extension = getFileExtension(file.name)
+  const mimeType = getAudioMimeType(file)
+
+  if (!mimeType && !ALLOWED_AUDIO_EXTENSIONS.has(extension)) {
+    return 'This file type is not supported. Please upload an M4A, MP3, or WAV file.'
+  }
+
+  if (file.size > MAX_AUDIO_BYTES) {
+    return 'This file is too large. Please choose a smaller audio file.'
   }
 
   return null
@@ -439,6 +473,94 @@ router.delete('/:token/photos/:assetId', async (req, res) => {
     res.json({ deleted: true })
   } catch (err) {
     res.status(500).json({ error: err.message })
+  }
+})
+
+// POST /contribute/:token/voice
+router.post('/:token/voice', async (req, res) => {
+  try {
+    const formData = await parseMultipartFormData(req)
+    const contributor_token = formData.get('contributor_token')
+    const contributor_title = String(formData.get('contributor_title') || '').trim()
+    const submittedFile = [
+      formData.get('file'),
+      formData.get('audio'),
+      formData.get('recording')
+    ].find(isFormDataFile)
+
+    if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
+    if (!contributor_title) return res.status(400).json({ error: 'Please add a title for this recording.' })
+    if (!submittedFile) return res.status(400).json({ error: 'Please choose an audio file.' })
+
+    const validationError = validateVoiceFile(submittedFile)
+    if (validationError) return res.status(400).json({ error: validationError })
+
+    const { data: invite, error: inviteError } = await supabase
+      .from('invite_links')
+      .select('id, memorial_id, is_active')
+      .eq('token', req.params.token)
+      .single()
+
+    if (inviteError || !invite || !invite.is_active) {
+      return res.status(410).json({ error: 'This link is no longer active.' })
+    }
+
+    const { data: contributor } = await supabase
+      .from('contributors')
+      .select('id, memorial_id')
+      .eq('id', contributor_token)
+      .single()
+
+    if (!contributor) return res.status(404).json({ error: 'Contributor not found' })
+    if (contributor.memorial_id !== invite.memorial_id) {
+      return res.status(403).json({ error: 'Contributor does not belong to this invitation.' })
+    }
+
+    const safeFileName = sanitizeFileName(submittedFile.name || 'voice-recording')
+    const storagePath = `memorials/${contributor.memorial_id}/contributions/${contributor.id}/voice/${randomUUID()}-${safeFileName}`
+    const mimeType = getAudioMimeType(submittedFile)
+    const fileBuffer = Buffer.from(await submittedFile.arrayBuffer())
+
+    const { error: uploadError } = await supabase.storage
+      .from(VOICE_STORAGE_BUCKET)
+      .upload(storagePath, fileBuffer, {
+        contentType: mimeType,
+        upsert: false
+      })
+
+    if (uploadError) return res.status(400).json({ error: uploadError.message })
+
+    const { data: recording, error: recordingError } = await supabase
+      .from('voice_recordings')
+      .insert({
+        memorial_id: contributor.memorial_id,
+        contributor_id: contributor.id,
+        storage_path: storagePath,
+        storage_bucket: VOICE_STORAGE_BUCKET,
+        file_name: submittedFile.name || safeFileName,
+        file_type: mimeType,
+        file_size_bytes: submittedFile.size || null,
+        duration_seconds: null,
+        contributor_title
+      })
+      .select('id, contributor_title, storage_path, storage_bucket, file_name, file_type, file_size_bytes, duration_seconds')
+      .single()
+
+    if (recordingError) {
+      await supabase.storage.from(VOICE_STORAGE_BUCKET).remove([storagePath])
+      return res.status(400).json({ error: recordingError.message })
+    }
+
+    await supabase
+      .from('contributors')
+      .update({ voice_done: true, updated_at: new Date().toISOString() })
+      .eq('id', contributor_token)
+
+    res.status(201).json({
+      recording
+    })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message })
   }
 })
 

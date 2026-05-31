@@ -14,10 +14,21 @@ import { getSupabaseClient } from "@/lib/supabaseClient.js";
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 const MOCK_DELAY = 500;
+const MOCK_INVITE_TOKEN = 'mock_invite_abc123';
 
 // API base URL — reads from env for production, falls back to localhost for dev
 // Set NEXT_PUBLIC_API_URL in Vercel dashboard for production deployment
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+export const MAX_AUDIO_FILE_SIZE_MB = 50;
+export const MAX_AUDIO_FILE_SIZE_BYTES = MAX_AUDIO_FILE_SIZE_MB * 1024 * 1024;
+export const ALLOWED_AUDIO_EXTENSIONS = ['m4a', 'mp3', 'wav', 'webm'];
+const AUDIO_MIME_BY_EXTENSION = {
+  m4a: 'audio/mp4',
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  webm: 'audio/webm',
+};
 
 export class ApiRequestError extends Error {
   constructor(message, { status = 0, code = "request_error", data = null } = {}) {
@@ -89,6 +100,7 @@ const now = () => new Date().toISOString();
 const fakeToken = () => 'mock_jwt_' + Math.random().toString(36).slice(2);
 const makeId = (prefix) => `${prefix}_${Math.random().toString(36).slice(2)}`;
 const isBrowser = () => typeof window !== 'undefined';
+const getFileExtension = (fileName = "") => fileName.split(".").pop()?.toLowerCase() || "";
 
 // ─── Shared localStorage helpers (used by Blessing's auth + memorial functions) ───
 
@@ -711,26 +723,48 @@ export async function uploadPhotos(token, files) {
 
 /**
  * POST /contribute/:token/voice
- * PHASE 4: Calls real backend at http://localhost:3001
- * MVP: Backend marks voice_done=true but returns { recording: { id: null, storage_path: null } }
- * Real file storage is Daniel's upload system — not yet merged
- * Fix: use local file data for UI display, backend data when available
- * Day 9: when Daniel's system merged, id + storage_path will be populated
+ * Uploads a contributor voice recording with required title metadata.
+ * Mock invite flows still use same-browser draft storage when the API is not available.
  */
 export async function uploadVoice(token, file, contributorTitle) {
   if (!contributorTitle || contributorTitle.trim() === '') {
-    throw new Error('A title is required for each voice recording');
+    throw new ApiRequestError('Please add a title for this recording.', {
+      code: "voice_title_required",
+    });
+  }
+
+  if (!file) {
+    throw new ApiRequestError('Please choose an audio file.', {
+      code: "voice_file_required",
+    });
+  }
+
+  const extension = getFileExtension(file.name);
+  const hasSupportedMime = file.type?.startsWith('audio/');
+  const hasSupportedExtension = ALLOWED_AUDIO_EXTENSIONS.includes(extension);
+
+  if (!hasSupportedMime && !hasSupportedExtension) {
+    throw new ApiRequestError('This file type is not supported. Please upload an M4A, MP3, or WAV file.', {
+      code: "unsupported_audio_type",
+    });
+  }
+
+  if (file.size > MAX_AUDIO_FILE_SIZE_BYTES) {
+    throw new ApiRequestError('This file is too large. Please choose a smaller audio file.', {
+      code: "audio_too_large",
+    });
   }
 
   const session = readContributorSession(token);
   const contributorToken = session?.contributorToken || session?.contributorId;
+  const mimeType = file.type || AUDIO_MIME_BY_EXTENSION[extension] || '';
 
   // Always build local recording object for UI display
   const localRecording = {
     id: `voice-${Date.now()}`,
     contributor_title: contributorTitle.trim(),
     file_name: file.name,
-    file_type: file.type,
+    file_type: mimeType,
     file_size_bytes: file.size,
     storage_path: null, // populated by Daniel's upload system later
     storage_bucket: 'memorial-assets',
@@ -745,7 +779,7 @@ export async function uploadVoice(token, file, contributorTitle) {
     formData.append('contributor_title', contributorTitle.trim());
     if (contributorToken) formData.append('contributor_token', contributorToken);
 
-    const response = await fetch(`${API_URL}/contribute/${token}/voice`, {
+    const response = await fetch(`${API_URL}/contribute/${encodeURIComponent(token)}/voice`, {
       method: 'POST',
       body: formData,
     });
@@ -757,26 +791,46 @@ export async function uploadVoice(token, file, contributorTitle) {
       const recording = {
         id: data.recording?.id || localRecording.id,
         contributor_title: data.recording?.contributor_title || contributorTitle.trim(),
-        file_name: file.name,
-        file_type: file.type,
-        file_size_bytes: file.size,
+        file_name: data.recording?.file_name || file.name,
+        file_type: data.recording?.file_type || mimeType,
+        file_size_bytes: data.recording?.file_size_bytes ?? file.size,
         storage_path: data.recording?.storage_path || null,
-        storage_bucket: 'memorial-assets',
-        duration_seconds: 0,
+        storage_bucket: data.recording?.storage_bucket || 'memorial-assets',
+        duration_seconds: data.recording?.duration_seconds || 0,
       };
 
       const existing = readStoredVoice(token);
       writeStoredVoice(token, [...existing, recording]);
       return { success: true, recording };
     }
-    throw new Error('Backend returned error');
 
-  } catch {
-    // Fallback — backend not running or endpoint not added yet
-    // Still saves local recording so review page works
-    const existing = readStoredVoice(token);
-    writeStoredVoice(token, [...existing, localRecording]);
-    return { success: true, recording: localRecording };
+    const contentType = response.headers.get("content-type") ?? "";
+    const data = contentType.includes("application/json")
+      ? await response.json().catch(() => null)
+      : null;
+    throw new ApiRequestError(data?.error || 'Upload failed. Please try again.', {
+      status: response.status,
+      code: "voice_upload_failed",
+      data,
+    });
+  } catch (error) {
+    const canUseLocalFallback =
+      token === MOCK_INVITE_TOKEN ||
+      token?.startsWith('mock_') ||
+      (process.env.NODE_ENV !== 'production' && !(error instanceof ApiRequestError));
+
+    if (canUseLocalFallback) {
+      // Preserve same-browser draft behavior for mock/local dev when the API is unreachable.
+      const existing = readStoredVoice(token);
+      writeStoredVoice(token, [...existing, localRecording]);
+      return { success: true, recording: localRecording };
+    }
+
+    if (error instanceof ApiRequestError) throw error;
+
+    throw new ApiRequestError('Upload failed. Please try again.', {
+      code: "network_error",
+    });
   }
 }
 
