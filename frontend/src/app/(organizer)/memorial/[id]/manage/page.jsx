@@ -27,7 +27,7 @@ function MemorialHeader({ memorial, onShare }) {
       </div>
       <div className="flex-1 min-w-0 pt-2">
         <h1 className="text-[32px] font-medium text-neutral-950 leading-tight">
-          {memorial?.subject_name || 'John Smith'}
+          {memorial?.subject_name || ''}
         </h1>
         <p className="mt-1 text-sm text-slate-400">
           {memorial?.date_of_birth && new Date(memorial.date_of_birth).getFullYear()}
@@ -35,7 +35,7 @@ function MemorialHeader({ memorial, onShare }) {
           {memorial?.date_of_passing && new Date(memorial.date_of_passing).getFullYear()}
         </p>
         <p className="mt-2 text-sm text-slate-500 leading-relaxed max-w-md">
-          {memorial?.bio || "This paragraph can be an example of explaining who John is. It's intended to be a part of John's profile."}
+          {memorial?.bio || ""}
         </p>
       </div>
       <div className="flex shrink-0 flex-col gap-2 pt-2">

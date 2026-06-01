@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getMemorialOutput, getMemorialById, getContributors } from '@/lib/api';
+import { getMemorialOutput, getMemorialById, getContributors, createInviteLink, createShareLink } from '@/lib/api';
 import ConstellationGraph from "@/components/output/constellation";
 import MemorialContributionsPage from "@/components/output/contribution-list";
 import MemorialContributionApproval from "@/components/output/contribution-awaiting";
@@ -520,14 +520,22 @@ function PhotoArchiveSection({ output }) {
 
 // ─── Share Modal ──────────────────────────────────────────────────────────────
 
-function ShareModal({ onClose }) {
+function ShareModal({ onClose, memorialId }) {
   const [copiedContributor, setCopiedContributor] = useState(false);
   const [copiedViewer, setCopiedViewer] = useState(false);
 
-  async function copyLink(url, type) {
-    await navigator.clipboard.writeText(url);
-    if (type === 'contributor') { setCopiedContributor(true); setTimeout(() => setCopiedContributor(false), 2000); }
-    else { setCopiedViewer(true); setTimeout(() => setCopiedViewer(false), 2000); }
+  async function copyLink(type) {
+    if (type === 'contributor') {
+      const data = await createInviteLink(memorialId);
+      await navigator.clipboard.writeText(data.invite_link.url);
+      setCopiedContributor(true);
+      setTimeout(() => setCopiedContributor(false), 2000);
+    } else {
+      const data = await createShareLink(memorialId);
+      await navigator.clipboard.writeText(data.share_link.url);
+      setCopiedViewer(true);
+      setTimeout(() => setCopiedViewer(false), 2000);
+    }
   }
 
   return (
@@ -548,7 +556,9 @@ function ShareModal({ onClose }) {
               <p className="text-h3 text-r-text">{label}</p>
               <p className="text-body-2 text-r-secondary mt-0.5">{sub}</p>
             </div>
-            <button onClick={() => copyLink('mock-url', type)} className="shrink-0 rounded-full px-4 py-2 text-h4 transition-all ml-5 border-none"
+            <button
+              onClick={() => copyLink(type)}
+              className="shrink-0 rounded-full px-4 py-2 text-h4 transition-all ml-5 border-none"
               style={{ backgroundColor: copied ? '#7D8C6A' : 'var(--color-r-btn)', color: copied ? '#FBF9F6' : 'var(--color-r-btn-text)' }}>
               {copied ? 'Copied!' : 'Copy Link'}
             </button>
@@ -694,7 +704,7 @@ export default function MemorialOutputPage() {
       </main>
 
       <BottomNav active={activeTab} onChange={setActiveTab} />
-      {showShare && <ShareModal onClose={() => setShowShare(false)} />}
+      {showShare && <ShareModal onClose={() => setShowShare(false)} memorialId={id} />}
     </div>
   );
 }

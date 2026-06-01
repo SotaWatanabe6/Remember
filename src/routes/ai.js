@@ -67,7 +67,7 @@ async function runPipelines(memorialId, jobId) {
 
 router.post('/memorials/:id/generate', authMiddleware, async (req, res) => {
   try {
-    const { data: memorial, error: memError } = await supabase.from('memorials').select('id, status').eq('id', req.params.id).eq('user_id', req.user.id).single()
+    const { data: memorial, error: memError } = await supabase.from('memorials').select('id, status').eq('id', req.params.id).eq('user_id', req.user.sub).single()
     if (memError || !memorial) return res.status(403).json({ error: 'Not authorized' })
     if (memorial.status === 'generating') return res.status(400).json({ error: 'Generation already in progress' })
 
