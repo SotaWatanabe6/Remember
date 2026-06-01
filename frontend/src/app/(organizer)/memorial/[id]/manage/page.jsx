@@ -14,6 +14,7 @@ import MemorialContributionApproval from "../_components/contribution-awaiting";
 import StorySlideshow from "@/components/output/StorySlideshow";
 import VoicesTab from "@/components/output/VoicesTab";
 import ProcessingTextSequence from "@/components/dashboard/ProcessingTextSequence";
+import { getSupabaseClient } from "@/lib/supabaseClient.js";
 import {  ChevronLeft,
   ChevronRight } from "lucide-react";
 
@@ -32,7 +33,17 @@ function isLocalDevAuthError(error) {
   return message.includes("not authorized") || message.includes("401") || message.includes("403");
 }
 
-function getStoredAuthToken() {
+async function getCurrentAuthToken() {
+  try {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.auth.getSession();
+    if (!error && data.session?.access_token) {
+      return data.session.access_token;
+    }
+  } catch {
+    // Fall back to the legacy localStorage shape below.
+  }
+
   if (typeof window === "undefined") return null;
 
   const stored = window.localStorage.getItem(SUPABASE_AUTH_TOKEN_KEY);
@@ -707,7 +718,7 @@ export default function MemorialOutputPage() {
     setContributorsLoading(true);
     setContributorsError(null);
     try {
-      const contributor = await getMemorialContributors(memorialId, getStoredAuthToken());
+      const contributor = await getMemorialContributors(memorialId, await getCurrentAuthToken());
       setContributors(contributor.contributors ?? []);
     } catch (err) {
       setContributorsError(err instanceof Error ? err.message : "Failed to fetch contributors");
@@ -723,7 +734,7 @@ export default function MemorialOutputPage() {
     setOutputLoading(true);
     setOutputError(null);
     try {
-      const token = getStoredAuthToken();
+      const token = await getCurrentAuthToken();
       const data = await getMemorialOutput(id, token, options);
       setOutput(data);
       return data;
@@ -743,7 +754,7 @@ export default function MemorialOutputPage() {
     setGenerationError(null);
     setGenerationJob(null);
 
-    const token = getStoredAuthToken();
+    const token = await getCurrentAuthToken();
 
     try {
       const generation = await generateMemorialOutput(memorialId, token);
