@@ -37,6 +37,17 @@ function MemorialHeader({ memorial, onShare }) {
         <p className="mt-2 text-sm text-slate-500 leading-relaxed max-w-md">
           {memorial?.bio || ""}
         </p>
+
+        {memorial?.status && (
+        <span className="mt-3 inline-block rounded-full px-4 py-1.5 text-caption bg-r-shape"
+          style={{ color: '#FBF9F6' }}>
+          {memorial.status === 'collecting' ? 'Collecting'
+            : memorial.status === 'generating' ? 'Generating'
+            : memorial.status === 'complete' ? 'Complete'
+            : memorial.status}
+        </span>
+      )}
+
       </div>
       <div className="flex shrink-0 flex-col gap-2 pt-2">
         <Link href={`/memorial/${memorial?.id}/output`} className="rounded-full bg-neutral-950 px-6 py-2.5 text-sm font-semibold text-white text-center hover:opacity-80 transition-opacity">
@@ -215,7 +226,28 @@ function ContributionsTab({contributorslist}) {
         </div>    
         {
           value === "contributors" ? (
-            <MemorialContributionsPage contributors={contributors} />
+            <div className="grid grid-cols-3 gap-4">
+              {contributors.map((contributor) => (
+                <div key={contributor.id} className="rounded-2xl p-5 flex flex-col gap-3 bg-r-modal border border-r-border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full shrink-0 bg-r-card" />
+                    <div className="min-w-0">
+                      <p className="text-body-2 font-semibold text-r-text">{contributor.name}</p>
+                      <p className="text-caption text-r-muted mt-0.5">10 contributions</p>
+                      <p className="text-caption text-r-muted">
+                        Last submitted {contributor.submitted_at
+                          ? new Date(contributor.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                          : '—'}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="self-start rounded-full px-4 py-1.5 text-caption bg-r-shape"
+                    style={{ color: '#FBF9F6' }}>
+                    {contributor.relationship_type || 'Relationship'}
+                  </span>
+                </div>
+              ))}
+            </div>
           ) : value === "awaiting" ? (
             <MemorialContributionApproval contributors={current} gallery={awaitinglist.length}/>
           ) : null
@@ -607,6 +639,7 @@ export default function MemorialOutputPage() {
         date_of_birth: m.date_of_birth || m.birth_date || null,
         date_of_passing: m.date_of_passing || m.death_date || null,
         bio: m.brief_biography || m.short_description || null,
+        status: m.status || null,  // added this
       });
     }).catch(() => {
       const mockData = mockMemorials.find((m) => m.id === id) ?? mockMemorials[0];
@@ -617,6 +650,7 @@ export default function MemorialOutputPage() {
         date_of_birth: mockData.date_of_birth || mockData.birth_date || null,
         date_of_passing: mockData.date_of_passing || mockData.death_date || null,
         bio: mockData.brief_biography || mockData.short_description || null,
+        status: mockData.status || null,  // added this
       });
     });
   }, [id]);
