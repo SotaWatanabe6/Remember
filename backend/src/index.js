@@ -1,5 +1,7 @@
 const express = require('express')
 const cors = require('cors')
+const helmet = require('helmet')
+const rateLimit = require('express-rate-limit')
 const dotenv = require('dotenv')
 
 dotenv.config()
@@ -8,23 +10,47 @@ const authRoutes = require('./routes/auth')
 const memorialRoutes = require('./routes/memorials')
 const contributeRoutes = require('./routes/contribute')
 const aiRoutes = require('./routes/ai')
+const { errorHandler } = require('./middleware/errorHandler')
 const shareRoutes = require('./routes/share')        // ← ADDED
 
 const app = express()
 
-app.use(cors())
-app.use(express.json())
+// ── Security ──────────────────────────────────────────────────────────────────
+app.use(helmet())
 
-app.get('/health', (req, res) => {
-  res.json({ ok: true })
+app.use(cors({
+  origin: ["http://localhost:3000", "http://localhost:5173"],
+  methods: ["GET", "POST", "PATCH", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}))
+
+// Rate limiter — max 20 upload requests per 15 minutes per IP
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: "Too many uploads. Please wait and try again." }
 })
 
+// ── Body parsing ──────────────────────────────────────────────────────────────
+app.use(express.json())
+
+// ── Health check ──────────────────────────────────────────────────────────────
+app.get('/health', (req, res) => {
+  res.json({ ok: true, message: "Remember API is running" })
+})
+
+// ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/auth', authRoutes)
 app.use('/memorials', memorialRoutes)
-app.use('/contribute', contributeRoutes)
+app.use('/contribute', uploadLimiter, contributeRoutes)
 app.use('/ai', aiRoutes)
 app.use('/share', shareRoutes)                       // ← ADDED
 
+
+// ── Global error handler ──────────────────────────────────────────────────────
+app.use(errorHandler)
+
+// ── Start server ──────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
   console.log(`Remember API running on port ${PORT}`)
