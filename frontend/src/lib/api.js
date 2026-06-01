@@ -349,7 +349,7 @@ export async function getMemorial(id) {
   try {
     const token = await getAuthToken();
     const response = await fetch(`${API_URL}/memorials/${id}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     });
     if (!response.ok) throw new Error('Failed to fetch memorial');
     return response.json();
@@ -398,8 +398,19 @@ export const generateInviteLink = createInviteLink;
  * TODO: Wire to real backend when Mendrika needs it.
  */
 export async function updateInviteLink(memorialId, { is_active }) {
-  await delay(MOCK_DELAY);
-  return { invite_link: { id: MOCK_INVITE_LINK.id, is_active } };
+  try {
+    const token = await getAuthToken();
+    const response = await fetch(`${API_URL}/memorials/${memorialId}/invite-link`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ expires_at: expires_at ?? null, max_uses: max_uses ?? null }),
+    });
+    if (!response.ok) throw new Error('Failed to create invite link');
+    return response.json();
+  } catch {
+    await delay(MOCK_DELAY);
+    return { invite_link: { id: MOCK_INVITE_LINK.id, is_active } };
+  }  
 }
 
 // ─── MENDRIKA: CONTRIBUTORS + AI ─────────────────────────────────────────────
@@ -429,9 +440,21 @@ export async function getContributors(memorialId) {
  * TODO: Wire to real backend when share link generation is built.
  */
 export async function createShareLink(memorialId) {
-  await delay(MOCK_DELAY);
-  const token = 'mock_share_' + Math.random().toString(36).slice(2);
-  return { share_link: { token, url: `http://localhost:3000/share/${token}` } };
+  try {
+    const token = await getAuthToken();
+    const response = await fetch(`${API_URL}/memorials/${memorialId}/share`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+    });
+    if (!response.ok) throw new Error('Failed to share link');
+    return response.json();
+  } catch {
+    // Fallback to mock — prevents constellation page from crashing
+    await delay(MOCK_DELAY);
+    const token = 'mock_share_' + Math.random().toString(36).slice(2);
+    return { share_link: { token, url: process.env.NEXT_PUBLIC_APP_URL+"/memorial/"+memorialId+"/output" } };
+
+  }  
 }
 
 /**

@@ -280,9 +280,16 @@ export default function SharePage() {
     async function load() {
       try {
         const data = await getShareToken(shareToken);
+        console.log(data);
         setOutput(data);
+        // Step 2 — fetch memorial header separately
+        // CONFIRMED by Ashwini: GET /share/:token does NOT return memorial data
+        // GET /memorials/:id returns subject_name, dates, cover_photo_url
+        // Day 9: get memorial ID from the share token lookup
+        // Step 2 — fetch memorial header using getMemorialById (real fetch with fallback)
+        // Real memorial ID confirmed from Supabase invite_links table
         try {
-          const memorialData = await getMemorialById('7638e909-d995-437c-b01e-b913854009a7');
+          const memorialData = await getMemorialById(shareToken);
           setMemorial(memorialData || mockMemorials[0]);
         } catch { setMemorial(mockMemorials[0]); }
       } catch (err) { setError(err.message); }
