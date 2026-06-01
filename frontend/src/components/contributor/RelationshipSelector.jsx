@@ -24,6 +24,10 @@ const relationshipErrorCopy = {
     title: "Contributions are closed",
     body: "This memorial is not accepting new contributions right now. Thank you for wanting to share a memory.",
   },
+  error: {
+    title: "We could not open your contribution",
+    body: "Please return to the invitation page and try again.",
+  },
   missing: {
     title: "We could not find your contribution draft",
     body: "Please return to the invitation page and enter your name before choosing your relationship.",
@@ -114,15 +118,26 @@ export default function RelationshipSelector({ inviteToken }) {
 
     async function loadDraft() {
       setIsLoading(true);
-      const relationshipDraft = await getContributorRelationshipDraft(inviteToken);
+      let relationshipDraft;
+
+      try {
+        relationshipDraft = await getContributorRelationshipDraft(inviteToken);
+      } catch (error) {
+        console.error("Failed to load contributor relationship draft.", error);
+        relationshipDraft = {
+          status: "error",
+          invite: null,
+          session: null,
+        };
+      }
 
       if (!isMounted) {
         return;
       }
 
       setDraft(relationshipDraft);
-      setRelationshipType(relationshipDraft.relationship_type ?? "");
-      setCustomLabel(relationshipDraft.relationship_custom_label ?? "");
+      setRelationshipType(relationshipDraft?.relationship_type ?? "");
+      setCustomLabel(relationshipDraft?.relationship_custom_label ?? "");
       setIsLoading(false);
     }
 

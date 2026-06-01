@@ -7,6 +7,9 @@ import {
   createMemorial as apiCreateMemorial,
   getMemorials as apiGetMemorials,
   getMemorial as apiGetMemorial,
+  getMemorialOutput as apiGetMemorialOutput,
+  getJobStatus as apiGetJobStatus,
+  triggerGeneration as apiTriggerGeneration,
 } from "../lib/api.js";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -104,7 +107,9 @@ export async function getMemorial(id) {
  * Used by Mendrika's output pages.
  * token = Supabase session access_token
  */
-export async function getMemorialOutput(id, token) {
+export async function getMemorialOutput(id, token, options = {}) {
+  const { fallbackToMock = false } = options;
+
   try {
     const response = await fetch(`${API_BASE_URL}/memorials/${id}/output`, {
       method: 'GET',
@@ -113,12 +118,26 @@ export async function getMemorialOutput(id, token) {
         Authorization: `Bearer ${token?.access_token || token || ''}`,
       },
     });
+
+    if (response.status === 404) {
+      return fallbackToMock ? apiGetMemorialOutput(id) : null;
+    }
     if (!response.ok) throw new Error(`Failed to fetch memorial output: ${response.status}`);
+
     return await response.json();
-  } catch (error) {
-    console.error('Error fetching memorial output:', error);
-    return { story: [], constellation: { nodes: [], edges: [] }, voices: [], photos: [] };
+  } catch {
+    return apiGetMemorialOutput(id);
   }
+}
+
+export async function generateMemorialOutput(id, token) {
+  if (!id) throw new Error("memorial id is required");
+  return apiTriggerGeneration(id, token);
+}
+
+export async function getGenerationJobStatus(jobId, token) {
+  if (!jobId) throw new Error("generation job id is required");
+  return apiGetJobStatus(jobId, token);
 }
 
 /**
