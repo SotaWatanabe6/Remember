@@ -141,6 +141,7 @@ export default function PhotosPage() {
   const [assets, setAssets] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [uploadingIds, setUploadingIds] = useState(new Set());
+  const [uploadError, setUploadError] = useState(null);
 
   const handleFiles = useCallback(async (files) => {
     const previews = files.map((file, i) => ({
@@ -165,8 +166,11 @@ export default function PhotosPage() {
         }));
         return [...kept, ...newAssets];
       });
+      setUploadError(null);
     } catch (err) {
       setAssets((prev) => prev.filter((a) => !a.pending));
+      const errorMessage = err?.message || 'Failed to upload photos. Please try again.';
+      setUploadError(errorMessage);
       console.error('Upload failed:', err);
     } finally {
       setUploading(false);
@@ -216,6 +220,30 @@ export default function PhotosPage() {
           </h1>
           <p className="mt-2 text-[17px]" style={{ color: '#5F5A52' }}>Upload photos below.</p>
         </div>
+
+        {/* Error Alert */}
+        {uploadError && (
+          <div
+            className="rounded-2xl p-4 flex items-start justify-between gap-3"
+            style={{ backgroundColor: '#FEE2E2', border: '1px solid #FECACA' }}
+          >
+            <div className="flex-1">
+              <p className="text-sm font-medium" style={{ color: '#991B1B' }}>
+                {uploadError}
+              </p>
+            </div>
+            <button
+              onClick={() => setUploadError(null)}
+              className="flex-shrink-0 text-red-800 hover:text-red-900 transition-colors"
+              aria-label="Dismiss error"
+            >
+              <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        )}
 
         {/* Drop zone */}
         <DropZone onFiles={handleFiles} />

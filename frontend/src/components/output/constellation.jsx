@@ -10,6 +10,106 @@ import {
 import { getContributors,getMemorial} from '@/lib/api';
 
 
+
+// CSS animations for constellation graph
+const styles = `
+  @keyframes fadeInScale {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  
+  @keyframes fadeOut {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+  
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 0.6;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+  
+  .modal-enter {
+    animation: fadeInScale 300ms ease-out;
+  }
+  
+  .node-highlight {
+    transition: r 300ms ease-out, fill 200ms ease-out;
+  }
+  
+  .pulse-node {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+`;
+
+// Inject styles on component mount
+if (typeof window !== 'undefined') {
+  const styleSheet = document.createElement('style');
+  styleSheet.textContent = styles;
+  document.head.appendChild(styleSheet);
+}
+
+
+// Pulsing placeholder for constellation loading state
+function PulsingPlaceholder() {
+  const placeholderNodes = [...Array(8)].map((_, i) => ({
+    id: `placeholder-${i}`,
+    x: 100 + (i % 3) * 200,
+    y: 150 + Math.floor(i / 3) * 150,
+    prominence: 0.3 + (Math.random() * 0.4),
+  }));
+
+  const placeholderLinks = placeholderNodes.slice(0, -1).map((node, i) => ({
+    source: node,
+    target: placeholderNodes[i + 1],
+  }));
+
+  return (
+    <svg width="100%" height="400" viewBox="0 0 800 400" className="border border-neutral-200 rounded-2xl bg-neutral-50">
+      {/* Placeholder edges */}
+      {placeholderLinks.map((link, i) => (
+        <line
+          key={`link-${i}`}
+          x1={link.source.x}
+          y1={link.source.y}
+          x2={link.target.x}
+          y2={link.target.y}
+          stroke="#e5e7eb"
+          strokeWidth="1"
+          className="pulse-node"
+        />
+      ))}
+      
+      {/* Placeholder nodes */}
+      {placeholderNodes.map((node) => (
+        <circle
+          key={node.id}
+          cx={node.x}
+          cy={node.y}
+          r={node.prominence * 40 + 20}
+          fill="#f3f4f6"
+          stroke="#d1d5db"
+          strokeWidth="2"
+          className="pulse-node"
+        />
+      ))}
+    </svg>
+  );
+}
+
 export default function ConstellationGraph({ ai_output }) {
   const ref = useRef(null);
   const { id } = useParams();
@@ -22,13 +122,20 @@ export default function ConstellationGraph({ ai_output }) {
       ...prev,
       [id]: !prev[id],
     }));
-    const filteredNodes = nodes.filter(item => hiddenItems[item.id] !== false);
-    console.log("Filtered Nodes: ", hiddenItems);
-    const filteredLinks = links.filter(
-      l => hiddenItems[l.target.id] !== false
-    );
-    setNodes(filteredNodes);
-    setLinks(filteredLinks);
+    
+    // Use setTimeout to allow D3 to apply smooth exit transitions
+    setTimeout(() => {
+      const filteredNodes = nodes.filter(item => {
+        const shouldHide = !(!prev[item.id] ? true : (prev[item.id] !== true));
+        return !shouldHide;
+      });
+      console.log("Filtered Nodes: ", prev);
+      const filteredLinks = links.filter(
+        l => !prev[l.target.id]
+      );
+      setNodes(filteredNodes);
+      setLinks(filteredLinks);
+    }, 300);
   };
   const [contributor, setContributors] = useState([]);
   const [memorial, setMemorial] = useState();
@@ -44,7 +151,21 @@ export default function ConstellationGraph({ ai_output }) {
       quotes: t.quotes
     }))    
   );
-  const [links, setLinks] = useState(
+
+    const [constellationLoading, setConstellationLoading] = useState(true);
+  
+  // Generate placeholder nodes for loading state
+  const placeholderNodes = [...Array(8)].map((_, i) => ({
+    id: `placeholder-${i}`,
+    name: `Node ${i + 1}`,
+    group: 'placeholder',
+    prominence: 0.3 + (Math.random() * 0.4),
+    summary: '',
+    photos: [],
+    quotes: [],
+    x: Math.random() * 600,
+    y: Math.random() * 400,
+  }));  const [links, setLinks] = useState(
     ai_output.constellation.edges.map(d => ({
       source: d.source,
       target: d.target,
@@ -168,6 +289,9 @@ export default function ConstellationGraph({ ai_output }) {
       .attr("height", height);
 
     svg.selectAll("*").remove();
+    
+    // Mark constellation as loaded once rendering starts
+    setConstellationLoading(false);
 
     const simulation = d3
       .forceSimulation(nodes)
@@ -239,6 +363,15 @@ export default function ConstellationGraph({ ai_output }) {
 
       label.attr("x", (d) => d.x).attr("y", (d) => d.y);
     });
+    
+    // Add smooth transition when nodes enter
+    node.transition()
+      .duration(500)
+      .attr("opacity", 1);
+      
+    link.transition()
+      .duration(500)
+      .attr("opacity", 1);
 
     function dragStarted(event, d) {
       if (!event.active) simulation.alphaTarget(0.3).restart();
@@ -282,7 +415,11 @@ export default function ConstellationGraph({ ai_output }) {
         </h2>        
       </div>  
       <div className="relative h-full w-full rounded-sm bg-[#d9d9d9] p-10">        
-        <svg ref={ref} ></svg>
+        {constellationLoading ? (
+          <PulsingPlaceholder />
+        ) : (
+          <svg ref={ref} ></svg>
+        )}
         {tab === "Relationships" &&  (
         <div className="absolute bottom-4 left-4 w-36 rounded bg-[#767676] p-3 text-white shadow-md">
             <p className="mb-3 text-sm">Legend</p>
@@ -432,7 +569,7 @@ export default function ConstellationGraph({ ai_output }) {
 
         {selectedNode && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-            <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl overflow-hidden">
+            <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl overflow-hidden modal-enter">
               {/* HEADER */}
               <div className="flex items-center justify-between border-b px-6 py-4">
                 <div>

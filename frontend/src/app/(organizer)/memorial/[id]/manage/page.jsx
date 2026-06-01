@@ -3,6 +3,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { SkeletonCard, SkeletonGrid, SkeletonTable, SkeletonTabs } from "@/components/ui-components/skeleton-loader";
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getMemorialOutput, getContributors, getMemorial } from '@/lib/api';
@@ -17,7 +18,7 @@ import {  ChevronLeft,
 
 function MemorialHeader({ memorial, onShare }) {
   return (
-    <div className="flex items-start gap-8">
+    <div className="flex flex-col md:flex-row items-start gap-4 md:gap-8">
       <div className="h-36 w-36 shrink-0 overflow-hidden rounded-full bg-[#4a5568]">
         {memorial?.cover_photo_url ? (
           <img src={memorial.cover_photo_url} alt={memorial.subject_name} className="h-full w-full object-cover" />
@@ -38,7 +39,7 @@ function MemorialHeader({ memorial, onShare }) {
           {memorial?.bio || "This paragraph can be an example of explaining who John is. It's intended to be a part of John's profile."}
         </p>
       </div>
-      <div className="flex shrink-0 flex-col gap-2 pt-2">
+      <div className="flex shrink-0 flex-col gap-2 pt-2 w-full md:w-auto">
         <Link href={`/memorial/${memorial?.id}/output`} className="rounded-full bg-neutral-950 px-6 py-2.5 text-sm font-semibold text-white text-center hover:opacity-80 transition-opacity">
           View page
         </Link>
@@ -64,7 +65,7 @@ function TabBar({ active, onChange }) {
         <button
           key={tab}
           onClick={() => onChange(tab)}
-          className={`px-8 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
+          className={`px-4 md:px-8 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
             active === tab
               ? 'border-neutral-950 text-neutral-950 font-semibold'
               : 'border-transparent text-slate-500 hover:text-neutral-950'
@@ -109,7 +110,7 @@ function ArchiveTab() {
         <button className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-80 transition-opacity">Filter</button>
         <button className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-80 transition-opacity">Sort</button>
       </div>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {[...Array(3)].map((_, i) => <div key={i} className="aspect-[4/3] rounded-xl bg-neutral-200" />)}
       </div>
     </div>
@@ -646,8 +647,27 @@ export default function MemorialOutputPage() {
 
         <div>
           {loading ? (
-            <div className="flex justify-center py-16">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-950" />
+            <div className="pt-6 space-y-6">
+              <SkeletonTabs />
+              {activeTab === 'Archive' && (
+                <div className="space-y-4">
+                  <div className="flex gap-4">
+                    {[...Array(3)].map((_, i) => (
+                      <SkeletonCard key={i} className="h-10 w-24" />
+                    ))}
+                  </div>
+                  <SkeletonGrid columns={3} count={9} height="200px" />
+                </div>
+              )}
+              {activeTab === 'Contributions' && (
+                <SkeletonTable rows={5} columns={3} />
+              )}
+              {activeTab === 'Outputs' && (
+                <div className="space-y-4">
+                  <SkeletonCard className="h-64 w-full" />
+                  <SkeletonGrid columns={2} count={4} height="150px" />
+                </div>
+              )}
             </div>
           ) : error ? (
             // PRIORITY 4: Error state with retry button
