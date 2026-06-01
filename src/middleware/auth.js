@@ -19,7 +19,6 @@ module.exports = async function authMiddleware(req, res, next) {
         message: 'Unauthorized',
       });
     }
-
     req.user = data.user;
 
     next();
