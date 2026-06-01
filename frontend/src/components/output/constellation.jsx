@@ -10,7 +10,7 @@ import {
 import { getContributors,getMemorial} from '@/lib/api';
 
 
-export default function ConstellationGraph({ ai_output }) {
+export default function ConstellationGraph({ ai_output, width, height }) {
   const ref = useRef(null);
   const { id } = useParams();
 
@@ -168,8 +168,6 @@ export default function ConstellationGraph({ ai_output }) {
     if (!hiddenContributors) return;
     if (!hiddenThemes) return;
 
-    const width = 800;
-    const height = 800;
 
     const edgeStyle = (type) => {
       switch (type) {

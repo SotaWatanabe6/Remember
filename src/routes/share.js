@@ -12,7 +12,6 @@ router.get('/:token', async (req, res) => {
       .select('*')
       .eq('token', req.params.token)
       .single()
-
     if (inviteError || !invite) {
       return res.status(404).json({ error: 'Memorial not found.' })
     }
@@ -29,7 +28,7 @@ router.get('/:token', async (req, res) => {
       .order('created_at', { ascending: false })
       .limit(1)
       .single()
-    console.log(invite.memorial_id);
+
     if (outputError || !output) {
       return res.status(404).json({ error: 'Memorial output not found.' })
     }

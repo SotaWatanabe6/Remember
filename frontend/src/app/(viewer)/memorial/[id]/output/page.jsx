@@ -93,7 +93,7 @@ function ConstellationsSection({ output }) {
   }
   return (
     <div className="py-4">
-      <ConstellationGraph ai_output={output} />
+      <ConstellationGraph ai_output={output} width={1250} height={800} />
     </div>
   );
 }
