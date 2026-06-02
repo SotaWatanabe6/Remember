@@ -8,10 +8,16 @@ import ConstellationGraph from "@/components/output/constellation";
 import MemorialContributionsPage from "@/components/output/contribution-list";
 import MemorialContributionApproval from "@/components/output/contribution-awaiting";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import { getShareToken, getMemorialById } from '@/lib/api';
 import { mockMemorials } from '@/data/mockMemorials.js';
+import StorySlideshow from '@/components/output/StorySlideshow';
+import VoicesTab from '@/components/output/VoicesTab';
 
 // ─── Tab bar — conditional active/inactive stays inline ──────────────────────
+
+// ─── Tab bar ─────────────────────────────────────────────────────────────────
 
 const TABS = ['Story', 'Constellation', 'Voices', 'All Photos'];
 
@@ -93,6 +99,12 @@ function VoicesTab({ data }) {
     );
   }
   return <div className="flex flex-col items-center justify-center py-24"><p className="text-body-2 text-r-muted">Voices tab — built by Sungjun</p></div>;
+function ConstellationTab() {
+  return (
+    <div className="flex flex-col items-center justify-center py-24">
+      <p className="text-slate-400 text-sm">Constellation tab — built by Mendrika</p>
+    </div>
+  );
 }
 
 // ─── Lightbox ─────────────────────────────────────────────────────────────────
@@ -280,8 +292,8 @@ export default function SharePage() {
     async function load() {
       try {
         const data = await getShareToken(shareToken);
-        console.log(data);
         setOutput(data);
+
         // Step 2 — fetch memorial header separately
         // CONFIRMED by Ashwini: GET /share/:token does NOT return memorial data
         // GET /memorials/:id returns subject_name, dates, cover_photo_url
@@ -289,7 +301,7 @@ export default function SharePage() {
         // Step 2 — fetch memorial header using getMemorialById (real fetch with fallback)
         // Real memorial ID confirmed from Supabase invite_links table
         try {
-          const memorialData = await getMemorialById(shareToken);
+          const memorialData = await getMemorialById('7638e909-d995-437c-b01e-b913854009a7');
           setMemorial(memorialData || mockMemorials[0]);
         } catch { setMemorial(mockMemorials[0]); }
       } catch (err) { setError(err.message); }
@@ -315,9 +327,9 @@ export default function SharePage() {
             <MemorialHeader memorial={memorial} />
             <TabBar active={activeTab} onChange={setActiveTab} />
             <div>
-              {activeTab === 'Story' && <StoryTab data={output?.story} />}
+              {activeTab === 'Story' && <StorySlideshow output={output} story={output?.story} />}
               {activeTab === 'Constellation' && <ConstellationTab data={output?.constellation} />}
-              {activeTab === 'Voices' && <VoicesTab data={output?.voices} />}
+              {activeTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} />}
               {activeTab === 'All Photos' && <AllPhotosTab albums={normalizePhotos(output?.photos)} />}
             </div>
           </>

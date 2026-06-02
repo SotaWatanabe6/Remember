@@ -71,23 +71,7 @@ export default function VoiceRecordingCard({
     <article className="rounded-[10px] border border-[#90a1b9]/60 bg-[#90a1b9]/15 p-5 shadow-auth sm:p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            {recording.category ? (
-              <span className="rounded-full bg-[#b8cae0] px-3 py-1 text-xs font-medium text-[#2d3748]">
-                {recording.category}
-              </span>
-            ) : null}
-            {recording.tags.map((tag) => (
-              <span
-                key={tag}
-                className="rounded-full border border-[#90a1b9]/60 bg-white/70 px-2.5 py-1 text-xs text-slate-600"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-
-          <h3 className="mt-4 text-xl font-medium leading-7 text-neutral-950">{recording.title}</h3>
+          <h3 className="text-xl font-medium leading-7 text-neutral-950">{recording.title}</h3>
           {contributorLine ? (
             <p className="mt-1 text-sm leading-5 text-slate-500">{contributorLine}</p>
           ) : null}
