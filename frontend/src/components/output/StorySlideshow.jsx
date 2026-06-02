@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 
 function formatRelationship(relationshipType) {
   if (!relationshipType) return '';
@@ -142,6 +143,7 @@ function StoryErrorState({ message }) {
 export default function StorySlideshow({ output, story, loading = false, error = null }) {
   const slides = useMemo(() => normalizeStorySlides(output, story), [output, story]);
   const [requestedIndex, setRequestedIndex] = useState(0);
+  const shouldReduceMotion = useReducedMotion();
   const currentIndex = slides.length > 0 ? Math.min(requestedIndex, slides.length - 1) : 0;
 
   useEffect(() => {
@@ -175,6 +177,7 @@ export default function StorySlideshow({ output, story, loading = false, error =
   const altText = slide.quote
     ? `Memory contributed by ${slide.contributorName}: ${slide.quote}`
     : `Story photo contributed by ${slide.contributorName}`;
+  const slideTransition = shouldReduceMotion ? { duration: 0 } : { duration: 0.35, ease: 'easeInOut' };
 
   return (
     <section
@@ -186,31 +189,51 @@ export default function StorySlideshow({ output, story, loading = false, error =
           <div className="h-full rounded-r-full bg-white transition-all duration-300" style={{ width: `${progress}%` }} />
         </div>
 
-        {slide.photoUrl ? (
-          <img
-            key={slide.id}
-            src={slide.photoUrl}
-            alt={altText}
-            className="h-full w-full object-cover opacity-100 transition-opacity duration-300"
-          />
-        ) : (
-          <div className="grid h-full grid-cols-10 grid-rows-8" aria-hidden="true">
-            {Array.from({ length: 80 }).map((_, index) => (
-              <div
-                key={index}
-                className={index % 2 === Math.floor(index / 10) % 2 ? 'bg-[#f7f7f7]' : 'bg-[#e6e6e6]'}
-              />
-            ))}
-          </div>
-        )}
+        <AnimatePresence initial={false}>
+          <motion.div
+            key={slide.id ?? currentIndex}
+            className="absolute inset-0"
+            initial={shouldReduceMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={shouldReduceMotion ? { opacity: 1 } : { opacity: 0 }}
+            transition={slideTransition}
+          >
+            {slide.photoUrl ? (
+              <img src={slide.photoUrl} alt={altText} className="h-full w-full object-cover" />
+            ) : (
+              <div className="grid h-full grid-cols-10 grid-rows-8" aria-hidden="true">
+                {Array.from({ length: 80 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className={index % 2 === Math.floor(index / 10) % 2 ? 'bg-[#f7f7f7]' : 'bg-[#e6e6e6]'}
+                  />
+                ))}
+              </div>
+            )}
 
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-black/10" aria-hidden="true" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-black/10" aria-hidden="true" />
 
-        {slide.themeLabel ? (
-          <div className="absolute right-4 top-5 z-20 rounded-full bg-white/85 px-3 py-1 text-xs font-medium text-[#1c398e] shadow-auth backdrop-blur-sm sm:right-7 sm:top-7 sm:text-sm">
-            {slide.themeLabel}
-          </div>
-        ) : null}
+            {slide.themeLabel ? (
+              <div className="absolute right-4 top-5 z-20 rounded-full bg-white/85 px-3 py-1 text-xs font-medium text-[#1c398e] shadow-auth backdrop-blur-sm sm:right-7 sm:top-7 sm:text-sm">
+                {slide.themeLabel}
+              </div>
+            ) : null}
+
+            <div className="absolute inset-x-0 bottom-0 z-10 px-5 pb-7 pt-24 sm:px-8 sm:pb-9">
+              <blockquote className="max-w-3xl text-[26px] font-normal leading-tight text-white sm:text-[34px] sm:leading-[1.15]">
+                {slide.quote}
+              </blockquote>
+              <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-[#cad5e2] sm:text-base">
+                <span>{slide.contributorName}</span>
+                {slide.relationshipLabel ? (
+                  <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm sm:text-sm">
+                    {slide.relationshipLabel}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </motion.div>
+        </AnimatePresence>
 
         <button
           type="button"
@@ -231,20 +254,6 @@ export default function StorySlideshow({ output, story, loading = false, error =
         >
           <ChevronRightIcon />
         </button>
-
-        <div className="absolute inset-x-0 bottom-0 z-10 px-5 pb-7 pt-24 sm:px-8 sm:pb-9">
-          <blockquote className="max-w-3xl text-[26px] font-normal leading-tight text-white sm:text-[34px] sm:leading-[1.15]">
-            {slide.quote}
-          </blockquote>
-          <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-[#cad5e2] sm:text-base">
-            <span>{slide.contributorName}</span>
-            {slide.relationshipLabel ? (
-              <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm sm:text-sm">
-                {slide.relationshipLabel}
-              </span>
-            ) : null}
-          </div>
-        </div>
       </div>
 
       <div className="flex min-h-[88px] items-center justify-between gap-4 border-t border-[#e2e8f0] px-5 py-5 sm:px-7">

@@ -2,18 +2,17 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import MemorialContributionsPage from "@/components/output/contribution-list";
-import MemorialContributionApproval from "@/components/output/contribution-awaiting";
-import {  ChevronLeft, ChevronRight } from "lucide-react";
-import ConstellationGraph from "@/components/output/constellation";
-// ─── Tab bar (same as output page) ────────
 import { getShareToken, getMemorialById } from '@/lib/api';
 import { mockMemorials } from '@/data/mockMemorials.js';
+import StorySlideshow from '@/components/output/StorySlideshow';
+import VoicesTab from '@/components/output/VoicesTab';
 
 // Cream background matching output page
 const CREAM_BG = '#F0EAE2';
+
+// ─── Tab bar ─────────────────────────────────────────────────────────────────
 
 const TABS = ['Story', 'Constellation', 'Voices', 'All Photos'];
 
@@ -87,59 +86,10 @@ function MemorialHeader({ memorial }) {
 
 // ─── Placeholder tabs ─────────────────────────────────────────────────────────
 
-function StoryTab({ data }) {
-  if (!data || data.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <p className="text-neutral-950 text-base font-medium">No story generated yet</p>
-        <p className="text-slate-500 text-sm mt-1">
-          The story will appear here once the memorial has been generated.
-        </p>
-      </div>
-    );
-  }
+function ConstellationTab() {
   return (
     <div className="flex flex-col items-center justify-center py-24">
-      <p className="text-slate-400 text-sm">Story tab — built by Sungjun</p>
-    </div>
-  );
-}
-
-function ConstellationTab({ data }) {
-  if (!data) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <p className="text-neutral-950 text-base font-medium">No constellation yet</p>
-        <p className="text-slate-500 text-sm mt-1">
-          The constellation will appear here once the memorial has been generated.
-        </p>
-      </div>
-    );
-  }
-  return (
-    <div className="py-4">
-      <ConstellationGraph ai_output={{ constellation: data }} />
-    </div>
-  );
-}
-
-
-function VoicesTab({ data }) {
-  if (!data || data.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <p className="text-neutral-950 text-base font-medium">
-          No voice recordings were submitted for this memorial
-        </p>
-        <p className="text-slate-500 text-sm mt-1">
-          Voice recordings will appear here once contributors have submitted.
-        </p>
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-col items-center justify-center py-24">
-      <p className="text-slate-400 text-sm">Voices tab — built by Sungjun</p>
+      <p className="text-slate-400 text-sm">Constellation tab — built by Mendrika</p>
     </div>
   );
 }
@@ -378,8 +328,8 @@ export default function SharePage() {
       try {
         // Step 1 — fetch the four output tabs
         const data = await getShareToken(shareToken);
-        console.log(data);
         setOutput(data);
+
         // Step 2 — fetch memorial header separately
         // CONFIRMED by Ashwini: GET /share/:token does NOT return memorial data
         // GET /memorials/:id returns subject_name, dates, cover_photo_url
@@ -387,7 +337,7 @@ export default function SharePage() {
         // Step 2 — fetch memorial header using getMemorialById (real fetch with fallback)
         // Real memorial ID confirmed from Supabase invite_links table
         try {
-          const memorialData = await getMemorialById(shareToken);
+          const memorialData = await getMemorialById('7638e909-d995-437c-b01e-b913854009a7');
           setMemorial(memorialData || mockMemorials[0]);
         } catch {
           setMemorial(mockMemorials[0]);
@@ -438,9 +388,9 @@ export default function SharePage() {
 
             {/* Tab content */}
             <div>
-              {activeTab === 'Story' && <StoryTab data={output?.story} />}
+              {activeTab === 'Story' && <StorySlideshow output={output} story={output?.story} />}
               {activeTab === 'Constellation' && <ConstellationTab data={output?.constellation} />}
-              {activeTab === 'Voices' && <VoicesTab data={output?.voices} />}
+              {activeTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} />}
               {activeTab === 'All Photos' && <AllPhotosTab albums={normalizePhotos(output?.photos)} />}
             </div>
           </>

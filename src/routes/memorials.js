@@ -40,6 +40,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
       .select('*')
       .eq('id', req.params.id)
       .single()
+    console.log("This is my data ",data);
     if (error) return res.status(404).json({ error: 'Memorial not found' })
     res.json({ memorial: data })
   } catch (err) { res.status(500).json({ error: err.message }) }

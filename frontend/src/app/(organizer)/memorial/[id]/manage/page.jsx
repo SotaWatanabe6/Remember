@@ -2,17 +2,61 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getMemorialOutput, getContributors, getMemorial,createShareLink,createInviteLink } from '@/lib/api';
+import { generateMemorialOutput, getGenerationJobStatus, getMemorialOutput } from '@/services/memorialService';
+import { getMemorialContributors} from '@/services/contributorService'
 import { mockMemorials } from '@/data/mockMemorials.js';
-import ConstellationGraph from "@/components/output/constellation";
-import MemorialContributionsPage from "@/components/output/contribution-list";
-import MemorialContributionApproval from "@/components/output/contribution-awaiting";
+import ConstellationGraph from "../_components/constellation";
+import MemorialContributionsPage from "../_components/contribution-list";
+import MemorialContributionApproval from "../_components/contribution-awaiting";
+import StorySlideshow from "@/components/output/StorySlideshow";
+import VoicesTab from "@/components/output/VoicesTab";
+import { getMemorial } from '@/lib/api.js';
 import ProcessingTextSequence from "@/components/dashboard/ProcessingTextSequence";
+import { getSupabaseClient } from "@/lib/supabaseClient.js";
 import {  ChevronLeft,
   ChevronRight } from "lucide-react";
+
+const SUPABASE_AUTH_TOKEN_KEY = "sb-tbpdhybqbjucoxdizlgw-auth-token";
+const GENERATION_POLL_INTERVAL_MS = 1500;
+const GENERATION_MAX_POLL_ATTEMPTS = 60;
+const GENERATION_SUCCESS_STATUSES = new Set(["complete", "completed", "succeeded", "success"]);
+const GENERATION_FAILURE_STATUSES = new Set(["failed", "error"]);
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function isLocalDevAuthError(error) {
+  if (process.env.NODE_ENV === 'production') return false;
+
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error || "").toLowerCase();
+  return message.includes("not authorized") || message.includes("401") || message.includes("403");
+}
+
+async function getCurrentAuthToken() {
+  try {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.auth.getSession();
+    if (!error && data.session?.access_token) {
+      return data.session.access_token;
+    }
+  } catch {
+    // Fall back to the legacy localStorage shape below.
+  }
+
+  if (typeof window === "undefined") return null;
+
+  const stored = window.localStorage.getItem(SUPABASE_AUTH_TOKEN_KEY);
+  if (!stored) return null;
+
+  try {
+    const parsed = JSON.parse(stored);
+    return parsed?.access_token || parsed?.currentSession?.access_token || parsed;
+  } catch {
+    return stored;
+  }
+}
 
 // ─── Memorial Header ──────────────────────────────────────────────────────────
 
@@ -119,65 +163,61 @@ function ArchiveTab() {
 
 // ─── Contributions Tab ────────────────────────────────────────────────────────
 
-function ContributionsTab({contributorslist}) {
+function ContributionsTab({ contributorslist, loading, error, onRetry }) {
   const [value, setValue] = useState("contributors");
-  console.log(contributorslist);
-  const contributors = contributorslist.filter(obj => obj.status == 'submitted');
-  const awaitinglist = contributorslist.filter(obj => obj.status == 'in_progress') 
-  // const submissions = [
-  //   {
-  //     id: 1,
-  //     user: "Jane Smith",
-  //     contribution: "10 contributions",
-  //     summary:
-  //       "This can be an AI generated summary of the contribution, either mentioning surfaced themes or flagged submissions that may be sensitive or inappropriate.",
-  //   },
-  //   {
-  //     id: 2,
-  //     user: "Michael Johnson",
-  //     contribution: "7 contributions",
-  //     summary:
-  //       "AI generated summaries can highlight themes, relationships, and potentially sensitive submissions for moderators to review quickly.",
-  //   },
-  //   {
-  //     id: 3,
-  //     user: "Emily Davis",
-  //     contribution: "4 contributions",
-  //     summary:
-  //       "This summary may contain surfaced insights generated automatically from uploaded stories, photos, and audio.",
-  //   },
-  //   {
-  //     id: 4,
-  //     user: "Chris Brown",
-  //     contribution: "15 contributions",
-  //     summary:
-  //       "AI can help identify emotional themes and summarize media content for easier moderation workflows.",
-  //   },
-  //   {
-  //     id: 5,
-  //     user: "Sarah Wilson",
-  //     contribution: "3 contributions",
-  //     summary:
-  //       "Potentially sensitive content or highlighted themes may appear here after automatic AI analysis.",
-  //   },
-  // ];
-
+  const submissions = [
+    {
+      id: 1,
+      user: "Jane Smith",
+      contribution: "10 contributions",
+      summary:
+        "This can be an AI generated summary of the contribution, either mentioning surfaced themes or flagged submissions that may be sensitive or inappropriate.",
+    },
+    {
+      id: 2,
+      user: "Michael Johnson",
+      contribution: "7 contributions",
+      summary:
+        "AI generated summaries can highlight themes, relationships, and potentially sensitive submissions for moderators to review quickly.",
+    },
+    {
+      id: 3,
+      user: "Emily Davis",
+      contribution: "4 contributions",
+      summary:
+        "This summary may contain surfaced insights generated automatically from uploaded stories, photos, and audio.",
+    },
+    {
+      id: 4,
+      user: "Chris Brown",
+      contribution: "15 contributions",
+      summary:
+        "AI can help identify emotional themes and summarize media content for easier moderation workflows.",
+    },
+    {
+      id: 5,
+      user: "Sarah Wilson",
+      contribution: "3 contributions",
+      summary:
+        "Potentially sensitive content or highlighted themes may appear here after automatic AI analysis.",
+    },
+  ];
   const handleChange = (e) => {
     setValue(e.target.value);
   };
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  const current = awaitinglist[currentIndex];
+  const current = submissions[currentIndex];
 
   const handlePrev = () => {
       setCurrentIndex((prev) =>
-      prev === 0 ? awaitinglist.length - 1 : prev - 1
+      prev === 0 ? submissions.length - 1 : prev - 1
       );
   };
 
   const handleNext = () => {
       setCurrentIndex((prev) =>
-      prev === awaitinglist.length - 1 ? 0 : prev + 1
+      prev === submissions.length - 1 ? 0 : prev + 1
       );
   };      
   return (
@@ -200,7 +240,7 @@ function ContributionsTab({contributorslist}) {
               </button>
 
               <span>
-                {currentIndex + 1}/{awaitinglist.length}
+                {currentIndex + 1}/{submissions.length}
               </span>
 
               <button
@@ -215,10 +255,23 @@ function ContributionsTab({contributorslist}) {
           }
         </div>    
         {
-          value === "contributors" ? (
-            <MemorialContributionsPage contributors={contributors} />
+          value === "contributors" && loading ? (
+            <TabLoading />
+          ) : value === "contributors" && error ? (
+            <TabError
+              title="Unable to load contributors"
+              message="Contributor details could not be loaded. You can still use the other tabs."
+              onRetry={onRetry}
+            />
+          ) : value === "contributors" && contributorslist.length === 0 ? (
+            <TabEmpty
+              title="No contributors yet"
+              message="Contributors will appear here once people begin sharing memories."
+            />
+          ) : value === "contributors" ? (
+            <MemorialContributionsPage contributors={contributorslist} />
           ) : value === "awaiting" ? (
-            <MemorialContributionApproval contributors={current} gallery={awaitinglist.length}/>
+            <MemorialContributionApproval contributors={current} />
           ) : null
         }
       </div>
@@ -277,6 +330,7 @@ function AllPhotosSection({ albums }) {
   const [openAlbum, setOpenAlbum] = useState(null);
   const [lightboxPhoto, setLightboxPhoto] = useState(null);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const albumList = Array.isArray(albums) ? albums : albums?.albums ?? [];
   const currentAlbumPhotos = openAlbum?.photos || [];
 
   function openLightbox(photo, index) { setLightboxPhoto(photo); setLightboxIndex(index); }
@@ -289,7 +343,7 @@ function AllPhotosSection({ albums }) {
     setLightboxIndex(i); setLightboxPhoto(currentAlbumPhotos[i]);
   }
   // ── PRIORITY 3: Empty state — no photos submitted yet ──
-  if (!albums || albums.length === 0) {
+  if (albumList.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <div className="h-16 w-16 rounded-full bg-neutral-100 flex items-center justify-center mb-4">
@@ -315,14 +369,14 @@ function AllPhotosSection({ albums }) {
             <button className="p-1 hover:text-neutral-950">
               <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
             </button>
-            <span className="text-xs">1/{albums.length}</span>
+            <span className="text-xs">1/{albumList.length}</span>
             <button className="p-1 hover:text-neutral-950">
               <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
             </button>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-4 mb-8">
-          {albums?.albums?.map((album, i) => (
+          {albumList.map((album, i) => (
             <button
               key={i}
               onClick={() => setOpenAlbum(openAlbum?.album_name === album.album_name ? null : album)}
@@ -405,7 +459,6 @@ function AllPhotosSection({ albums }) {
 
 // ─── PRIORITY 3: Pre-generation empty state for Outputs tab ──────────────────
 
-
 function PreGenerationEmpty({
   canGenerate,
   disabledMessage,
@@ -461,7 +514,7 @@ function PreGenerationEmpty({
 
 // ─── Outputs Tab ──────────────────────────────────────────────────────────────
 
-function OutputsTab({ 
+function OutputsTab({
   canGenerate,
   disabledMessage,
   generationError,
@@ -471,21 +524,34 @@ function OutputsTab({
   output,
   loading,
   error,
-  onRetry  
- }) {
+  onRetry,
+}) {
   // PRIORITY 3: Show pre-generation empty state if no output yet
 
+  if (loading) {
+    return <TabLoading />;
+  }
+
+  if (error) {
+    return (
+      <TabError
+        title="Unable to load outputs"
+        message="The generated memorial output could not be loaded. Archive and Contributions are still available."
+        onRetry={onRetry}
+      />
+    );
+  }
 
   if (!output) {
     return (
       <div className="pt-6">
-        <PreGenerationEmpty 
+        <PreGenerationEmpty
           canGenerate={canGenerate}
           disabledMessage={disabledMessage}
           generationError={generationError}
           generationJob={generationJob}
           generating={generating}
-          onGenerate={onGenerate}        
+          onGenerate={onGenerate}
         />
       </div>
     );
@@ -494,19 +560,15 @@ function OutputsTab({
   return (
     <div className="flex flex-col divide-y divide-neutral-100 pt-4">
       <CollapsibleSection title="Story">
-        <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6">
-          <p className="text-sm text-slate-400">Story — built by Sungjun</p>
-        </div>
+        <StorySlideshow output={output} story={output?.story} />
       </CollapsibleSection>
       <CollapsibleSection title="Constellation">
         <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6 aspect-video flex items-center justify-center">
-          <ConstellationGraph ai_output={output} width={800} height={800} />
+          <ConstellationGraph memorial={output} width={800} height={800} />
         </div>
       </CollapsibleSection>
       <CollapsibleSection title="Voices">
-        <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6">
-          <p className="text-sm text-slate-400">Voices — built by Sungjun</p>
-        </div>
+        <VoicesTab output={output} voices={output?.voices} />
       </CollapsibleSection>
       <CollapsibleSection title="All Photos" defaultOpen={true}>
         <AllPhotosSection albums={output?.photos} />
@@ -522,17 +584,11 @@ function ShareModal({ onClose, memorialId }) {
   const [copiedViewer, setCopiedViewer] = useState(false);
 
   async function copyLink(url, type) {
+    await navigator.clipboard.writeText(url);
     if (type === 'contributor') {
-      const contributor_link=await createInviteLink(memorialId);
-      console.log(contributor_link);
-      await navigator.clipboard.writeText(contributor_link.invite_link.url);
       setCopiedContributor(true);
       setTimeout(() => setCopiedContributor(false), 2000);
     } else {
-      // const viewer_link=process.env.NEXT_PUBLIC_APP_URL+"/memorial/"+memorialId+"/output";
-      const viewer_link=await createShareLink(memorialId);
-      console.log(viewer_link);
-      await navigator.clipboard.writeText(viewer_link.share_link.url);
       setCopiedViewer(true);
       setTimeout(() => setCopiedViewer(false), 2000);
     }
@@ -590,9 +646,25 @@ function ShareModal({ onClose, memorialId }) {
   );
 }
 
-// ─── PRIORITY 4: Error state ──────────────────────────────────────────────────
+function TabLoading() {
+  return (
+    <div className="flex justify-center py-16">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-950" />
+    </div>
+  );
+}
 
-function OutputError({ onRetry }) {
+function TabEmpty({ title, message }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="h-16 w-16 rounded-full bg-neutral-100 flex items-center justify-center mb-4" />
+      <p className="text-neutral-950 text-base font-medium">{title}</p>
+      <p className="text-slate-500 text-sm mt-1 max-w-xs">{message}</p>
+    </div>
+  );
+}
+
+function TabError({ title, message, onRetry }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <div className="h-16 w-16 rounded-full bg-red-50 flex items-center justify-center mb-4">
@@ -600,8 +672,8 @@ function OutputError({ onRetry }) {
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
       </div>
-      <p className="text-neutral-950 text-base font-medium">Unable to load memorial</p>
-      <p className="text-slate-500 text-sm mt-1 max-w-xs">Something went wrong loading this memorial. Please try again.</p>
+      <p className="text-neutral-950 text-base font-medium">{title}</p>
+      <p className="text-slate-500 text-sm mt-1 max-w-xs">{message}</p>
       <button
         onClick={onRetry}
         className="mt-4 rounded-full bg-neutral-950 px-6 py-2.5 text-sm font-semibold text-white hover:opacity-80 transition-opacity"
@@ -618,28 +690,60 @@ export default function MemorialOutputPage() {
   const { id } = useParams();
   const [activeTab, setActiveTab] = useState('Outputs');
   const [output, setOutput] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [outputLoading, setOutputLoading] = useState(true);
+  const [outputError, setOutputError] = useState(null);
+  const [contributorsLoading, setContributorsLoading] = useState(true);
+  const [contributorsError, setContributorsError] = useState(null);
   const [showShare, setShowShare] = useState(false);
   const memorialId = id;
   const [contributors, setContributors] = useState([]);
-  const [contributorsLoading, setContributorsLoading] = useState(true);
-  const [contributorsError, setContributorsError] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState(null);
   const [generationJob, setGenerationJob] = useState(null);
+  const [memorial, setMemorial] = useState(null);
 
   // Read from mockMemorials.js — single source of truth for mock data
   // Day 9: replace with real fetch from GET /memorials/:id
+  const mockData = mockMemorials.find((m) => m.id === id) ?? mockMemorials[0];
+  // const memorial = {
+  //   id: mockData.id,
+  //   subject_name: mockData.subject_name || mockData.deceased_name,
+  //   cover_photo_url: mockData.cover_photo_url || mockData.profile_photo_url || null,
+  //   date_of_birth: mockData.date_of_birth || mockData.birth_date || null,
+  //   date_of_passing: mockData.date_of_passing || mockData.death_date || null,
+  //   bio: mockData.brief_biography || mockData.short_description || null,
+  // };
 
   const loadContributors = useCallback(async () => {
     if (!memorialId) return;
-
     setContributorsLoading(true);
     setContributorsError(null);
     try {
       const contributor = await getMemorialContributors(memorialId, await getCurrentAuthToken());
+      setMemorial(memorial.memorial);
       setContributors(contributor.contributors ?? []);
+      getMemorial(id).then((data) => {
+          const m = data?.memorial ?? data;
+          if (!m) return;
+          setMemorial({
+            id: m.id,
+            subject_name: m.subject_name || m.deceased_name,
+            cover_photo_url: m.cover_photo_url || m.profile_photo_url || null,
+            date_of_birth: m.date_of_birth || m.birth_date || null,
+            date_of_passing: m.date_of_passing || m.death_date || null,
+            bio: m.brief_biography || m.short_description || null,
+          });
+        }).catch(() => {
+          const mockData = mockMemorials.find((m) => m.id === id) ?? mockMemorials[0];
+          setMemorial({
+            id: mockData.id,
+            subject_name: mockData.subject_name || mockData.deceased_name,
+            cover_photo_url: mockData.cover_photo_url || mockData.profile_photo_url || null,
+            date_of_birth: mockData.date_of_birth || mockData.birth_date || null,
+            date_of_passing: mockData.date_of_passing || mockData.death_date || null,
+            bio: mockData.brief_biography || mockData.short_description || null,
+          });
+        });      
     } catch (err) {
       setContributorsError(err instanceof Error ? err.message : "Failed to fetch contributors");
       setContributors([]);
@@ -691,13 +795,12 @@ export default function MemorialOutputPage() {
           if (GENERATION_FAILURE_STATUSES.has(status)) {
             throw new Error(latestJob?.error_message || "Generation failed. Please try again.");
           }
-
           await sleep(GENERATION_POLL_INTERVAL_MS);
           const jobStatus = await getGenerationJobStatus(initialJob.id, token);
           latestJob = jobStatus?.job ?? latestJob;
           setGenerationJob(latestJob);
         }
-
+        await triggerGeneration(memorialId, token);
         const finalStatus = String(latestJob?.status || "").toLowerCase();
         if (!GENERATION_SUCCESS_STATUSES.has(finalStatus)) {
           throw new Error("Generation is taking longer than expected. Please try refreshing the outputs shortly.");
@@ -739,78 +842,6 @@ export default function MemorialOutputPage() {
   useEffect(() => {
     queueMicrotask(loadOutput);
   }, [loadOutput]);
-  
-  useEffect(() => {    
-    if (!memorialId) return;
-    
-    const loadMemorial = async () => {        
-      setLoading(true);
-      setError(null);
-      try {
-        // const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
-        // if (typeof token === "undefined") {
-        //   console.log("Token retrieved:", token);
-        //   return ;
-        // }
-        const contributor= await getContributors(memorialId);
-        setContributors(contributor.contributors);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }      
-    }
-    loadMemorial();
-
-  }, [memorialId]);  
-
-  // Read from mockMemorials.js — single source of truth for mock data
-  // Day 9: replace with real fetch from GET /memorials/:id
-  const [memorial, setMemorial] = useState(null);
-
-  useEffect(() => {
-    if (!id) return;
-    getMemorial(id).then((data) => {
-      const m = data?.memorial ?? data;
-      if (!m) return;
-      setMemorial({
-        id: m.id,
-        subject_name: m.subject_name || m.deceased_name,
-        cover_photo_url: m.cover_photo_url || m.profile_photo_url || null,
-        date_of_birth: m.date_of_birth || m.birth_date || null,
-        date_of_passing: m.date_of_passing || m.death_date || null,
-        bio: m.brief_biography || m.short_description || null,
-      });
-    }).catch(() => {
-      const mockData = mockMemorials.find((m) => m.id === id) ?? mockMemorials[0];
-      setMemorial({
-        id: mockData.id,
-        subject_name: mockData.subject_name || mockData.deceased_name,
-        cover_photo_url: mockData.cover_photo_url || mockData.profile_photo_url || null,
-        date_of_birth: mockData.date_of_birth || mockData.birth_date || null,
-        date_of_passing: mockData.date_of_passing || mockData.death_date || null,
-        bio: mockData.brief_biography || mockData.short_description || null,
-      });
-    });
-  }, [id]);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await getMemorialOutput(id);  // ← no token argument
-      setOutput(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    if (!id) return;
-    load();
-  }, [id, load]);
 
   return (
     <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
@@ -828,30 +859,28 @@ export default function MemorialOutputPage() {
         <TabBar active={activeTab} onChange={setActiveTab} />
 
         <div>
-          {loading ? (
-            <div className="flex justify-center py-16">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-950" />
-            </div>
-          ) : error ? (
-            // PRIORITY 4: Error state with retry button
-            <OutputError onRetry={load} />
-          ) : (
-            <>
-              {activeTab === 'Archive' && <ArchiveTab />}
-              {activeTab === 'Contributions' && <ContributionsTab contributorslist={contributors} />}
-              {activeTab === 'Outputs' && <OutputsTab 
-                output={output}
-                canGenerate={canGenerate}
-                disabledMessage={generationDisabledMessage}
-                generationError={generationError}
-                generationJob={generationJob}
-                generating={generating}
-                onGenerate={handleGenerate}
-                loading={outputLoading}
-                error={outputError}
-                onRetry={loadOutput}                
-              />}
-            </>
+          {activeTab === 'Archive' && <ArchiveTab />}
+          {activeTab === 'Contributions' && (
+            <ContributionsTab
+              contributorslist={contributors}
+              loading={contributorsLoading}
+              error={contributorsError}
+              onRetry={loadContributors}
+            />
+          )}
+          {activeTab === 'Outputs' && (
+            <OutputsTab
+              canGenerate={canGenerate}
+              disabledMessage={generationDisabledMessage}
+              generationError={generationError}
+              generationJob={generationJob}
+              generating={generating}
+              onGenerate={handleGenerate}
+              output={output}
+              loading={outputLoading}
+              error={outputError}
+              onRetry={loadOutput}
+            />
           )}
         </div>
 
