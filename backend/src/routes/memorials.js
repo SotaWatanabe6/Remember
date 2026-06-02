@@ -164,4 +164,39 @@ router.get('/:id/contributors', authMiddleware, async (req, res) => {
   }
 })
 
+// GET /memorials/:id/output
+router.get('/:id/output', authMiddleware, async (req, res) => {
+  try {
+    const { data: output, error } = await supabase
+      .from('ai_outputs')
+      .select('*')
+      .eq('memorial_id', req.params.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+    if (error || !output) return res.status(404).json({ error: 'Output not found. Generation may not be complete yet.' })
+    res.json(output.output_json)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// POST /memorials/:id/share
+router.post('/:id/share', authMiddleware, async (req, res) => {
+  try {
+    const { data: memorial, error: memError } = await supabase
+      .from('memorials').select('id').eq('id', req.params.id).eq('user_id', req.user.sub).single()
+    if (memError || !memorial) return res.status(403).json({ error: 'Not authorized' })
+    const token = crypto.randomBytes(12).toString('hex')
+    const { data, error } = await supabase
+      .from('invite_links')
+      .insert({ memorial_id: req.params.id, token, created_by: req.user.sub, is_active: true })
+      .select().single()
+    if (error) return res.status(400).json({ error: error.message })
+    res.status(201).json({ share_link: { token: data.token, url: `${process.env.NEXT_PUBLIC_APP_URL}/share/${data.token}` } })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 module.exports = router

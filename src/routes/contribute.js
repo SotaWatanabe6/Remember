@@ -1,17 +1,117 @@
 require('dotenv').config()
 const express = require('express')
+const { randomUUID } = require('crypto')
+const { Readable } = require('stream')
 const router = express.Router()
 const supabase = require('../supabase')
-const multer = require('multer');
-const { validateFiles } = require('../middleware/validate');
-const { extractImageMetadata } = require('../services/exif');
-const { extractAudioDuration } = require('../services/duration');
 
-const STORAGE_BUCKET = 'memorial-assets';
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024, files: 10 },
-});
+const PHOTO_STORAGE_BUCKET =
+  process.env.CONTRIBUTOR_PHOTO_BUCKET ||
+  process.env.MEMORIAL_ASSETS_BUCKET ||
+  process.env.STORAGE_BUCKET ||
+  'memorial-assets'
+const VOICE_STORAGE_BUCKET =
+  process.env.CONTRIBUTOR_VOICE_BUCKET ||
+  process.env.MEMORIAL_ASSETS_BUCKET ||
+  process.env.STORAGE_BUCKET ||
+  'memorial-assets'
+const MAX_PHOTO_BYTES = 50 * 1024 * 1024
+const MAX_AUDIO_BYTES = 50 * 1024 * 1024
+const ALLOWED_PHOTO_EXTENSIONS = new Set(['heic', 'heif', 'jpg', 'jpeg', 'png', 'webp'])
+const ALLOWED_AUDIO_EXTENSIONS = new Set(['m4a', 'mp3', 'wav', 'webm'])
+const PHOTO_MIME_BY_EXTENSION = {
+  heic: 'image/heic',
+  heif: 'image/heif',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp'
+}
+const AUDIO_MIME_BY_EXTENSION = {
+  m4a: 'audio/mp4',
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  webm: 'audio/webm'
+}
+
+function getFileExtension(fileName = '') {
+  return fileName.split('.').pop()?.toLowerCase() || ''
+}
+
+function sanitizeFileName(fileName = 'photo') {
+  const cleaned = fileName
+    .normalize('NFKD')
+    .replace(/[^\w.\-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+
+  return cleaned || 'photo'
+}
+
+function getPhotoMimeType(file) {
+  const extension = getFileExtension(file.name)
+  if (file.type?.startsWith('image/')) return file.type
+  return PHOTO_MIME_BY_EXTENSION[extension] || ''
+}
+
+function getAudioMimeType(file) {
+  const extension = getFileExtension(file.name)
+  if (file.type?.startsWith('audio/')) return file.type
+  return AUDIO_MIME_BY_EXTENSION[extension] || ''
+}
+
+function validatePhotoFile(file) {
+  const extension = getFileExtension(file.name)
+  const mimeType = getPhotoMimeType(file)
+
+  if (!mimeType || !ALLOWED_PHOTO_EXTENSIONS.has(extension)) {
+    return 'Only JPG, PNG, WebP, HEIC, or HEIF photos can be uploaded.'
+  }
+
+  if (file.size > MAX_PHOTO_BYTES) {
+    return 'Photos must be smaller than 50 MB.'
+  }
+
+  return null
+}
+
+function validateVoiceFile(file) {
+  const extension = getFileExtension(file.name)
+  const mimeType = getAudioMimeType(file)
+
+  if (!mimeType && !ALLOWED_AUDIO_EXTENSIONS.has(extension)) {
+    return 'This file type is not supported. Please upload an M4A, MP3, or WAV file.'
+  }
+
+  if (file.size > MAX_AUDIO_BYTES) {
+    return 'This file is too large. Please choose a smaller audio file.'
+  }
+
+  return null
+}
+
+function isFormDataFile(value) {
+  return value && typeof value.name === 'string' && typeof value.arrayBuffer === 'function'
+}
+
+async function parseMultipartFormData(req) {
+  const contentType = req.headers['content-type'] || ''
+
+  if (!contentType.includes('multipart/form-data')) {
+    const error = new Error('Photo upload must use multipart/form-data.')
+    error.status = 415
+    throw error
+  }
+
+  const request = new Request('http://remember.local/upload', {
+    method: req.method,
+    headers: req.headers,
+    body: Readable.toWeb(req),
+    duplex: 'half'
+  })
+
+  return request.formData()
+}
 
 // GET /contribute/:token — validate invite token
 router.get('/:token', async (req, res) => {
@@ -87,6 +187,7 @@ router.post('/:token/start', async (req, res) => {
 
     if (contribError) return res.status(400).json({ error: contribError.message })
 
+    // increment use_count
     await supabase
       .from('invite_links')
       .update({ use_count: invite.use_count + 1 })
@@ -207,139 +308,260 @@ router.post('/:token/submit', async (req, res) => {
 })
 
 // POST /contribute/:token/photos
-router.post('/:token/photos', upload.array('files', 10), validateFiles, async (req, res) => {
+router.post('/:token/photos', async (req, res) => {
   try {
-    const { contributor_token, caption } = req.body;
-    if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' });
+    const formData = await parseMultipartFormData(req)
+    const contributor_token = formData.get('contributor_token')
+    const submittedFiles = [
+      ...formData.getAll('files[]'),
+      ...formData.getAll('files'),
+      ...formData.getAll('photos')
+    ].filter(isFormDataFile)
+
+    if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
+    if (!submittedFiles.length) return res.status(400).json({ error: 'At least one photo file is required.' })
+
+    const { data: invite, error: inviteError } = await supabase
+      .from('invite_links')
+      .select('id, memorial_id, is_active')
+      .eq('token', req.params.token)
+      .single()
+
+    if (inviteError || !invite || !invite.is_active) {
+      return res.status(410).json({ error: 'This link is no longer active.' })
+    }
 
     const { data: contributor } = await supabase
       .from('contributors')
-      .select('memorial_id')
+      .select('id, memorial_id')
       .eq('id', contributor_token)
-      .single();
+      .single()
 
-    if (!contributor) return res.status(404).json({ error: 'Contributor not found' });
+    if (!contributor) return res.status(404).json({ error: 'Contributor not found' })
+    if (contributor.memorial_id !== invite.memorial_id) {
+      return res.status(403).json({ error: 'Contributor does not belong to this invitation.' })
+    }
 
-    const results = [];
+    const uploadedFiles = []
+    const uploadErrors = []
 
-    for (const file of req.files) {
-      const exif = await extractImageMetadata(file.buffer);
+    for (const file of submittedFiles) {
+      const validationError = validatePhotoFile(file)
+      if (validationError) {
+        uploadErrors.push({ file_name: file.name || 'photo', error: validationError })
+        continue
+      }
 
-      const { data: dbRecord, error } = await supabase
+      const safeFileName = sanitizeFileName(file.name)
+      const storagePath = `memorials/${contributor.memorial_id}/contributions/${contributor.id}/photos/${randomUUID()}-${safeFileName}`
+      const mimeType = getPhotoMimeType(file)
+      const fileBuffer = Buffer.from(await file.arrayBuffer())
+
+      const { error: uploadError } = await supabase.storage
+        .from(PHOTO_STORAGE_BUCKET)
+        .upload(storagePath, fileBuffer, {
+          contentType: mimeType,
+          upsert: false
+        })
+
+      if (uploadError) {
+        uploadErrors.push({ file_name: file.name || 'photo', error: uploadError.message })
+        continue
+      }
+
+      const { data: mediaAsset, error: mediaError } = await supabase
         .from('media_assets')
         .insert({
           memorial_id: contributor.memorial_id,
-          contributor_id: contributor_token,
-          storage_path: 'pending',
-          storage_bucket: STORAGE_BUCKET,
-          file_name: file.originalname,
-          file_type: file.mimetype,
-          file_size_bytes: file.size,
-          ai_analysis_status: 'pending',
-          caption: caption || null,
-          width: exif?.width || null,
-          height: exif?.height || null,
-          taken_at: exif?.takenAt || null,
+          contributor_id: contributor.id,
+          storage_path: storagePath,
+          storage_bucket: PHOTO_STORAGE_BUCKET,
+          file_name: file.name || safeFileName,
+          file_type: mimeType,
+          file_size_bytes: file.size || null,
+          taken_at: null,
+          caption: null
         })
-        .select()
-        .single();
+        .select('id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption')
+        .single()
 
-      if (error) throw new Error(error.message);
-
-      const ext = file.originalname.split('.').pop().toLowerCase();
-      const storagePath = `memorials/${contributor.memorial_id}/contributions/${contributor_token}/photos/${dbRecord.id}.${ext}`;
-
-      const { error: storageError } = await supabase.storage
-        .from(STORAGE_BUCKET)
-        .upload(storagePath, file.buffer, {
-          contentType: file.mimetype,
-          upsert: false,
-        });
-
-      if (storageError) {
-        await supabase.from('media_assets').delete().eq('id', dbRecord.id);
-        continue;
+      if (mediaError) {
+        await supabase.storage.from(PHOTO_STORAGE_BUCKET).remove([storagePath])
+        uploadErrors.push({ file_name: file.name || 'photo', error: mediaError.message })
+        continue
       }
 
-      await supabase.from('media_assets').update({ storage_path: storagePath }).eq('id', dbRecord.id);
-
-      results.push({
-        id: dbRecord.id,
-        storage_path: storagePath,
-        file_name: file.originalname,
-      });
+      uploadedFiles.push(mediaAsset)
     }
 
-    res.status(201).json({ uploaded: results.length, files: results });
+    if (!uploadedFiles.length) {
+      return res.status(400).json({
+        error: 'No photos were uploaded.',
+        uploaded: 0,
+        files: [],
+        errors: uploadErrors
+      })
+    }
+
+    await supabase
+      .from('contributors')
+      .update({ photos_done: true, updated_at: new Date().toISOString() })
+      .eq('id', contributor.id)
+
+    res.status(uploadErrors.length ? 207 : 201).json({
+      uploaded: uploadedFiles.length,
+      files: uploadedFiles,
+      errors: uploadErrors
+    })
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message })
   }
-});
+})
+
+// DELETE /contribute/:token/photos/:assetId
+router.delete('/:token/photos/:assetId', async (req, res) => {
+  try {
+    const { contributor_token } = req.body
+
+    if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
+
+    const { data: invite, error: inviteError } = await supabase
+      .from('invite_links')
+      .select('id, memorial_id, is_active')
+      .eq('token', req.params.token)
+      .single()
+
+    if (inviteError || !invite || !invite.is_active) {
+      return res.status(410).json({ error: 'This link is no longer active.' })
+    }
+
+    const { data: asset, error: assetError } = await supabase
+      .from('media_assets')
+      .select('id, contributor_id, memorial_id, storage_path, storage_bucket')
+      .eq('id', req.params.assetId)
+      .eq('contributor_id', contributor_token)
+      .eq('memorial_id', invite.memorial_id)
+      .single()
+
+    if (assetError || !asset) return res.status(404).json({ error: 'Photo not found' })
+
+    const { error: storageError } = await supabase.storage
+      .from(asset.storage_bucket || PHOTO_STORAGE_BUCKET)
+      .remove([asset.storage_path])
+
+    if (storageError) return res.status(400).json({ error: storageError.message })
+
+    const { error: deleteError } = await supabase
+      .from('media_assets')
+      .delete()
+      .eq('id', asset.id)
+
+    if (deleteError) return res.status(400).json({ error: deleteError.message })
+
+    const { count } = await supabase
+      .from('media_assets')
+      .select('id', { count: 'exact', head: true })
+      .eq('contributor_id', contributor_token)
+
+    if (count === 0) {
+      await supabase
+        .from('contributors')
+        .update({ photos_done: false, updated_at: new Date().toISOString() })
+        .eq('id', contributor_token)
+    }
+
+    res.json({ deleted: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
 
 // POST /contribute/:token/voice
-router.post('/:token/voice', upload.single('file'), async (req, res) => {
+router.post('/:token/voice', async (req, res) => {
   try {
-    const { contributor_token, contributor_title } = req.body;
-    if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' });
-    if (!contributor_title?.trim()) return res.status(400).json({ error: 'contributor_title is required' });
+    const formData = await parseMultipartFormData(req)
+    const contributor_token = formData.get('contributor_token')
+    const contributor_title = String(formData.get('contributor_title') || '').trim()
+    const submittedFile = [
+      formData.get('file'),
+      formData.get('audio'),
+      formData.get('recording')
+    ].find(isFormDataFile)
+
+    if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
+    if (!contributor_title) return res.status(400).json({ error: 'Please add a title for this recording.' })
+    if (!submittedFile) return res.status(400).json({ error: 'Please choose an audio file.' })
+
+    const validationError = validateVoiceFile(submittedFile)
+    if (validationError) return res.status(400).json({ error: validationError })
+
+    const { data: invite, error: inviteError } = await supabase
+      .from('invite_links')
+      .select('id, memorial_id, is_active')
+      .eq('token', req.params.token)
+      .single()
+
+    if (inviteError || !invite || !invite.is_active) {
+      return res.status(410).json({ error: 'This link is no longer active.' })
+    }
 
     const { data: contributor } = await supabase
       .from('contributors')
-      .select('memorial_id')
+      .select('id, memorial_id')
       .eq('id', contributor_token)
-      .single();
+      .single()
 
-    if (!contributor) return res.status(404).json({ error: 'Contributor not found' });
+    if (!contributor) return res.status(404).json({ error: 'Contributor not found' })
+    if (contributor.memorial_id !== invite.memorial_id) {
+      return res.status(403).json({ error: 'Contributor does not belong to this invitation.' })
+    }
 
-    const file = req.file;
-    const durationSeconds = await extractAudioDuration(file.buffer, file.mimetype);
+    const safeFileName = sanitizeFileName(submittedFile.name || 'voice-recording')
+    const storagePath = `memorials/${contributor.memorial_id}/contributions/${contributor.id}/voice/${randomUUID()}-${safeFileName}`
+    const mimeType = getAudioMimeType(submittedFile)
+    const fileBuffer = Buffer.from(await submittedFile.arrayBuffer())
 
-    const { data: dbRecord, error } = await supabase
+    const { error: uploadError } = await supabase.storage
+      .from(VOICE_STORAGE_BUCKET)
+      .upload(storagePath, fileBuffer, {
+        contentType: mimeType,
+        upsert: false
+      })
+
+    if (uploadError) return res.status(400).json({ error: uploadError.message })
+
+    const { data: recording, error: recordingError } = await supabase
       .from('voice_recordings')
       .insert({
         memorial_id: contributor.memorial_id,
-        contributor_id: contributor_token,
-        storage_path: 'pending',
-        storage_bucket: STORAGE_BUCKET,
-        file_name: file.originalname,
-        file_type: file.mimetype,
-        file_size_bytes: file.size,
-        contributor_title: contributor_title.trim(),
-        transcription_status: 'pending',
-        duration_seconds: durationSeconds,
+        contributor_id: contributor.id,
+        storage_path: storagePath,
+        storage_bucket: VOICE_STORAGE_BUCKET,
+        file_name: submittedFile.name || safeFileName,
+        file_type: mimeType,
+        file_size_bytes: submittedFile.size || null,
+        duration_seconds: null,
+        contributor_title
       })
-      .select()
-      .single();
+      .select('id, contributor_title, storage_path, storage_bucket, file_name, file_type, file_size_bytes, duration_seconds')
+      .single()
 
-    if (error) throw new Error(error.message);
-
-    const ext = file.originalname.split('.').pop().toLowerCase();
-    const storagePath = `memorials/${contributor.memorial_id}/contributions/${contributor_token}/voice/${dbRecord.id}.${ext}`;
-
-    const { error: storageError } = await supabase.storage
-      .from(STORAGE_BUCKET)
-      .upload(storagePath, file.buffer, {
-        contentType: file.mimetype,
-        upsert: false,
-      });
-
-    if (storageError) {
-      await supabase.from('voice_recordings').delete().eq('id', dbRecord.id);
-      return res.status(500).json({ error: 'Storage upload failed' });
+    if (recordingError) {
+      await supabase.storage.from(VOICE_STORAGE_BUCKET).remove([storagePath])
+      return res.status(400).json({ error: recordingError.message })
     }
 
-    await supabase.from('voice_recordings').update({ storage_path: storagePath }).eq('id', dbRecord.id);
+    await supabase
+      .from('contributors')
+      .update({ voice_done: true, updated_at: new Date().toISOString() })
+      .eq('id', contributor_token)
 
     res.status(201).json({
-      recording: {
-        id: dbRecord.id,
-        contributor_title: contributor_title.trim(),
-        storage_path: storagePath,
-      },
-    });
+      recording
+    })
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message })
   }
-});
+})
 
 module.exports = router
