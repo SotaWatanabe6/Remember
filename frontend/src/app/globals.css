@@ -64,6 +64,28 @@
   --text-display-line-height: 72px;
 
   /* =========================
+     COLORS (tokens only)
+  ========================== */
+
+  --button-color: #0a0a0a;
+  --selection-box-color: #818487;
+
+  --text-color-1: #423f39;
+  --text-color-2: #5f5a52;
+  --text-color-muted: #97877b;
+
+  --background-soft: #f5f2ed;
+  --background-main: #ddd6cf;
+
+  --shape-fill: #788764;
+  --tag-color: #b4bc96;
+  --soft-green: #cfd3bf;
+
+  --link-color-light: #b8cae0;
+  --link-color-dark: #4b78ad;
+
+  --drop-down-border-color: #cad5e2;
+
      COLORS — shared app tokens
      Used via Tailwind classes: bg-r-bg, text-r-text, border-r-border etc
      Naming: r- prefix = Remember design tokens
@@ -132,6 +154,227 @@
   --card-padding: clamp(1rem, 2vw, 1.5rem);
   --inline-gap: clamp(0.5rem, 1vw, 1rem);
 
+  /* =========================
+     RADIUS
+  ========================== */
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 32px;
+
+  /* =========================
+     SHADOWS
+  ========================== */
+
+  --shadow-auth:
+    0 1.27px 1.905px rgb(0 0 0 / 0.1),
+    0 1.27px 1.27px rgb(0 0 0 / 0.1);
+
+  --shadow-soft:
+    0 4px 20px rgb(0 0 0 / 0.05);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   BASE LAYER (global defaults)
+───────────────────────────────────────────────────────────── */
+
+@layer base {
+  html {
+    font-family: var(--font-family-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    min-width: 320px;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-family-body);
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    border-color: var(--border);
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   ROOT VARIABLES (runtime theme values)
+───────────────────────────────────────────────────────────── */
+
+:root {
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+
+  --primary: #0a0a0a;
+  --primary-foreground: #ffffff;
+
+  --secondary: #f5f2ed;
+  --secondary-foreground: #0a0a0a;
+
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+
+  --accent: #ddd6cf;
+  --accent-foreground: #0a0a0a;
+
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+
+  --ring: #d1d5db;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   DARK MODE
+───────────────────────────────────────────────────────────── */
+
+.dark {
+  --background: #171717;
+  --foreground: #fafafa;
+
+  --card: #1f1f1f;
+  --card-foreground: #fafafa;
+
+  --primary: #fafafa;
+  --primary-foreground: #171717;
+
+  --secondary: #262626;
+  --secondary-foreground: #fafafa;
+
+  --muted: #262626;
+  --muted-foreground: #a3a3a3;
+
+  --accent: #404040;
+  --accent-foreground: #fafafa;
+
+  --border: rgb(255 255 255 / 10%);
+  --input: rgb(255 255 255 / 15%);
+
+  --ring: #525252;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   COMPONENTS (reusable multi-property classes)
+───────────────────────────────────────────────────────────── */
+
+@layer components {
+
+  /* =========================
+     DISPLAY
+  ========================== */
+
+  .display {
+    font-family: var(--font-family-display);
+    font-size: var(--text-display-size);
+    line-height: var(--text-display-line-height);
+    font-weight: var(--font-weight-bold);
+    color: var(--text-color-1);
+  }
+
+  /* =========================
+     HEADINGS
+  ========================== */
+
+  .header-1 {
+    font-family: var(--font-family-display);
+    font-size: var(--text-h1-size);
+    line-height: var(--text-h1-line-height);
+    font-weight: var(--font-weight-bold);
+    color: var(--text-color-1);
+    letter-spacing: 0.05em;
+  }
+
+  .header-2{
+    font-family: var(--font-family-display);
+    font-size: var(--text-h2-size);
+    line-height: var(--text-h2-line-height);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-color-2);
+    font-style: italic;
+    letter-spacing: 0.05em;
+  }
+
+  .header-3 {
+    font-family: var(--font-family-body);
+    font-size: var(--text-h3-size);
+    line-height: var(--text-h3-line-height);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-color-1);
+  }
+
+  .header-4 {
+    font-family: var(--font-family-body);
+    font-size: var(--text-h4-size);
+    line-height: var(--text-h4-line-height);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-color-muted);
+  }
+
+  /* =========================
+     BODY TEXT
+  ========================== */
+
+  .body-1 {
+    font-family: var(--font-family-body);
+    font-size: var(--text-body-size);
+    line-height: var(--text-body-line-height);
+    font-weight: var(--font-weight-regular);
+    color: var(--text-color-2);
+  }
+
+  .body-2 {
+    font-family: var(--font-family-body);
+    font-size: var(--text-body-2-size);
+    line-height: var(--text-body-2-line-height);
+    font-weight: var(--font-weight-regular);
+    color: var(--text-color-1);
+  }
+
+  .caption {
+    font-family: var(--font-family-body);
+    font-size: var(--text-caption-size);
+    line-height: var(--text-caption-line-height);
+    font-weight: var(--font-weight-regular);
+    color: var(--text-color-2);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   UTILITIES (single-purpose helpers)
+───────────────────────────────────────────────────────────── */
+
+@layer utilities {
+
+  .on-dark {
+    color: #fbf9f6;
+  }
+
+  .text-primary {
+    color: var(--text-color-1);
+  }
+
+  .text-secondary {
+    color: var(--text-color-2);
+  }
+
+  .text-muted {
+    color: var(--text-color-muted);
+  }
+  
   /* Fixed values for contributor/viewer page shells */
   --page-section-gap: 32px;
   --page-max-w: 680px;

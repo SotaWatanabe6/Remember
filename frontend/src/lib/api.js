@@ -906,6 +906,37 @@ export async function uploadPhotos(token, files) {
       });
     }
 
+    // Handle specific error responses from backend
+    const errorData = await response.json().catch(() => ({}));
+    const statusCode = response.status;
+    let errorMessage = 'Failed to upload photos';
+
+    if (statusCode === 413 || errorData.code === 'file_too_large') {
+      errorMessage = 'One or more files are too large. Maximum file size is 50 MB.';
+    } else if (errorData.error) {
+      errorMessage = errorData.error;
+    }
+
+    throw new ApiRequestError(errorMessage, {
+      status: statusCode,
+      code: statusCode === 413 ? 'file_too_large' : 'upload_failed',
+      data: errorData,
+    });
+  } catch (error) {
+    // Re-throw API errors with proper context
+    if (error instanceof ApiRequestError) {
+      throw error;
+    }
+
+    // Fallback — still saves local previews so review page works if network issue
+    if (error?.name === 'AbortError' || error?.code === 'network_error') {
+      const existing = readStoredPhotos(token);
+      writeStoredPhotos(token, [...existing, ...localAssets]);
+      return { success: true, uploaded: files.length, assets: localAssets };
+    }
+
+    // Re-throw unknown errors
+    throw error;
     const timestamp = Date.now();
     const localAssets = validFiles.map((file, index) => ({
       id: `photo-${timestamp}-${index}-${Math.random().toString(36).slice(2)}`,
@@ -1002,6 +1033,7 @@ export async function uploadPhotos(token, files) {
     partialFailure: Array.isArray(data?.errors) && data.errors.length > 0,
   };
 }
+
 
 /**
  * POST /contribute/:token/voice

@@ -219,12 +219,14 @@ export default function PhotosPage() {
   const { inviteToken } = useParams();
   const [assets, setAssets] = useState([]);
   const [caption, setCaption] = useState('');
+  const [uploadError, setUploadError] = useState(null);
 
   // Load existing photos from store on mount (Sungjun's store)
   useEffect(() => {
     setAssets(getStore().photos);
   }, []);
 
+  // Fix full-page cream background — no white showing around edges
   // Store operations are synchronous — no async upload, no uploading state
   const handleFiles = useCallback((files) => {
     const newAssets = addPhotos(files, caption.trim() || null);
@@ -424,6 +426,17 @@ export default function PhotosPage() {
     };
   }, []);
 
+  const handleFiles = useCallback((files) => {
+    try {
+      const newAssets = addPhotos(files, caption.trim() || null);
+      setAssets((prev) => [...prev, ...newAssets]);
+      setUploadError(null);
+    } catch (err) {
+      const errorMessage = err?.message || 'Failed to upload photos. Please try again.';
+      setUploadError(errorMessage);
+      console.error('Upload failed:', err);
+    }
+  }, [caption]);
   useEffect(() => {
     selectedPhotosRef.current = selectedPhotos;
   }, [selectedPhotos]);
@@ -457,6 +470,31 @@ export default function PhotosPage() {
           <p className="mt-2 text-body-2 text-r-secondary">Upload photos below.</p>
         </div>
 
+        {/* Error Alert */}
+        {uploadError && (
+          <div
+            className="rounded-2xl p-4 flex items-start justify-between gap-3"
+            style={{ backgroundColor: '#FEE2E2', border: '1px solid #FECACA' }}
+          >
+            <div className="flex-1">
+              <p className="text-sm font-medium" style={{ color: '#991B1B' }}>
+                {uploadError}
+              </p>
+            </div>
+            <button
+              onClick={() => setUploadError(null)}
+              className="flex-shrink-0 text-red-800 hover:text-red-900 transition-colors"
+              aria-label="Dismiss error"
+            >
+              <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Drop zone */}
         <DropZone onFiles={handleFiles} />
 
         {/* Caption input — from main, styled with globals.css tokens */}

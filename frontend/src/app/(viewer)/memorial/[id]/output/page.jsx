@@ -3,6 +3,8 @@
 // frontend/src/app/(viewer)/memorial/[id]/output/page.jsx
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { SkeletonCard, SkeletonGrid, SkeletonTable, SlideshowSkeleton, ConstellationSkeleton, VoicesSkeleton, PhotoArchiveSkeleton } from "@/components/ui-components/skeleton-loader";
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getMemorialOutput, getMemorialById, getContributors, createInviteLink, createShareLink } from '@/lib/api';
@@ -60,6 +62,11 @@ function BottomNav({ active, onChange }) {
 
 function SlideshowSection({ output }) {
   return (
+    <div className="flex flex-col items-center justify-center py-16 sm:py-32 text-center">
+      <p className="text-[#1a1a1a] text-lg font-medium">Slideshow</p>
+      <p className="text-[#6b6b6b] text-sm mt-2 max-w-xs">
+        The memorial slideshow will appear here once generated.
+      </p>
     <div className="flex flex-col items-center justify-center py-32 text-center">
       <p className="text-h3 text-r-text">Slideshow</p>
       <p className="mt-2 max-w-xs text-body-2 text-r-muted">The memorial slideshow will appear here once generated.</p>
@@ -74,6 +81,11 @@ function SlideshowSection({ output }) {
 function ConstellationsSection({ output }) {
   if (!output?.constellation) {
     return (
+      <div className="flex flex-col items-center justify-center py-16 sm:py-32 text-center">
+        <p className="text-[#1a1a1a] text-lg font-medium">Constellations</p>
+        <p className="text-[#6b6b6b] text-sm mt-2 max-w-xs">
+          Constellation will appear here once the memorial has been generated.
+        </p>
       <div className="flex flex-col items-center justify-center py-32 text-center">
         <p className="text-h3 text-r-text">Constellations</p>
         <p className="mt-2 max-w-xs text-body-2 text-r-muted">Constellation will appear here once the memorial has been generated.</p>
@@ -266,6 +278,13 @@ function VoicesSection({ voices }) {
 
   if (!voices || voices.length === 0) {
     return (
+      <div className="flex flex-col items-center justify-center py-16 sm:py-32 text-center">
+        <p className="text-[#1a1a1a] text-base font-medium">
+          No voice recordings were submitted for this memorial
+        </p>
+        <p className="text-[#6b6b6b] text-sm mt-1">
+          Voice recordings will appear here once contributors have submitted.
+        </p>
       <div className="flex flex-col items-center justify-center py-32 text-center">
         <p className="text-body-2 font-medium text-r-text">No voice recordings were submitted for this memorial</p>
         <p className="mt-1 text-body-2 text-r-muted">Voice recordings will appear here once contributors have submitted.</p>
@@ -387,6 +406,15 @@ function Lightbox({ photo, onClose, onPrev, onNext }) {
   }, [onClose, onPrev, onNext]);
 
   return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-3 sm:px-4" onClick={onClose}>
+      <div className="relative max-w-xl sm:max-w-3xl w-full" onClick={(e) => e.stopPropagation()}>
+        <div className="aspect-square sm:aspect-[4/3] w-full overflow-hidden rounded-xl sm:rounded-2xl bg-neutral-800">
+          {photo.url
+            ? <img src={photo.url} alt={photo.caption || ''} className="h-full w-full object-cover" />
+            : <div className="h-full w-full bg-neutral-700 flex items-center justify-center">
+                <span className="text-neutral-500 text-sm">No image</span>
+              </div>
+          }
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4" onClick={onClose}>
       <div className="relative max-w-3xl w-full" onClick={(e) => e.stopPropagation()}>
         <div className="aspect-[4/3] w-full overflow-hidden rounded-2xl bg-neutral-800">
@@ -446,7 +474,7 @@ function AlbumView({ albums }) {
       <p className="mb-3 text-caption font-medium text-r-muted">Albums</p>
       {/* Albums section */}
       <p className="text-sm font-medium mb-3" style={{ color: COLORS.textMuted }}>Albums</p>
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
         {albums.map((album, i) => (
           <button key={i}
             onClick={() => setOpenAlbum(openAlbum?.album_name === album.album_name ? null : album)}
@@ -501,7 +529,7 @@ function AlbumView({ albums }) {
               Close
             </button>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
             {openAlbum.photos?.map((photo, index) => (
               <button key={photo.id} onClick={() => openLightbox(photo, index)}
                 className="group relative aspect-square overflow-hidden rounded-xl"
@@ -669,6 +697,7 @@ function ContributorsView() {
 
           {/* Expanded photos grid */}
           {expanded === contributor.id && (
+            <div className="p-4 border-t grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3" style={{ borderColor: COLORS.border, backgroundColor: COLORS.bg }}>
             <div className="p-4 border-t grid grid-cols-3 gap-3"
               style={{ borderColor: COLORS.border, backgroundColor: COLORS.bg }}>
               {contributor.photos.map((photo, index) => (
@@ -1011,7 +1040,7 @@ function MemorialHeader({ memorial, onShare }) {
 
 function OutputError({ onRetry }) {
   return (
-    <div className="flex flex-col items-center justify-center py-32 text-center">
+    <div className="flex flex-col items-center justify-center py-16 sm:py-32 text-center">
       <div className="h-16 w-16 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: '#fef2f2' }}>
         <svg width="24" height="24" fill="none" stroke="var(--color-r-danger)" strokeWidth="1.5" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -1117,6 +1146,8 @@ export default function MemorialOutputPage() {
 
   return (
     <div className="min-h-screen w-full pb-20" style={{ backgroundColor: COLORS.bg }}>
+      <header className="flex items-center justify-between px-4 md:px-8 py-4 md:py-5">
+        <span className="text-xl font-medium" style={{ color: COLORS.text }}>Remember</span>
 
       {/* Top nav */}
       <header className="flex items-center justify-between px-8 py-5">
@@ -1137,6 +1168,14 @@ export default function MemorialOutputPage() {
         </div>
       </header>
 
+      <main className="px-4 md:px-8 pb-8">
+        {loading ? (
+          <div className="pt-6">
+            {activeTab === 'Slideshow' && <SlideshowSkeleton />}
+            {activeTab === 'Constellations' && <ConstellationSkeleton />}
+            {activeTab === 'Voices' && <VoicesSkeleton />}
+            {activeTab === 'Photo Archive' && <PhotoArchiveSkeleton />}
+            {activeTab === 'Contributions' && <SkeletonTable rows={6} columns={4} />}
       {/* Content */}
       <main className="px-8 pb-8">
         {loading ? (
