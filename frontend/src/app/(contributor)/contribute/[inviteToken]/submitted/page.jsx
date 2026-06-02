@@ -1,64 +1,57 @@
 "use client";
 
+// frontend/src/app/(contributor)/contribute/[inviteToken]/submitted/page.jsx
+
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { getContributorSubmittedDraft } from "@/services/contributorService.js";
 
+// ─── Error copy ────────────────────────────────────────────────────────────────
+
 const submittedErrorCopy = {
-  invalid: {
-    title: "This invitation link is not available",
-    body: "Please check the link or ask the memorial organizer to send a new invitation.",
-  },
-  expired: {
-    title: "This invitation has expired",
-    body: "The contribution window for this link has passed. The organizer can share a new link if they are still collecting memories.",
-  },
-  closed: {
-    title: "Contributions are closed",
-    body: "This memorial is not accepting new contributions right now. Thank you for wanting to share a memory.",
-  },
-  missing: {
-    title: "We could not find your contribution draft",
-    body: "Please return to the invitation page and enter your name before submitting memories.",
-  },
-  error: {
-    title: "We could not open this confirmation",
-    body: "Something went wrong while loading this page. Your organizer can confirm that your contribution was received.",
-  },
+  invalid: { title: "This invitation link is not available", body: "Please check the link or ask the memorial organizer to send a new invitation." },
+  expired: { title: "This invitation has expired", body: "The contribution window for this link has passed. The organizer can share a new link if they are still collecting memories." },
+  closed: { title: "Contributions are closed", body: "This memorial is not accepting new contributions right now. Thank you for wanting to share a memory." },
+  missing: { title: "We could not find your contribution draft", body: "Please return to the invitation page and enter your name before submitting memories." },
+  error: { title: "We could not open this confirmation", body: "Something went wrong while loading this page. Your organizer can confirm that your contribution was received." },
 };
+
+// ─── Loading state ─────────────────────────────────────────────────────────────
 
 function LoadingState() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
+    <main className="flex min-h-screen items-center justify-center px-6 py-10 sm:px-[50px] bg-r-bg">
       <section className="flex flex-col items-center gap-4 text-center" aria-live="polite">
-        <div className="size-12 rounded-full border-2 border-slate-200 border-t-neutral-950" />
-        <p className="text-base leading-6 text-slate-600">Opening confirmation...</p>
+        <div
+          className="size-12 rounded-full border-2"
+          style={{ borderColor: 'var(--color-r-border)', borderTopColor: 'var(--color-r-text)' }}
+        />
+        <p className="text-body-2 text-r-secondary">Opening confirmation...</p>
       </section>
     </main>
   );
 }
 
+// ─── Error state ───────────────────────────────────────────────────────────────
+
 function SubmittedErrorState({ status, inviteToken }) {
   const copy = submittedErrorCopy[status] ?? submittedErrorCopy.error;
-
   return (
-    <main className="flex min-h-screen items-center justify-center bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
+    <main className="flex min-h-screen items-center justify-center px-6 py-10 sm:px-[50px] bg-r-bg">
       <section className="flex w-full max-w-[560px] flex-col items-center gap-5 text-center">
-        <div className="flex size-16 items-center justify-center rounded-full bg-slate-100 text-2xl font-medium text-slate-600">
+        <div className="flex size-16 items-center justify-center rounded-full text-2xl font-medium bg-r-card text-r-muted">
           R
         </div>
         <div className="flex flex-col gap-3">
-          <h1 className="text-[32px] font-medium leading-[38px] text-neutral-950 sm:text-[40px] sm:leading-[48px]">
-            {copy.title}
-          </h1>
-          <p className="text-base leading-7 text-slate-600 sm:text-lg">{copy.body}</p>
+          <h1 className="text-h1 text-r-text">{copy.title}</h1>
+          <p className="text-body-2 text-r-secondary">{copy.body}</p>
         </div>
         {status === "missing" ? (
           <Link
             href={`/contribute/${inviteToken}`}
-            className="mt-2 flex h-[52px] items-center justify-center rounded-full bg-neutral-950 px-8 text-base font-bold leading-6 text-white transition hover:bg-neutral-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-500"
+            className="mt-2 flex h-[52px] items-center justify-center rounded-full px-8 text-body-2 font-medium transition hover:opacity-80 bg-r-btn text-r-btn-text"
           >
             Return to invitation
           </Link>
@@ -68,26 +61,22 @@ function SubmittedErrorState({ status, inviteToken }) {
   );
 }
 
+// ─── Memorial Avatar — logic unchanged ────────────────────────────────────────
+
 function MemorialAvatar({ name, photoUrl }) {
   const initial = useMemo(() => name.trim().charAt(0).toUpperCase() || "R", [name]);
-
   return (
-    <div className="relative flex size-[132px] items-center justify-center overflow-hidden rounded-full bg-slate-100 text-[52px] font-medium text-slate-500 shadow-auth sm:size-[156px] sm:text-[60px]">
+    <div className="relative flex size-[132px] items-center justify-center overflow-hidden rounded-full text-[52px] font-medium sm:size-[156px] sm:text-[60px] bg-r-card text-r-muted">
       {photoUrl ? (
-        <Image
-          src={photoUrl}
-          alt={`Photo of ${name}`}
-          fill
-          sizes="(min-width: 640px) 156px, 132px"
-          className="object-cover"
-          unoptimized
-        />
+        <Image src={photoUrl} alt={`Photo of ${name}`} fill sizes="(min-width: 640px) 156px, 132px" className="object-cover" unoptimized />
       ) : (
         <span aria-hidden="true">{initial}</span>
       )}
     </div>
   );
 }
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SubmittedPage() {
   const { inviteToken } = useParams();
@@ -96,67 +85,57 @@ export default function SubmittedPage() {
 
   useEffect(() => {
     let isMounted = true;
-
     async function loadSubmitted() {
       setIsLoading(true);
       try {
         const submittedDraft = await getContributorSubmittedDraft(inviteToken);
-        if (isMounted) {
-          setDraft(submittedDraft);
-        }
+        if (isMounted) setDraft(submittedDraft);
       } catch {
-        if (isMounted) {
-          setDraft({ status: "error", invite: null, session: null });
-        }
+        if (isMounted) setDraft({ status: "error", invite: null, session: null });
       } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        if (isMounted) setIsLoading(false);
       }
     }
-
     loadSubmitted();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, [inviteToken]);
 
-  if (isLoading) {
-    return <LoadingState />;
-  }
-
+  if (isLoading) return <LoadingState />;
   if (!draft || draft.status !== "ready") {
     return <SubmittedErrorState status={draft?.status ?? "error"} inviteToken={inviteToken} />;
   }
 
-  const subjectName = draft.invite.deceased.name;
+  const subjectName = draft.invite.deceased.name; // kept for MemorialAvatar if re-enabled
 
   return (
-    <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
-      <div className="mx-auto flex min-h-[calc(100vh-80px)] w-full max-w-[680px] flex-col gap-10">
+    <main className="min-h-screen px-6 py-10 sm:px-[50px] bg-r-bg">
+      <div className="mx-auto flex min-h-[calc(100vh-80px)] w-full max-w-[680px] flex-col gap-8">
+
         <nav className="flex h-10 items-center justify-between">
-          <span className="text-2xl leading-8 text-neutral-950">Remember</span>
+          <span className="text-2xl leading-8 text-r-text">Remember</span>
         </nav>
 
         <section className="flex flex-1 flex-col items-center justify-center gap-8 pb-16 text-center">
-          <div className="flex size-[105px] items-center justify-center rounded-full bg-[#dbe7f3] text-neutral-950">
-            <svg width="46" height="46" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
 
           <div className="flex max-w-[560px] flex-col items-center gap-4">
-            <h1 className="text-[36px] font-medium leading-[42px] text-neutral-950 sm:text-[40px] sm:leading-[48px]">
-              Your contribution was received.
-            </h1>
-            <p className="text-base leading-7 text-slate-600 sm:text-lg">
-              Thank you for sharing your memories of {subjectName}. They will help shape this
-              memorial.
+            <h1 className="text-h1 text-r-text">Submission completed</h1>
+            <p className="text-body-2 text-r-secondary">
+              Thank you for sharing these precious moments. Your memories will be treasured
+              and help keep their spirit alive.
             </p>
           </div>
 
-          <MemorialAvatar name={subjectName} photoUrl={draft.invite.deceased.photoUrl} />
+          {/* Decorative olive circle */}
+          <div className="rounded-full bg-r-shape" style={{ width: '180px', height: '180px' }} />
+
+          <button
+            onClick={() => window.location.href = `/contribute/${inviteToken}/upload`}
+            className="rounded-full text-body-2 font-medium tracking-wide transition-opacity hover:opacity-80 bg-r-btn text-r-btn-text border-none"
+            style={{ width: '320px', padding: '16px 0', cursor: 'pointer' }}
+          >
+            Continue
+          </button>
+
         </section>
       </div>
     </main>

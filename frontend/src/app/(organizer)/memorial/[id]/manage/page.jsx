@@ -71,7 +71,7 @@ function MemorialHeader({ memorial, onShare }) {
       </div>
       <div className="flex-1 min-w-0 pt-2">
         <h1 className="text-[32px] font-medium text-neutral-950 leading-tight">
-          {memorial?.subject_name || 'John Smith'}
+          {memorial?.subject_name || ''}
         </h1>
         <p className="mt-1 text-sm text-slate-400">
           {memorial?.date_of_birth && new Date(memorial.date_of_birth).getFullYear()}
@@ -79,8 +79,19 @@ function MemorialHeader({ memorial, onShare }) {
           {memorial?.date_of_passing && new Date(memorial.date_of_passing).getFullYear()}
         </p>
         <p className="mt-2 text-sm text-slate-500 leading-relaxed max-w-md">
-          {memorial?.bio || "This paragraph can be an example of explaining who John is. It's intended to be a part of John's profile."}
+          {memorial?.bio || ""}
         </p>
+
+        {memorial?.status && (
+        <span className="mt-3 inline-block rounded-full px-4 py-1.5 text-caption bg-r-shape"
+          style={{ color: '#FBF9F6' }}>
+          {memorial.status === 'collecting' ? 'Collecting'
+            : memorial.status === 'generating' ? 'Generating'
+            : memorial.status === 'complete' ? 'Complete'
+            : memorial.status}
+        </span>
+      )}
+
       </div>
       <div className="flex shrink-0 flex-col gap-2 pt-2">
         <Link href={`/memorial/${memorial?.id}/output`} className="rounded-full bg-neutral-950 px-6 py-2.5 text-sm font-semibold text-white text-center hover:opacity-80 transition-opacity">
@@ -253,6 +264,34 @@ function ContributionsTab({ contributorslist, loading, error, onRetry }) {
             ): null
           }
         </div>    
+        {
+          value === "contributors" ? (
+            <div className="grid grid-cols-3 gap-4">
+              {contributors.map((contributor) => (
+                <div key={contributor.id} className="rounded-2xl p-5 flex flex-col gap-3 bg-r-modal border border-r-border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full shrink-0 bg-r-card" />
+                    <div className="min-w-0">
+                      <p className="text-body-2 font-semibold text-r-text">{contributor.name}</p>
+                      <p className="text-caption text-r-muted mt-0.5">10 contributions</p>
+                      <p className="text-caption text-r-muted">
+                        Last submitted {contributor.submitted_at
+                          ? new Date(contributor.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                          : '—'}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="self-start rounded-full px-4 py-1.5 text-caption bg-r-shape"
+                    style={{ color: '#FBF9F6' }}>
+                    {contributor.relationship_type || 'Relationship'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : value === "awaiting" ? (
+            <MemorialContributionApproval contributors={current} gallery={awaitinglist.length}/>
+          ) : null
+        }
         {
           value === "contributors" && loading ? (
             <TabLoading />
@@ -702,6 +741,48 @@ export default function MemorialOutputPage() {
 
   // Read from mockMemorials.js — single source of truth for mock data
   // Day 9: replace with real fetch from GET /memorials/:id
+  const [memorial, setMemorial] = useState(null);
+
+  useEffect(() => {
+    if (!id) return;
+    getMemorial(id).then((data) => {
+      const m = data?.memorial ?? data;
+      if (!m) return;
+      setMemorial({
+        id: m.id,
+        subject_name: m.subject_name || m.deceased_name,
+        cover_photo_url: m.cover_photo_url || m.profile_photo_url || null,
+        date_of_birth: m.date_of_birth || m.birth_date || null,
+        date_of_passing: m.date_of_passing || m.death_date || null,
+        bio: m.brief_biography || m.short_description || null,
+        status: m.status || null,  // added this
+      });
+    }).catch(() => {
+      const mockData = mockMemorials.find((m) => m.id === id) ?? mockMemorials[0];
+      setMemorial({
+        id: mockData.id,
+        subject_name: mockData.subject_name || mockData.deceased_name,
+        cover_photo_url: mockData.cover_photo_url || mockData.profile_photo_url || null,
+        date_of_birth: mockData.date_of_birth || mockData.birth_date || null,
+        date_of_passing: mockData.date_of_passing || mockData.death_date || null,
+        bio: mockData.brief_biography || mockData.short_description || null,
+        status: mockData.status || null,  // added this
+      });
+    });
+  }, [id]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getMemorialOutput(id);  // ← no token argument
+      setOutput(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
   const mockData = mockMemorials.find((m) => m.id === id) ?? mockMemorials[0];
   const memorial = {
     id: mockData.id,
