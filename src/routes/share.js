@@ -44,7 +44,7 @@ router.get('/:token', async (req, res) => {
     if (contributorError || !contributor) {
       return res.status(404).json({ error: 'Contributors not found.' })
     }
-    res.json({output_json: output.output_json, memorial: memorial, contributor: contributor})
+    res.json({ ...output.output_json, memorial: memorial || null, contributor: contributor || null})
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

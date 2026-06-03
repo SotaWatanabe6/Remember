@@ -12,7 +12,6 @@ router.get('/:token', async (req, res) => {
       .select('*')
       .eq('token', req.params.token)
       .single()
-
     if (inviteError || !invite) {
       return res.status(404).json({ error: 'Memorial not found.' })
     }
@@ -33,14 +32,19 @@ router.get('/:token', async (req, res) => {
     if (outputError || !output) {
       return res.status(404).json({ error: 'Memorial output not found.' })
     }
-
-    const { data: memorial } = await supabase
+    const { data: memorial, error: memorialError } = await supabase
       .from('memorials')
-      .select('id, subject_name, date_of_birth, date_of_passing, cover_photo_url')
-      .eq('id', invite.memorial_id)
+      .select('*')
+      .eq('id', output.memorial_id)
       .single()
-
-    res.json({ ...output.output_json, memorial: memorial || null })
+    if (memorialError || !memorial) {
+      return res.status(404).json({ error: 'Memorial output not found.' })
+    }      
+    const { data: contributor, error: contributorError } = await supabase.from('contributors').select('id, name, relationship_type, status, submitted_at, created_at').eq('memorial_id', output.memorial_id).order('created_at', { ascending: false })
+    if (contributorError || !contributor) {
+      return res.status(404).json({ error: 'Contributors not found.' })
+    }
+    res.json({ ...output.output_json, memorial: memorial || null, contributor: contributor || null})
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
