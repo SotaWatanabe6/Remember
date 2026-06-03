@@ -1398,13 +1398,10 @@ export async function getMemorialOutput(memorialId) {
     const response = await fetch(`${API_URL}/memorials/${memorialId}/output`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-
     if (!response.ok) throw new Error('Output not found');
     return await response.json();
   } catch {
-    // Fallback to mock if backend fails or memorial not in DB yet
-    await delay(MOCK_DELAY);
-    return getMockMemorialOutput();
+    return null; // no mock fallback — let the page show empty state
   }
 }
 
