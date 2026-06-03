@@ -2,7 +2,6 @@ import {
   ApiRequestError,
   getInviteToken,
   getContributorSummary,
-  getContributors,
   getResponses,
   saveRelationship,
   saveResponses,
@@ -16,7 +15,6 @@ import {
 import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS } from "@/lib/contribute/questionnaireQuestions.js";
 
 const CONTRIBUTOR_SESSION_STORAGE_PREFIX = "remember_contributor_session";
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 function getSessionStorageKey(inviteToken) {
   return `${CONTRIBUTOR_SESSION_STORAGE_PREFIX}:${inviteToken}`;
@@ -27,14 +25,7 @@ function getStoredContributorSession(inviteToken) {
     return null;
   }
 
-  let storedSession;
-
-  try {
-    storedSession = window.localStorage.getItem(getSessionStorageKey(inviteToken));
-  } catch (error) {
-    console.warn("Unable to load contributor session.", error);
-    return null;
-  }
+  const storedSession = window.localStorage.getItem(getSessionStorageKey(inviteToken));
 
   if (!storedSession) {
     return null;
@@ -42,13 +33,8 @@ function getStoredContributorSession(inviteToken) {
 
   try {
     return JSON.parse(storedSession);
-  } catch (error) {
-    console.warn("Discarding invalid contributor session.", error);
-    try {
-      window.localStorage.removeItem(getSessionStorageKey(inviteToken));
-    } catch (storageError) {
-      console.warn("Unable to clear invalid contributor session.", storageError);
-    }
+  } catch {
+    window.localStorage.removeItem(getSessionStorageKey(inviteToken));
     return null;
   }
 }
@@ -58,11 +44,7 @@ function storeContributorSession(inviteToken, session) {
     return;
   }
 
-  try {
-    window.localStorage.setItem(getSessionStorageKey(inviteToken), JSON.stringify(session));
-  } catch (error) {
-    console.warn("Unable to store contributor session.", error);
-  }
+  window.localStorage.setItem(getSessionStorageKey(inviteToken), JSON.stringify(session));
 }
 
 function isMockContributorSession(session) {
@@ -161,33 +143,6 @@ function normalizeInvite(inviteToken, invite, status) {
   };
 }
 
-function normalizeStartContributionResponse(response, invite, contributorName) {
-  const contributor = response?.contributor ?? response?.data?.contributor ?? null;
-  const contributorToken =
-    response?.contributor_token ??
-    response?.contributorToken ??
-    response?.token ??
-    response?.data?.contributor_token ??
-    contributor?.contributor_token ??
-    contributor?.token ??
-    contributor?.id ??
-    "";
-  const contributorId = contributor?.id ?? response?.contributor_id ?? response?.data?.contributor_id ?? "";
-
-  if (!contributorId || !contributorToken) {
-    return null;
-  }
-
-  return {
-    contributor,
-    contributorId,
-    contributorToken,
-    memorialId: contributor?.memorial_id ?? response?.memorial_id ?? invite.memorialId,
-    contributorName: contributor?.name ?? contributorName,
-    status: contributor?.status ?? "in_progress",
-  };
-}
-
 export async function validateContributorInvite(inviteToken) {
   try {
     const invite = await getInviteToken(inviteToken);
@@ -242,33 +197,22 @@ export async function beginContributorDraft(inviteToken, contributorName) {
     return resumedSession;
   }
 
-  let startedContribution;
+  const contribution = await startContribution(inviteToken, trimmedContributorName);
+  const contributor = contribution?.contributor;
+  const contributorId = contributor?.id;
+  const contributorToken = contribution?.contributor_token;
 
-  try {
-    startedContribution = await startContribution(inviteToken, trimmedContributorName);
-  } catch (error) {
-    console.error("Failed to start contributor session.", error);
-    throw new Error("We could not begin your contribution. Please try again.");
-  }
-
-  const contribution = normalizeStartContributionResponse(
-    startedContribution,
-    invite,
-    trimmedContributorName,
-  );
-
-  if (!contribution) {
-    console.error("Unexpected contributor start response.", startedContribution);
+  if (!contributorId || !contributorToken) {
     throw new Error("The Remember API did not return a contributor session.");
   }
 
   const session = {
     inviteToken,
-    memorialId: contribution.memorialId,
-    contributorId: contribution.contributorId,
-    contributorToken: contribution.contributorToken,
-    contributorName: contribution.contributorName,
-    status: contribution.status,
+    memorialId: contributor.memorial_id ?? invite.memorialId,
+    contributorId,
+    contributorToken,
+    contributorName: contributor.name ?? trimmedContributorName,
+    status: contributor.status ?? "in_progress",
     createdAt: now,
     updatedAt: now,
   };
@@ -300,18 +244,7 @@ function hasCompletedRelationship(session) {
 }
 
 export async function getContributorRelationshipDraft(inviteToken) {
-  let invite;
-
-  try {
-    invite = await validateContributorInvite(inviteToken);
-  } catch (error) {
-    console.error("Failed to load contributor invite.", error);
-    return {
-      status: "error",
-      invite: null,
-      session: null,
-    };
-  }
+  const invite = await validateContributorInvite(inviteToken);
 
   if (invite.status !== "valid") {
     return {
@@ -364,22 +297,15 @@ export async function saveContributorRelationship(
   const relationship_custom_label =
     trimmedRelationshipType === CONTRIBUTOR_RELATIONSHIP_OTHER ? trimmedCustomLabel : null;
 
-  let savedRelationship;
-
-  try {
-    savedRelationship = await saveRelationship(inviteToken, {
-      contributor_token: draft.session.contributorToken,
-      relationship_type: trimmedRelationshipType,
-      relationship_label: relationship_custom_label,
-    });
-  } catch (error) {
-    console.error("Failed to save contributor relationship.", error);
-    throw new Error("We could not save your relationship yet. Please try again.");
-  }
+  const savedRelationship = await saveRelationship(inviteToken, {
+    contributor_token: draft.session.contributorToken,
+    relationship_type: trimmedRelationshipType,
+    relationship_label: relationship_custom_label,
+  });
 
   const updatedSession = {
     ...draft.session,
-    relationship_type: savedRelationship?.contributor?.relationship_type ?? trimmedRelationshipType,
+    relationship_type: savedRelationship.contributor?.relationship_type ?? trimmedRelationshipType,
     relationship_custom_label,
     relationship_label: relationship_custom_label,
     updatedAt: new Date().toISOString(),
@@ -455,29 +381,7 @@ export async function getQuestionnaireResponses(inviteToken) {
     };
   });
 }
-export async function getMemorialContributors(memorialId, token) {
-  if (!memorialId) throw new Error("memorialId is required");
 
-  try {
-    const accessToken = token?.access_token || token || "";
-    const res = await fetch(
-      `${API_BASE_URL}/memorials/${memorialId}/contributors`,
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        },
-      }
-    );
-
-    if (!res.ok) throw new Error("Failed to fetch contributors");
-
-    return res.json();
-  } catch {
-    return getContributors(memorialId);
-  }
-}
 
 export async function saveQuestionnaireResponse(inviteToken, response, options = {}) {
   const draft = await getContributorQuestionnaireDraft(inviteToken);
@@ -548,7 +452,7 @@ export async function getContributorReviewDraft(inviteToken) {
     summary: {
       ...summary,
       contributor: {
-        ...summary?.contributor,
+        ...summary.contributor,
         id: session.contributorId,
         name: session.contributorName,
         relationship_type: session.relationship_type ?? "",
@@ -566,13 +470,7 @@ export async function submitContributorDraft(inviteToken) {
   }
 
   const result = await submitContribution(inviteToken, draft.session.contributorToken);
-  const submittedContributor = result?.contributor;
-
-  if (!submittedContributor?.status || !submittedContributor?.submitted_at) {
-    console.error("Unexpected contributor submit response.", result);
-    throw new Error("The Remember API did not confirm the contribution was submitted.");
-  }
-
+  const submittedContributor = result.contributor;
   const updatedSession = {
     ...draft.session,
     status: submittedContributor.status,

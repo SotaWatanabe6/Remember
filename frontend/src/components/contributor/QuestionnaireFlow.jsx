@@ -32,10 +32,6 @@ const questionnaireErrorCopy = {
     title: "Choose your relationship first",
     body: "Before the questions, please tell the family how you knew them.",
   },
-  error: {
-    title: "We could not open your questions",
-    body: "Please return to the invitation page and try again.",
-  },
 };
 
 function LoadingState() {
@@ -180,18 +176,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
 
     async function loadQuestionnaire() {
       setIsLoading(true);
-      let questionnaireDraft;
-
-      try {
-        questionnaireDraft = await getContributorQuestionnaireDraft(inviteToken);
-      } catch (error) {
-        console.error("Failed to load contributor questionnaire draft.", error);
-        questionnaireDraft = {
-          status: "error",
-          invite: null,
-          session: null,
-        };
-      }
+      const questionnaireDraft = await getContributorQuestionnaireDraft(inviteToken);
 
       if (!isMounted) {
         return;

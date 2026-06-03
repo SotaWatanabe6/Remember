@@ -1,23 +1,30 @@
-const supabase = require('../supabase')
+const jwt = require('jsonwebtoken')
+const jwksClient = require('jwks-rsa')
 
-module.exports = async function authMiddleware(req, res, next) {
-  try {
-    const authHeader = req.headers.authorization
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Not authenticated' })
-    }
+const client = jwksClient({
+  jwksUri: 'https://tbpdhybqbjucoxdizlgw.supabase.co/auth/v1/.well-known/jwks.json'
+})
 
-    const token = authHeader.split(' ')[1]
-    const { data, error } = await supabase.auth.getUser(token)
+function getKey(header, callback) {
+  client.getSigningKey(header.kid, (err, key) => {
+    if (err) return callback(err)
+    callback(null, key.getPublicKey())
+  })
+}
 
-    if (error || !data?.user) {
+module.exports = function authMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Not authenticated' })
+  }
+
+  const token = authHeader.split(' ')[1]
+  jwt.verify(token, getKey, { algorithms: ['ES256'] }, (err, decoded) => {
+    if (err) {
+      console.error('JWT error:', err.message)
       return res.status(401).json({ error: 'Invalid or expired token' })
     }
-
-    req.user = data.user
+    req.user = decoded
     next()
-  } catch (err) {
-    console.error('Auth error:', err.message)
-    return res.status(500).json({ error: 'Authentication failed' })
-  }
+  })
 }
