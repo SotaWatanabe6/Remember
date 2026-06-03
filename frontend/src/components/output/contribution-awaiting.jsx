@@ -36,7 +36,7 @@ export default function MemorialContributionApproval({contributors,gallery}) {
                     </p>
 
                     <div className="mt-3 inline-flex rounded-md bg-gray-200 px-4 py-1 text-xs text-gray-700">
-                      {contributors.relationship_type}
+                      {contributors.relationship_type || "No relationship type"}
                     </div>
                   </div>
                 </div>

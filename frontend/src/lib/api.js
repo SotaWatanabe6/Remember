@@ -531,8 +531,18 @@ export async function updateInviteLink(memorialId, { is_active }) {
  * TODO: Replace with real fetch() on Day 9.
  */
 export async function getContributors(memorialId) {
-  await delay(MOCK_DELAY);
-  return { contributors: MOCK_CONTRIBUTORS };
+  try {
+    const token = await getAuthToken();
+    const response = await fetch(`${API_URL}/memorials/${memorialId}/contributors`, {
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error('Failed to fetch contributors');
+    return response.json();
+  } catch {
+    // Fallback to mock — prevents constellation page from crashing
+    await delay(MOCK_DELAY);
+    return { contributors: MOCK_CONTRIBUTORS };
+  }
 }
 
 // ─── TEAM: SHARE LINK (confirm owner with team) ───────────────────────────────

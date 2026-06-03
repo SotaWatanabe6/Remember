@@ -206,13 +206,8 @@ function ArchiveTab() {
 function ContributionsTab({ contributorslist, loading, error, onRetry }) {
   const [value, setValue] = useState("contributors");
 
-  const submissions = [
-    { id: 1, user: "Jane Smith", contribution: "10 contributions", summary: "This can be an AI generated summary of the contribution, either mentioning surfaced themes or flagged submissions that may be sensitive or inappropriate." },
-    { id: 2, user: "Michael Johnson", contribution: "7 contributions", summary: "AI generated summaries can highlight themes, relationships, and potentially sensitive submissions for moderators to review quickly." },
-    { id: 3, user: "Emily Davis", contribution: "4 contributions", summary: "This summary may contain surfaced insights generated automatically from uploaded stories, photos, and audio." },
-    { id: 4, user: "Chris Brown", contribution: "15 contributions", summary: "AI can help identify emotional themes and summarize media content for easier moderation workflows." },
-    { id: 5, user: "Sarah Wilson", contribution: "3 contributions", summary: "Potentially sensitive content or highlighted themes may appear here after automatic AI analysis." },
-  ];
+  const submissions = contributorslist.filter(c => c.status === "submitted");
+  const nonSubmissions = contributorslist.filter(c => c.status !== "submitted");
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const current = submissions[currentIndex];
@@ -227,7 +222,7 @@ function ContributionsTab({ contributorslist, loading, error, onRetry }) {
           <option value="contributors">Contributors</option>
           <option value="awaiting">Awaiting Approval</option>
         </select>
-        {value === "awaiting" && (
+        {(value === "awaiting" && submissions.length > 0) && (
           <div className="flex items-center gap-4 text-sm text-gray-600">
             <button onClick={handlePrev} className="rounded p-1 transition hover:bg-gray-200">
               <ChevronLeft size={18} />
@@ -248,38 +243,38 @@ function ContributionsTab({ contributorslist, loading, error, onRetry }) {
           onRetry={onRetry}
         />
       )}
-      {value === "contributors" && !loading && !error && contributorslist.length === 0 && (
+      {value === "contributors" && !loading && !error && nonSubmissions.length === 0 && (
         <TabEmpty
           title="No contributors yet"
           message="Contributors will appear here once people begin sharing memories."
         />
       )}
-      {value === "contributors" && !loading && !error && contributorslist.length > 0 && (
+      {value === "contributors" && !loading && !error && nonSubmissions.length > 0 && (
         <div className="grid grid-cols-3 gap-4">
-          {contributorslist.map((contributor) => (
+          {nonSubmissions.map((contributor) => (
             <div key={contributor.id} className="rounded-2xl p-5 flex flex-col gap-3 bg-r-modal border border-r-border">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full shrink-0 bg-r-card" />
                 <div className="min-w-0">
                   <p className="text-body-2 font-semibold text-r-text">{contributor.name}</p>
-                  <p className="text-caption text-r-muted mt-0.5">10 contributions</p>
+                  <p className="text-caption text-r-muted mt-0.5">{nonSubmissions.length} contributions</p>
                   <p className="text-caption text-r-muted">
                     Last submitted {contributor.submitted_at
                       ? new Date(contributor.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-                      : '—'}
+                      : 'No date provided'}
                   </p>
                 </div>
               </div>
               <span className="self-start rounded-full px-4 py-1.5 text-caption bg-r-shape"
                 style={{ color: '#FBF9F6' }}>
-                {contributor.relationship_type || 'Relationship'}
+                {contributor.relationship_type || 'No Relationship'}
               </span>
             </div>
           ))}
         </div>
       )}
       {value === "awaiting" && (
-        <MemorialContributionApproval contributors={current} />
+        <MemorialContributionApproval contributors={current} gallery={submissions.length} />
       )}
     </div>
   );
@@ -473,7 +468,7 @@ function PreGenerationEmpty({ canGenerate, disabledMessage, generationError, gen
 
 // ─── Outputs Tab ──────────────────────────────────────────────────────────────
 
-function OutputsTab({ canGenerate, disabledMessage, generationError, generationJob, generating, onGenerate, output, loading, error, onRetry }) {
+function OutputsTab({memorial, contributors, canGenerate, disabledMessage, generationError, generationJob, generating, onGenerate, output, loading, error, onRetry }) {
   if (loading) return <TabLoading />;
 
   if (error) {
@@ -508,7 +503,7 @@ function OutputsTab({ canGenerate, disabledMessage, generationError, generationJ
       </CollapsibleSection>
       <CollapsibleSection title="Constellation">
         <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6 aspect-video flex items-center justify-center">
-          <ConstellationGraph ai_output={output} />
+          <ConstellationGraph ai_output={output} memorial={memorial} contributor={contributors} width={800} height={800} />
         </div>
       </CollapsibleSection>
       <CollapsibleSection title="Voices">
@@ -635,6 +630,8 @@ export default function MemorialOutputPage() {
     try {
       const token = await getCurrentAuthToken();
       const contributor = await getMemorialContributors(memorialId, token);
+      const memorialApi = await getMemorial(memorialId);
+      setMemorial(memorialApi.memorial);
       setContributors(contributor.contributors ?? []);
     } catch (err) {
       setContributorsError(err instanceof Error ? err.message : "Failed to fetch contributors");
@@ -749,6 +746,8 @@ export default function MemorialOutputPage() {
           )}
           {activeTab === 'Outputs' && (
             <OutputsTab
+              memorial={memorial}
+              contributors={contributors}
               canGenerate={canGenerate}
               disabledMessage={generationDisabledMessage}
               generationError={generationError}

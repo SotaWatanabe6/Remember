@@ -64,7 +64,7 @@ function MemorialHeader({ memorial }) {
 
 // ─── Constellation tab ────────────────────────────────────────────────────────
 
-function ConstellationTab({ data }) {
+function ConstellationTab({ data ,memorial, contributor}) {
   if (!data) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -73,7 +73,7 @@ function ConstellationTab({ data }) {
       </div>
     );
   }
-  return <div className="py-4"><ConstellationGraph ai_output={{ constellation: data }} /></div>;
+  return <div className="py-4"><ConstellationGraph ai_output={data} memorial={memorial} contributor={contributor} width={800} height={800}/></div>;
 }
 
 // ─── Lightbox ─────────────────────────────────────────────────────────────────
@@ -282,6 +282,7 @@ export default function SharePage() {
   const [activeTab, setActiveTab] = useState('Story');
   const [output, setOutput] = useState(null);
   const [memorial, setMemorial] = useState(null);
+  const [contributors, setContributors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -289,15 +290,10 @@ export default function SharePage() {
     async function load() {
       try {
         const data = await getShareToken(shareToken);
+        console.log("Share token data:", data);
         setOutput(data);
-        if (data.memorial) {
-          setMemorial(data.memorial);
-        } else {
-          try {
-            const memorialData = await getMemorialById(data.memorial_id || shareToken);
-            setMemorial(memorialData || mockMemorials[0]);
-          } catch { setMemorial(mockMemorials[0]); }
-        }
+        setContributors(data.contributor || []);
+        setMemorial(data.memorial || mockMemorials[0]);
       } catch (err) { setError(err.message); }
       finally { setLoading(false); }
     }
@@ -322,7 +318,7 @@ export default function SharePage() {
             <TabBar active={activeTab} onChange={setActiveTab} />
             <div>
               {activeTab === 'Story' && <StorySlideshow output={output} story={output?.story} />}
-              {activeTab === 'Constellation' && <ConstellationTab data={output?.constellation} />}
+              {activeTab === 'Constellation' && <ConstellationTab data={output} memorial={memorial} contributor={contributors} />}
               {activeTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} />}
               {activeTab === 'All Photos' && <AllPhotosTab albums={normalizePhotos(output?.photos)} />}
             </div>

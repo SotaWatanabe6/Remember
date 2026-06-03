@@ -110,49 +110,77 @@ function PulsingPlaceholder() {
   );
 }
 
-export default function ConstellationGraph({ ai_output }) {
+export default function ConstellationGraph({ ai_output ,memorial, contributor, width, height}) {
   const ref = useRef(null);
+  console.log(memorial);
   const { id } = useParams();
-
+  // Don't need to add constellation Loading since D3.js made the transition
+  // Removed also the sitetimeout cause that causes the problem filter features
+  const [constellationLoading, setConstellationLoading] = useState(false);
   const [selectedNode, setSelectedNode] = useState(null);
   const [tab, setTab] = useState("Themes");
-  const [hiddenItems, setHiddenItems] = useState({});
+  const [hiddenContributors, setHiddenContributors] = useState({});
+  const [hiddenRelationshipType, setHiddenRelationshipType] = useState({});
+  const [hiddenThemes, setHiddenThemes] = useState({});  
+  const handleThemesChange = (nodeId) => {
+    setHiddenThemes((prev) => ({
+      ...prev,
+      [nodeId]: !prev[nodeId],
+    }));    
+  };  
+
+  function capitalizeFirstLetter(str) {
+    if(!str || str=='null') return str;
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+  const handleRelationshipTypesChange = (nodeId) => {
+    setHiddenRelationshipType((prev) => ({
+      ...prev,
+      [nodeId]: !prev[nodeId],
+    }));
+    
+  };  
+  
   const toggleEye = (id) => {
-    setHiddenItems((prev) => ({
+    setHiddenContributors((prev) => ({
       ...prev,
       [id]: !prev[id],
     }));
-    
-    // Use setTimeout to allow D3 to apply smooth exit transitions
-    setTimeout(() => {
-      const filteredNodes = nodes.filter(item => {
-        const shouldHide = !(!prev[item.id] ? true : (prev[item.id] !== true));
-        return !shouldHide;
-      });
-      console.log("Filtered Nodes: ", prev);
-      const filteredLinks = links.filter(
-        l => !prev[l.target.id]
-      );
-      setNodes(filteredNodes);
-      setLinks(filteredLinks);
-    }, 300);
-  };
-  const [contributor, setContributors] = useState([]);
-  const [memorial, setMemorial] = useState();
-  const [relationshipCounts, setRelationshipCounts] = useState([]);
-  const [nodes, setNodes] = useState(
-    ai_output?.constellation?.nodes?.map(t => ({
-      id: t.id,
-      name: t.label,
-      group: t.category,
-      prominence: t.prominence_score,
-      summary: t.summary,
-      photos: t.photo_ids,
-      quotes: t.quotes
-    })) || []
-);
 
-    const [constellationLoading, setConstellationLoading] = useState(true);
+  };  
+  const [relationshipCounts, setRelationshipCounts] = useState(
+    Object.entries(
+      contributor.reduce((acc, item) => {
+          acc[capitalizeFirstLetter(item.relationship_type)] =
+            (acc[capitalizeFirstLetter(item.relationship_type)] || 0) + 1;
+          return acc;
+        }, {})
+      ).map(([relationship_type, count]) => ({
+        relationship_type: capitalizeFirstLetter(relationship_type),
+        count,
+      }))    
+  );
+  console.log(ai_output.constellation);
+  const [nodes, setNodes] = useState(
+      ai_output?.constellation?.nodes?.map(t => ({
+        id: t.id,
+        name: t.label,
+        group: capitalizeFirstLetter(t.category),
+        prominence: t.prominence_score,
+        summary: t.summary,
+        photos: t.photo_ids,
+        quotes: t.quotes
+      }))
+  );
+  const [links, setLinks] = useState(
+    ai_output?.constellation?.edges?.map(d => ({
+      source: d.source,
+      target: d.target,
+      type: capitalizeFirstLetter(d.relationship_type),
+      weight: d.weight
+    }))
+  );
+  
   
   // Generate placeholder nodes for loading state
   const placeholderNodes = [...Array(8)].map((_, i) => ({
@@ -165,62 +193,14 @@ export default function ConstellationGraph({ ai_output }) {
     quotes: [],
     x: Math.random() * 600,
     y: Math.random() * 400,
-  }));  const [links, setLinks] = useState(
-    ai_output?.constellation?.edges?.map(d => ({
-      source: d.source,
-      target: d.target,
-      type: d.relationship_type,
-      weight: d.weight
-    })) || []
-  );
-
-
-  
-  useEffect(() => {    
-    if (!tab) return;
-    if (!id) return;
-    
-    const loadMemorial = async () => {        
-
-      try {
-        // const token = JSON.parse(localStorage.getItem("sb-tbpdhybqbjucoxdizlgw-auth-token"));
-        // if (typeof token === "undefined") {
-        //   console.log("Token retrieved:", token);
-        //   return ;
-        // }
-        const contributor = await getContributors(id);
-        const memorialApi = await getMemorial(id);
-        console.log(memorialApi);
-        setMemorial(memorialApi.memorial);
-        setContributors(contributor.contributors);
-        setRelationshipCounts(Object.entries(
-        contributor.contributors.reduce((acc, item) => {
-            acc[item.relationship_type] =
-              (acc[item.relationship_type] || 0) + 1;
-            return acc;
-          }, {})
-        ).map(([relationship_type, count]) => ({
-          relationship_type,
-          count,
-        })));
-      } catch (err) {
-        console.error("Error fetching memorial data:", err);
-      } finally {
-
-      }      
-    }
-    loadMemorial();
-
-  }, [tab,id]);   
+  }));
 
   
   const handleChange = (e) => {
       setTab(e.target.value);
       if (e.target.value === "Themes") {
-      // setHiddenItems(ai_output.constellation.nodes.map(t => ({
-      //   [t.id]: false,
-      // })));        
-        setNodes(ai_output.constellation.nodes.map(t => ({
+
+        setNodes(ai_output?.constellation?.nodes.map(t => ({
           id: t.id,
           name: t.label,          // common for display
           group: t.category,      // useful for coloring / clustering
@@ -229,21 +209,21 @@ export default function ConstellationGraph({ ai_output }) {
           photos: t.photo_ids,
           quotes: t.quotes
         })));    
-        setLinks(ai_output.constellation.edges.map(d => ({
+        setLinks(ai_output?.constellation?.edges.map(d => ({
           source: d.source,
           target: d.target,
-          type: d.relationship_type,
+          type: (d.relationship_type),
           weight: d.weight
         })));
     }
     else{
-      // setHiddenItems(contributor.map(t => ({
-      //   [t.id]: false,
-      // })));
       setNodes(contributor.map(t => ({
         id: t.id,
         name: t.name,
         prominence: 0.7,
+        summary: t.summary,
+        photos: t.photo_ids,
+        quotes: t.quotes        
       })));    
       if (memorial) {
         setNodes((prevItems) => [...prevItems, {
@@ -255,34 +235,62 @@ export default function ConstellationGraph({ ai_output }) {
       setLinks(contributor.map(d => ({
         source: memorial.user_id,
         target: d.id,
-        type: d.relationship_type,
+        type: capitalizeFirstLetter(d.relationship_type),
         weight: d.weight
-      })));      
+      })));         
     }
   }
   useEffect(() => {
     if (!nodes || nodes.length === 0) return;
     if (!links || links.length === 0) return;
-
-    const width = 800;
-    const height = 800;
+    if (!tab) return;
+    if (!hiddenRelationshipType) return;
+    if (!hiddenContributors) return;
+    if (!hiddenThemes) return;
 
     const edgeStyle = (type) => {
       switch (type) {
-        case "family":
+        case "Family":
           return ""; // solid
-        case "friend":
+        case "Friend":
           return "6,4"; // dashed
-        case "colleague":
+        case "Colleague":
           return "2,4"; // dotted
-        case "community":
+        case "Community":
           return "10,4,2,4"; // long-dash pattern
         default:
           return "";
       }
     };
-    // console.log("Nodes: ", nodes);
-    // console.log("Links: ", links);
+    let displayNode=[];
+    let displayLink=[];
+    if (tab === "Themes") {
+
+      displayNode=nodes.filter(
+        (node) => !hiddenThemes[node.id]
+      );
+      displayLink=links.filter(
+        (link) =>
+          !hiddenThemes[link.source.id] &&
+          !hiddenThemes[link.target.id]
+      );
+    }
+    else {
+      displayNode=nodes.filter(
+        (node) => !hiddenRelationshipType[node.type]
+      );
+      displayLink=links.filter(
+        (link) =>
+          !hiddenRelationshipType[link.type]
+      );        
+      console.log("After relationship type filter - Nodes: ", displayNode);
+      console.log("After relationship type filter - Links: ", displayLink);
+      displayNode=displayNode.filter(item => !hiddenContributors[item.id]);
+      displayLink=displayLink.filter(
+        l => !hiddenContributors[l.target.id]
+      );
+    }        
+
     const svg = d3
       .select(ref.current)
       .attr("width", width)
@@ -290,14 +298,12 @@ export default function ConstellationGraph({ ai_output }) {
 
     svg.selectAll("*").remove();
     
-    // Mark constellation as loaded once rendering starts
-    setConstellationLoading(false);
 
     const simulation = d3
-      .forceSimulation(nodes)
+      .forceSimulation(displayNode)
       .force(
         "link",
-        d3.forceLink(links).id((d) => d.id).distance(150)
+        d3.forceLink(displayLink).id((d) => d.id).distance(150)
       )
       .force("charge", d3.forceManyBody().strength(-800))
       .force("center", d3.forceCenter(width / 2, height / 2))
@@ -306,7 +312,7 @@ export default function ConstellationGraph({ ai_output }) {
     const link = svg
       .append("g")
       .selectAll("line")
-      .data(links)
+      .data(displayLink)
       .enter()
       .append("line")
       .attr("stroke", "#000000")
@@ -316,7 +322,7 @@ export default function ConstellationGraph({ ai_output }) {
     const node = svg
       .append("g")
       .selectAll("circle")
-      .data(nodes)
+      .data(displayNode)
       .enter()
       .append("circle")
       .attr("r", d=> d.prominence * 80 + 5) // size based on prominence
@@ -340,7 +346,7 @@ export default function ConstellationGraph({ ai_output }) {
     const label = svg
     .append("g")
     .selectAll("text")
-    .data(nodes)
+    .data(displayNode)
     .enter()
     .append("text")
     .text((d) =>truncate(d.name, 12) || " No theme ")
@@ -391,7 +397,7 @@ export default function ConstellationGraph({ ai_output }) {
     }
 
     return () => simulation.stop();
-  }, [nodes, links]);
+  }, [nodes, links, hiddenRelationshipType, hiddenContributors, hiddenThemes,tab]);
 
   return (
     <div>
@@ -430,7 +436,7 @@ export default function ConstellationGraph({ ai_output }) {
                   return (
                     <div key={index} className="flex items-center gap-2">
                       <div className="h-3 w-3 rounded-sm bg-white" />
-                      <span>{item.relationship_type}</span>
+                      <span>{item.relationship_type == "null" || item.relationship_type == undefined ? "No relationship type" : item.relationship_type}</span>
                     </div>
                   );
                 }
@@ -455,6 +461,7 @@ export default function ConstellationGraph({ ai_output }) {
                     <input
                       type="checkbox"
                       defaultChecked
+                      onChange={() => handleThemesChange(item.id)}                            
                       className="
                         h-4
                         w-4
@@ -506,7 +513,8 @@ export default function ConstellationGraph({ ai_output }) {
                   <label key={index} className="flex items-center gap-3">
                     <input
                       type="checkbox"
-                      defaultChecked
+                      defaultChecked                      
+                      onChange={() => handleRelationshipTypesChange(item.relationship_type)}                        
                       className="
                         h-4
                         w-4
@@ -514,7 +522,7 @@ export default function ConstellationGraph({ ai_output }) {
                         accent-black
                       "
                     />
-                    <span>{item.count} {item.relationship_type}</span>
+                    <span>{item.count} {item.relationship_type == "null" || item.relationship_type==undefined ? "No relationship type" : item.relationship_type}</span>
                   </label>
                   );
                 }
@@ -527,7 +535,7 @@ export default function ConstellationGraph({ ai_output }) {
             <div className="space-y-4">
               {contributor.map((item) => {
 
-                const isHidden = hiddenItems[item.id];
+                const isHidden = hiddenContributors[item.id];
                 return (
 
                 <div
@@ -554,7 +562,7 @@ export default function ConstellationGraph({ ai_output }) {
                       </p>
 
                       <button className="mt-3 rounded bg-[#d9d9d9] px-6 py-1 text-xs">
-                        {item.relationship_type}
+                        {item.relationship_type == "null" || item.relationship_type == undefined ? "No relationship type" : item.relationship_type}
                       </button>
                     </div>
                   </div>
@@ -595,7 +603,7 @@ export default function ConstellationGraph({ ai_output }) {
                   </h3>
 
                   <div className="rounded-xl bg-gray-50 p-4 text-gray-700 leading-relaxed">
-                    {selectedNode.summary}
+                    {selectedNode.summary || "No summary available for "+selectedNode.name}
                   </div>
                 </div>
 
@@ -606,7 +614,7 @@ export default function ConstellationGraph({ ai_output }) {
                   </h3>
 
                   <div className="space-y-4">
-                    {selectedNode.quotes.map((quote, index) => (
+                    {selectedNode?.quotes?.map((quote, index) => (
                       <div
                         key={index}
                         className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
@@ -630,7 +638,7 @@ export default function ConstellationGraph({ ai_output }) {
                 </div>
 
                 {/* EMPTY STATE */}
-                {selectedNode.quotes.length === 0 && (
+                {!selectedNode?.quotes && (
                   <div className="rounded-xl bg-gray-50 p-6 text-center text-gray-500">
                     No quotes available
                   </div>

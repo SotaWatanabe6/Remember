@@ -66,7 +66,7 @@ function SlideshowSection({ output }) {
 
 // ─── Constellations — Mendrika's component ────────────────────────────────────
 
-function ConstellationsSection({ output, memorial }) {
+function ConstellationsSection({ output, memorial,contributor }) {
   if (!output?.constellation) {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
@@ -74,8 +74,8 @@ function ConstellationsSection({ output, memorial }) {
         <p className="mt-2 max-w-xs text-body-2 text-r-muted">Constellation will appear here once the memorial has been generated.</p>
       </div>
     );
-  }
-  return <div className="py-4"><ConstellationGraph ai_output={output} memorial={memorial} /></div>;
+  } 
+  return <div className="py-4"><ConstellationGraph ai_output={output} memorial={memorial} contributor={contributor} width={1250} height={800}/></div>;
 }
 
 // ─── Waveform Player ──────────────────────────────────────────────────────────
@@ -164,13 +164,15 @@ function WaveformPlayer({ audioUrl, color }) {
 
 function ContributionsSection({ contributorslist }) {
   const [value, setValue] = useState("contributors");
-  const submissions = [
-    { id: 1, user: "Jane Smith", contribution: "10 contributions", summary: "This can be an AI generated summary of the contribution, either mentioning surfaced themes or flagged submissions that may be sensitive or inappropriate." },
-    { id: 2, user: "Michael Johnson", contribution: "7 contributions", summary: "AI generated summaries can highlight themes, relationships, and potentially sensitive submissions for moderators to review quickly." },
-    { id: 3, user: "Emily Davis", contribution: "4 contributions", summary: "This summary may contain surfaced insights generated automatically from uploaded stories, photos, and audio." },
-    { id: 4, user: "Chris Brown", contribution: "15 contributions", summary: "AI can help identify emotional themes and summarize media content for easier moderation workflows." },
-    { id: 5, user: "Sarah Wilson", contribution: "3 contributions", summary: "Potentially sensitive content or highlighted themes may appear here after automatic AI analysis." },
-  ];
+  // const submissions = [
+  //   { id: 1, user: "Jane Smith", contribution: "10 contributions", summary: "This can be an AI generated summary of the contribution, either mentioning surfaced themes or flagged submissions that may be sensitive or inappropriate." },
+  //   { id: 2, user: "Michael Johnson", contribution: "7 contributions", summary: "AI generated summaries can highlight themes, relationships, and potentially sensitive submissions for moderators to review quickly." },
+  //   { id: 3, user: "Emily Davis", contribution: "4 contributions", summary: "This summary may contain surfaced insights generated automatically from uploaded stories, photos, and audio." },
+  //   { id: 4, user: "Chris Brown", contribution: "15 contributions", summary: "AI can help identify emotional themes and summarize media content for easier moderation workflows." },
+  //   { id: 5, user: "Sarah Wilson", contribution: "3 contributions", summary: "Potentially sensitive content or highlighted themes may appear here after automatic AI analysis." },
+  // ];
+  const submissions = contributorslist.filter(c => c.status === "submitted");
+  const nonSubmissions = contributorslist.filter(c => c.status !== "submitted");
   const [currentIndex, setCurrentIndex] = useState(0);
   const current = submissions[currentIndex];
   const handlePrev = () => setCurrentIndex((prev) => prev === 0 ? submissions.length - 1 : prev - 1);
@@ -190,7 +192,7 @@ function ContributionsSection({ contributorslist }) {
           </div>
         )}
       </div>
-      {value === "contributors" ? <MemorialContributionsPage contributors={contributorslist} /> : value === "awaiting" ? <MemorialContributionApproval contributors={current} /> : null}
+      {value === "contributors" ? <MemorialContributionsPage contributors={nonSubmissions} /> : value === "awaiting" ? <MemorialContributionApproval contributors={current} /> : null}
     </div>
   );
 }
@@ -405,7 +407,7 @@ function ContributorsView() {
               </div>
               <span className="mt-3 self-start inline-block rounded-full px-3 py-1 text-caption bg-r-bg"
                 style={{ border: '1px solid var(--color-r-border)', color: relationshipColor(contributor.relationship) }}>
-                {contributor.relationship}
+                {contributor.relationship || "No Relationship Provided"}
               </span>
             </div>
             <div className="flex flex-1">
@@ -722,7 +724,7 @@ export default function MemorialOutputPage() {
         ) : (
           <>
             {activeTab === 'Slideshow' && <SlideshowSection output={output} />}
-            {activeTab === 'Constellations' && <ConstellationsSection output={output} memorial={memorial} />}
+            {activeTab === 'Constellations' && <ConstellationsSection output={output} memorial={memorial} contributor={contributors} />}
             {activeTab === 'Voices' && <VoicesSection voices={output?.voices} />}
             {activeTab === 'Contributions' && <ContributionsSection contributorslist={contributors} />}
             {activeTab === 'Photo Archive' && <PhotoArchiveSection output={output} />}
