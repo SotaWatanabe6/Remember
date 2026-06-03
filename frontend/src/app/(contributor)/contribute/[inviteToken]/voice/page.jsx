@@ -1,6 +1,6 @@
 'use client';
 
-// frontend/src/app/(contributor)/contribute/[inviteToken]/voice/page.jsx
+// src/app/(contributor)/contribute/[inviteToken]/voice/page.jsx
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
@@ -13,18 +13,7 @@ import {
   uploadVoice,
 } from '@/lib/api';
 
-const FONT = "'Cormorant Garamond', Georgia, serif";
-
-const COLORS = {
-  bg: '#F0EAE2',
-  family: '#AF5F42',
-  friend: '#45556C',
-  colleague: '#59763C',
-  text: '#1a1a1a',
-  textMuted: '#6b6b6b',
-  cardBg: '#E8E0D8',
-  border: '#D4CAC0',
-};
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const AUDIO_ACCEPT = 'audio/*,.m4a,.mp3,.wav,.webm';
 const FILE_TYPE_ERROR = 'This file type is not supported. Please upload an M4A, MP3, or WAV file.';
@@ -37,17 +26,17 @@ const INLINE_UPLOAD_ERROR_CODES = new Set([
   'audio_too_large',
 ]);
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function getFileExtension(fileName = '') {
   return fileName.split('.').pop()?.toLowerCase() || '';
 }
 
 function validateAudioFile(file) {
   if (!file) return 'Please choose an audio file.';
-
   const extension = getFileExtension(file.name);
   const hasAudioMime = file.type?.startsWith('audio/');
   const hasAllowedExtension = ALLOWED_AUDIO_EXTENSIONS.includes(extension);
-
   if (!hasAudioMime && !hasAllowedExtension) return FILE_TYPE_ERROR;
   if (file.size > MAX_AUDIO_FILE_SIZE_BYTES) return FILE_SIZE_ERROR;
   return '';
@@ -58,16 +47,20 @@ function statusCopy(recording) {
   return 'Voice recording uploaded';
 }
 
+function formatDuration(seconds) {
+  if (!seconds) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+// ─── Nav ──────────────────────────────────────────────────────────────────────
 
 function ContributorNav({ backHref }) {
   return (
     <nav className="flex h-10 items-center justify-between">
-      <span style={{ fontFamily: FONT }} className="text-2xl leading-8 text-[#423F39]">Remember</span>
-      <Link
-        href={backHref}
-        style={{ fontFamily: FONT }}
-        className="flex items-center gap-1.5 text-base text-[#5F5A52] hover:text-[#423F39] transition-colors"
-      >
+      <span className="text-r-text text-2xl leading-8">Remember</span>
+      <Link href={backHref} className="flex items-center gap-1.5 text-body-2 text-r-secondary transition-colors">
         <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
         </svg>
@@ -77,14 +70,9 @@ function ContributorNav({ backHref }) {
   );
 }
 
-function formatDuration(seconds) {
-  if (!seconds) return '0:00';
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-// ─── Audio row ────────────────────────────────────────────────────────────────
+// ─── Audio Row ────────────────────────────────────────────────────────────────
+// Sungjun's full logic — hasPreview, commitTitle, handleLoadedMetadata, async togglePlay
+// Styling uses CSS tokens
 
 function AudioRow({ recording, onDelete, onEditTitle, onDurationLoaded }) {
   const audioRef = useRef(null);
@@ -96,12 +84,10 @@ function AudioRow({ recording, onDelete, onEditTitle, onDurationLoaded }) {
 
   async function togglePlay() {
     if (!audioRef.current || !hasPreview) return;
-
     if (playing) {
       audioRef.current.pause();
       return;
     }
-
     try {
       await audioRef.current.play();
     } catch {
@@ -125,24 +111,21 @@ function AudioRow({ recording, onDelete, onEditTitle, onDurationLoaded }) {
   function commitTitle() {
     const trimmedTitle = title.trim();
     setEditingTitle(false);
-
-    if (!trimmedTitle) {
-      setTitle(recording.contributor_title);
-      return;
-    }
-
+    if (!trimmedTitle) { setTitle(recording.contributor_title); return; }
     setTitle(trimmedTitle);
     onEditTitle(recording.id, trimmedTitle);
   }
 
   return (
-    <div className="flex items-center gap-4" style={{ borderTop: '1px solid #D4CAC0', paddingTop: '14px' }}>
-      {/* Play button */}
+    <div
+      className="flex items-center gap-4"
+      style={{ borderTop: '1px solid var(--color-r-border)', paddingTop: '14px' }}
+    >
       <button
         onClick={togglePlay}
         disabled={!hasPreview}
         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-opacity hover:opacity-80 disabled:opacity-100"
-        style={{ backgroundColor: '#423F39', color: 'white' }}
+        style={{ backgroundColor: 'var(--color-r-text)', color: 'white' }}
         aria-label={hasPreview ? (playing ? 'Pause recording preview' : 'Play recording preview') : 'Recording uploaded'}
       >
         {!hasPreview ? (
@@ -161,7 +144,6 @@ function AudioRow({ recording, onDelete, onEditTitle, onDurationLoaded }) {
         )}
       </button>
 
-      {/* File name + progress */}
       <div className="flex-1 min-w-0">
         {editingTitle ? (
           <input
@@ -170,25 +152,23 @@ function AudioRow({ recording, onDelete, onEditTitle, onDurationLoaded }) {
             onChange={(e) => setTitle(e.target.value)}
             onBlur={commitTitle}
             onKeyDown={(e) => e.key === 'Enter' && e.target.blur()}
-            className="w-full rounded px-2 py-0.5 text-sm focus:outline-none"
-            style={{ border: '1px solid #D4CAC0', color: '#423F39', fontFamily: FONT, backgroundColor: '#FBF9F6' }}
+            className="w-full rounded px-2 py-0.5 text-sm focus:outline-none text-r-text bg-r-modal"
+            style={{ border: '1px solid var(--color-r-border)' }}
           />
         ) : (
-          <p className="truncate text-sm font-medium" style={{ color: '#423F39', fontFamily: FONT }}>{title}</p>
+          <p className="truncate text-body-2 font-medium text-r-text">{title}</p>
         )}
         <div className="mt-1.5 flex items-center gap-2">
-          <div className="relative h-1 flex-1 rounded-full" style={{ backgroundColor: '#D4CAC0' }}>
+          <div className="relative h-1 flex-1 rounded-full bg-r-border">
             <div
               className="h-full rounded-full transition-all"
-              style={{ width: `${progress}%`, backgroundColor: '#4A7FA5' }}
+              style={{ width: `${progress}%`, backgroundColor: 'var(--color-r-accent)' }}
             />
           </div>
-          <span className="shrink-0 text-xs" style={{ color: '#97877B', fontFamily: FONT }}>
-            {formatDuration(recording.duration_seconds)}
-          </span>
+          <span className="shrink-0 text-caption text-r-muted">{formatDuration(recording.duration_seconds)}</span>
         </div>
-        <p className="mt-1 text-xs" style={{ color: '#59763C' }}>{statusCopy(recording)}</p>
-        <p className="truncate text-xs" style={{ color: '#97877B' }}>{recording.file_name}</p>
+        <p className="mt-1 text-caption text-r-muted">{recording.file_name}</p>
+        <p className="text-caption" style={{ color: 'var(--color-r-colleague)' }}>{statusCopy(recording)}</p>
         {recording.audio_url && (
           <audio
             ref={audioRef}
@@ -203,24 +183,13 @@ function AudioRow({ recording, onDelete, onEditTitle, onDurationLoaded }) {
         )}
       </div>
 
-      {/* Edit / Delete */}
       <div className="flex shrink-0 gap-2">
-        <button
-          onClick={() => setEditingTitle(true)}
-          className="p-1.5 transition-colors"
-          style={{ color: '#97877B' }}
-          aria-label="Edit title"
-        >
+        <button onClick={() => setEditingTitle(true)} className="p-1.5 transition-colors text-r-muted" aria-label="Edit title">
           <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a4 4 0 01-1.414.828l-3 1 1-3a4 4 0 01.828-1.414z" />
           </svg>
         </button>
-        <button
-          onClick={() => onDelete(recording.id)}
-          className="p-1.5 transition-colors"
-          style={{ color: '#C0503A' }}
-          aria-label="Delete recording"
-        >
+        <button onClick={() => onDelete(recording.id)} className="p-1.5 transition-colors text-r-danger" aria-label="Delete recording">
           <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6m2 0a1 1 0 00-1-1h-4a1 1 0 00-1 1H5" />
           </svg>
@@ -243,9 +212,9 @@ function TitleModal({ fileName, onConfirm, onCancel }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ backgroundColor: 'rgba(66,63,57,0.3)' }}>
-      <div className="w-full max-w-sm rounded-2xl p-8 shadow-xl" style={{ backgroundColor: '#FBF9F6', fontFamily: FONT }}>
-        <h2 className="text-xl font-semibold" style={{ color: '#423F39' }}>Name this recording</h2>
-        <p className="mt-1 text-sm" style={{ color: '#97877B' }}>{fileName}</p>
+      <div className="w-full max-w-sm rounded-2xl p-8 shadow-xl bg-r-modal">
+        <h2 className="text-h3 text-r-text">Name this recording</h2>
+        <p className="mt-1 text-caption text-r-muted">{fileName}</p>
         <input
           id="voice-recording-title"
           autoFocus
@@ -256,24 +225,25 @@ function TitleModal({ fileName, onConfirm, onCancel }) {
           aria-invalid={Boolean(error)}
           aria-label="Recording title"
           placeholder="e.g. Voicemail from Christmas 2019"
-          className="mt-5 w-full rounded-xl px-4 py-3 text-sm focus:outline-none"
-          style={{ border: '1px solid #D4CAC0', color: '#423F39', fontFamily: FONT, backgroundColor: 'transparent' }}
+          className="mt-5 w-full rounded-xl px-4 py-3 text-sm focus:outline-none text-r-text bg-transparent"
+          style={{ border: '1px solid var(--color-r-border)' }}
         />
-        {error && <p id="voice-recording-title-error" className="mt-1.5 text-xs" style={{ color: '#C0503A' }}>{error}</p>}
+        {error && (
+          <p id="voice-recording-title-error" className="mt-1.5 text-caption text-r-danger">{error}</p>
+        )}
         <div className="mt-5 flex gap-3">
           <button
             onClick={onCancel}
-            className="flex-1 rounded-full py-3 text-sm transition-colors"
-            style={{ border: '1px solid #D4CAC0', color: '#5F5A52', fontFamily: FONT, backgroundColor: 'transparent' }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#E8E0D8'; }}
+            className="flex-1 rounded-full py-3 text-body-2 transition-colors text-r-secondary bg-transparent"
+            style={{ border: '1px solid var(--color-r-border)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-r-card)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
           >
             Cancel
           </button>
           <button
             onClick={handleConfirm}
-            className="flex-1 rounded-full py-3 text-sm transition-opacity hover:opacity-80"
-            style={{ backgroundColor: '#C4B49A', color: '#5F5A52', border: 'none', fontFamily: FONT }}
+            className="flex-1 rounded-full py-3 text-body-2 transition-opacity hover:opacity-80 bg-r-btn text-r-btn-text border-none"
           >
             Add
           </button>
@@ -289,7 +259,6 @@ export default function VoicePage() {
   const router = useRouter();
   const { inviteToken } = useParams();
   const fileInputRef = useRef(null);
-
   const [recordings, setRecordings] = useState([]);
   const [pendingFile, setPendingFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -300,21 +269,14 @@ export default function VoicePage() {
 
   function addPreviewUrl(recording, file) {
     if (typeof URL === 'undefined' || !file) return recording;
-
     const previewUrl = URL.createObjectURL(file);
     previewUrlsRef.current.set(recording.id, previewUrl);
-
-    return {
-      ...recording,
-      audio_url: previewUrl,
-      local_preview_url: true,
-    };
+    return { ...recording, audio_url: previewUrl, local_preview_url: true };
   }
 
   function revokePreviewUrl(recordingId) {
     const previewUrl = previewUrlsRef.current.get(recordingId);
     if (!previewUrl) return;
-
     URL.revokeObjectURL(previewUrl);
     previewUrlsRef.current.delete(recordingId);
   }
@@ -323,29 +285,20 @@ export default function VoicePage() {
     const file = e.target.files?.[0];
     setUploadError('');
     setUploadSuccess('');
-
     const validationError = validateAudioFile(file);
     if (validationError) {
       setUploadError(validationError);
       e.target.value = '';
       return;
     }
-
     setPendingFile(file);
     e.target.value = '';
   }
 
   async function handleUpload(file, title) {
-    if (!title.trim()) {
-      setUploadError('Please add a title for this recording.');
-      return;
-    }
-
+    if (!title.trim()) { setUploadError('Please add a title for this recording.'); return; }
     const validationError = validateAudioFile(file);
-    if (validationError) {
-      setUploadError(validationError);
-      return;
-    }
+    if (validationError) { setUploadError(validationError); return; }
 
     setUploadError('');
     setUploadSuccess('');
@@ -388,29 +341,15 @@ export default function VoicePage() {
   }
 
   function handleDurationLoaded(id, durationSeconds) {
-    setRecordings((prev) => prev.map((r) => (
-      r.id === id ? { ...r, duration_seconds: durationSeconds } : r
-    )));
+    setRecordings((prev) => prev.map((r) => (r.id === id ? { ...r, duration_seconds: durationSeconds } : r)));
   }
 
   function handleContinue() { router.push(`/contribute/${inviteToken}/review`); }
   function handleSkip() { router.push(`/contribute/${inviteToken}/review`); }
 
-  // Fix full-page cream background — no white showing around edges
-  useEffect(() => {
-    const prevBody = document.body.style.backgroundColor;
-    const prevHtml = document.documentElement.style.backgroundColor;
-    document.body.style.backgroundColor = COLORS.bg;
-    document.documentElement.style.backgroundColor = COLORS.bg;
-    return () => {
-      document.body.style.backgroundColor = prevBody;
-      document.documentElement.style.backgroundColor = prevHtml;
-    };
-  }, []);
-
+  // Load existing voice recordings on mount
   useEffect(() => {
     let isMounted = true;
-
     async function loadVoiceDraft() {
       try {
         const summary = await getContributorSummary(inviteToken);
@@ -419,14 +358,13 @@ export default function VoicePage() {
         console.error('Could not load voice draft:', err);
       }
     }
-
     if (inviteToken) loadVoiceDraft();
     return () => { isMounted = false; };
   }, [inviteToken]);
 
+  // Blob URL cleanup on unmount
   useEffect(() => {
     const previewUrls = previewUrlsRef.current;
-
     return () => {
       previewUrls.forEach((previewUrl) => URL.revokeObjectURL(previewUrl));
       previewUrls.clear();
@@ -434,25 +372,17 @@ export default function VoicePage() {
   }, []);
 
   return (
-    <main
-      className="min-h-screen px-6 py-10 sm:px-[50px]"
-      style={{ backgroundColor: '#F0EAE2', fontFamily: FONT, color: '#423F39' }}
-    >
-      <div className="mx-auto flex w-full max-w-[680px] flex-col gap-10">
+    <main className="min-h-screen px-6 py-10 sm:px-[50px] bg-r-bg text-r-text">
+      <div className="page-shell">
 
         <ContributorNav backHref={`/contribute/${inviteToken}/upload`} />
 
-        {/* Heading */}
         <div className="text-center">
-          <h1 className="text-[44px] font-bold leading-tight" style={{ color: '#423F39', letterSpacing: '-0.01em' }}>
-            Upload a voice recording
-          </h1>
-          <p className="mt-2 text-[17px]" style={{ color: '#4A7FA5' }}>
-            Upload a recording that includes their voice, such as a voicemail, message, or short audio clip.
-          </p>
+          <h1 className="text-h1 text-r-text">Upload your memories</h1>
+          <p className="mt-2 text-body-2 text-r-secondary">Upload a voice memo below.</p>
         </div>
 
-        {/* Upload file */}
+        {/* Upload zone */}
         <div>
           <input
             id="voice-recording-file"
@@ -469,40 +399,41 @@ export default function VoicePage() {
             aria-disabled={uploading}
             className="flex min-h-[168px] cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl px-5 py-12 text-center transition-colors"
             style={{
-              border: '1.5px dashed #D4CAC0',
+              border: '1.5px dashed var(--color-r-border)',
               backgroundColor: 'transparent',
               opacity: uploading ? 0.55 : 1,
             }}
-            onMouseEnter={(e) => { if (!uploading) e.currentTarget.style.backgroundColor = '#E8E0D8'; }}
+            onMouseEnter={(e) => { if (!uploading) e.currentTarget.style.backgroundColor = 'var(--color-r-card)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
           >
             {uploading ? (
-              <svg className="animate-spin" width="28" height="28" fill="none" stroke="#5F5A52" strokeWidth="1.6" viewBox="0 0 24 24">
+              <svg className="animate-spin" width="28" height="28" fill="none" stroke="var(--color-r-secondary)" strokeWidth="1.6" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
               </svg>
             ) : (
-              <svg width="28" height="28" fill="none" stroke="#5F5A52" strokeWidth="1.6" viewBox="0 0 24 24">
+              <svg width="28" height="28" fill="none" stroke="var(--color-r-secondary)" strokeWidth="1.6" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 10l-4-4m0 0L8 10m4-4v12" />
               </svg>
             )}
-            <span className="text-base" style={{ color: '#97877B' }}>
+            <span className="text-body-2 text-r-muted">
               {uploading ? 'Uploading...' : 'Choose an audio file'}
             </span>
-            <span id="voice-upload-guidance" className="text-sm" style={{ color: '#97877B' }}>
+            <span id="voice-upload-guidance" className="text-caption text-r-muted">
               M4A, MP3, WAV, or WebM up to 50 MB
             </span>
           </label>
+
           <div id="voice-upload-status" className="mt-3 min-h-6" aria-live="polite">
             {uploadError && (
-              <div className="flex flex-col gap-2 text-sm" style={{ color: '#C0503A' }}>
-                <p>{uploadError}</p>
+              <div className="flex flex-col gap-2">
+                <p className="text-caption text-r-danger">{uploadError}</p>
                 {failedUpload && (
                   <button
                     type="button"
                     onClick={() => handleUpload(failedUpload.file, failedUpload.title)}
                     disabled={uploading}
-                    className="w-fit rounded-full px-4 py-2 text-sm transition-opacity hover:opacity-80 disabled:opacity-50"
-                    style={{ border: '1px solid #C0503A', color: '#C0503A', fontFamily: FONT }}
+                    className="w-fit rounded-full px-4 py-2 text-caption transition-opacity hover:opacity-80 disabled:opacity-50 border-none"
+                    style={{ border: '1px solid var(--color-r-danger)', color: 'var(--color-r-danger)', backgroundColor: 'transparent' }}
                   >
                     Retry upload
                   </button>
@@ -510,15 +441,14 @@ export default function VoicePage() {
               </div>
             )}
             {uploadSuccess && !uploadError && (
-              <p className="text-sm" style={{ color: '#59763C' }}>{uploadSuccess}</p>
+              <p className="text-caption" style={{ color: 'var(--color-r-colleague)' }}>{uploadSuccess}</p>
             )}
           </div>
         </div>
 
-        {/* Uploaded recordings */}
         {recordings.length > 0 && (
-          <div className="rounded-2xl p-6" style={{ border: '1px solid #D4CAC0' }}>
-            <p className="mb-4 text-[20px] font-semibold" style={{ color: '#423F39' }}>Uploaded audio</p>
+          <div className="rounded-2xl p-6 border border-r-border">
+            <p className="mb-4 text-h3 text-r-text">Uploaded audio</p>
             <div className="flex flex-col gap-4">
               {recordings.map((rec) => (
                 <AudioRow
@@ -533,23 +463,20 @@ export default function VoicePage() {
           </div>
         )}
 
-        {/* Continue / Skip */}
         <div className="flex flex-col gap-3">
           <button
             onClick={handleContinue}
             disabled={uploading}
-            className="w-full rounded-full py-4 text-[16px] transition-opacity hover:opacity-80 active:opacity-70"
-            style={{ backgroundColor: '#C4B49A', color: '#5F5A52', border: 'none', fontFamily: FONT, letterSpacing: '0.02em' }}
+            className="w-full rounded-full py-4 text-body-2 font-medium tracking-wide transition-opacity hover:opacity-80 active:opacity-70 disabled:opacity-55 bg-r-btn text-r-btn-text border-none"
           >
             Continue
           </button>
           {recordings.length === 0 && (
             <button
               onClick={handleSkip}
-              className="w-full py-3 text-sm transition-colors"
-              style={{ color: '#97877B', fontFamily: FONT }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = '#423F39'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = '#97877B'; }}
+              className="w-full py-3 text-caption transition-colors text-r-muted"
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-r-text)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-r-muted)'; }}
             >
               Skip - I don&apos;t have any voice recordings
             </button>
@@ -558,13 +485,8 @@ export default function VoicePage() {
 
       </div>
 
-      {/* Title modal */}
       {pendingFile && (
-        <TitleModal
-          fileName={pendingFile.name}
-          onConfirm={handleTitleConfirm}
-          onCancel={() => setPendingFile(null)}
-        />
+        <TitleModal fileName={pendingFile.name} onConfirm={handleTitleConfirm} onCancel={() => setPendingFile(null)} />
       )}
     </main>
   );

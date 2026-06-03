@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import Header2 from "@/components/ui-components/navs/header2";
+import { SkeletonCard, SkeletonText } from "@/components/ui-components/skeleton-loader";
 import { getMemorials } from "@/services/memorialService.js";
 import AccountProfileCard from "./_components/account-profile-card";
 
@@ -47,9 +48,9 @@ export default function AccountBoardPage() {
       <Header2 />
 
       <main className="mx-auto flex w-full max-w-[1340px] flex-col pb-16 pt-[96px] sm:pb-24 sm:pt-[110px]">
-        <section className="relative flex min-h-[280px] flex-col items-center justify-center px-4 text-center">
-          <div className="mb-9 flex size-[124px] items-center justify-center rounded-full bg-[#C4D2E3]" />
-          <h1 className="text-h1 text-[#0A0A0A]">Your Memorials</h1>
+        <section className="relative flex min-h-[200px] sm:min-h-[280px] flex-col items-center justify-center px-4 text-center">
+          <div className="mb-6 sm:mb-9 flex size-[80px] sm:size-[124px] items-center justify-center rounded-full bg-[#C4D2E3]" />
+          <h1 className="text-2xl sm:text-h1 text-[#0A0A0A]">Your Memorials</h1>
           <p className="mt-5 text-body-1 text-(--text-color-2)">
             All memorials you created will be stored here
           </p>
@@ -72,9 +73,19 @@ export default function AccountBoardPage() {
           </Link>
 
           {isLoading ? (
-            <article className="flex min-h-[365px] items-center justify-center rounded-[20px] border border-[#D7DBE2] bg-white px-8 text-center text-body-1 text-(--text-color-2) shadow-[0_1px_10px_rgba(0,0,0,0.04)]">
-              Loading memorials...
-            </article>
+            <>
+              {[...Array(3)].map((_, i) => (
+                <div
+                  key={i}
+                  className="rounded-[20px] border border-[#D7DBE2] bg-white px-8 py-8 shadow-[0_1px_10px_rgba(0,0,0,0.04)]"
+                >
+                  <div className="space-y-4">
+                    <SkeletonCard className="h-32 w-32 rounded-full mx-auto" />
+                    <SkeletonText lines={3} className="text-center" />
+                  </div>
+                </div>
+              ))}
+            </>
           ) : null}
 
           {!isLoading && loadError ? (

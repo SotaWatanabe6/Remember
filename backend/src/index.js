@@ -11,7 +11,8 @@ const memorialRoutes = require('./routes/memorials')
 const contributeRoutes = require('./routes/contribute')
 const aiRoutes = require('./routes/ai')
 const { errorHandler } = require('./middleware/errorHandler')
-const shareRoutes = require('./routes/share')        // ← ADDED
+const shareRoutes = require('./routes/share')
+const waitlistRoutes = require('./routes/waitlist')
 
 const app = express()
 
@@ -44,8 +45,8 @@ app.use('/auth', authRoutes)
 app.use('/memorials', memorialRoutes)
 app.use('/contribute', uploadLimiter, contributeRoutes)
 app.use('/ai', aiRoutes)
-app.use('/share', shareRoutes)                       // ← ADDED
-
+app.use('/share', shareRoutes)
+app.use('/waitlist', waitlistRoutes)
 
 // ── Global error handler ──────────────────────────────────────────────────────
 app.use(errorHandler)

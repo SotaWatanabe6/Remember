@@ -119,6 +119,7 @@ async function getAuthToken() {
   // Fall back to mock session token
   return getStoredSession()?.token || '';
 }
+
 const now = () => new Date().toISOString();
 const fakeToken = () => 'mock_jwt_' + Math.random().toString(36).slice(2);
 const makeId = (prefix) => `${prefix}_${Math.random().toString(36).slice(2)}`;
@@ -530,8 +531,18 @@ export async function updateInviteLink(memorialId, { is_active }) {
  * TODO: Replace with real fetch() on Day 9.
  */
 export async function getContributors(memorialId) {
-  await delay(MOCK_DELAY);
-  return { contributors: MOCK_CONTRIBUTORS };
+  try {
+    const token = await getAuthToken();
+    const response = await fetch(`${API_URL}/memorials/${memorialId}/contributors`, {
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error('Failed to fetch contributors');
+    return response.json();
+  } catch {
+    // Fallback to mock — prevents constellation page from crashing
+    await delay(MOCK_DELAY);
+    return { contributors: MOCK_CONTRIBUTORS };
+  }
 }
 
 // ─── TEAM: SHARE LINK (confirm owner with team) ───────────────────────────────
@@ -542,9 +553,22 @@ export async function getContributors(memorialId) {
  * TODO: Replace with real fetch() on Day 9.
  */
 export async function createShareLink(memorialId) {
-  await delay(MOCK_DELAY);
-  const token = 'mock_share_' + Math.random().toString(36).slice(2);
-  return { share_link: { token, url: `http://localhost:3000/share/${token}` } };
+  try {
+    const token = await getAuthToken();
+    const response = await fetch(`${API_URL}/memorials/${memorialId}/share`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error('Failed to create share link');
+    return response.json();
+  } catch {
+    await delay(MOCK_DELAY);
+    const mockToken = 'mock_share_' + Math.random().toString(36).slice(2);
+    return { share_link: { token: mockToken, url: `http://localhost:3000/share/${mockToken}` } };
+  }
 }
 
 // ─── ASHWINI: AI PIPELINE ─────────────────────────────────────────────────────
@@ -612,6 +636,7 @@ export async function triggerGeneration(memorialId, token) {
  * Calls the real backend with a local-dev mock fallback when the API is unreachable.
  */
 let _mockProgress = 0;
+
 function createMockGenerationJob(status = 'queued', progress = 0, currentStep = 'Starting...') {
   return {
     job: {
@@ -870,6 +895,10 @@ export async function getResponses(token, contributorInput) {
  * Uploads contributor photos through the backend media endpoint.
  * The caller owns temporary preview URLs; persisted draft data only stores
  * backend-confirmed asset records so refreshes do not revive stale blob URLs.
+ *
+ * Backend expects: multipart/form-data with files[] and contributor_token fields.
+ * Backend returns:  { uploaded, files: [...], errors: [] }
+ *                   207 for partial success, 400/4xx for full failure.
  */
 export async function uploadPhotos(token, files) {
   const session = readContributorSession(token);
@@ -881,6 +910,7 @@ export async function uploadPhotos(token, files) {
     });
   }
 
+  // ── Mock path ──────────────────────────────────────────────────────────────
   if (isLocalMockInviteToken(token)) {
     await delay(MOCK_DELAY / 2);
 
@@ -889,13 +919,11 @@ export async function uploadPhotos(token, files) {
 
     files.forEach((file) => {
       const validationError = validatePhotoFile(file);
-
       if (validationError) {
         errors.push({ file_name: file.name || 'photo', error: validationError });
-        return;
+      } else {
+        validFiles.push(file);
       }
-
-      validFiles.push(file);
     });
 
     if (!validFiles.length) {
@@ -931,6 +959,7 @@ export async function uploadPhotos(token, files) {
     };
   }
 
+  // ── Real backend path ──────────────────────────────────────────────────────
   const formData = new FormData();
   files.forEach((file) => formData.append('files[]', file));
   formData.append('contributor_token', contributorToken);
@@ -943,46 +972,52 @@ export async function uploadPhotos(token, files) {
       body: formData,
     });
   } catch (error) {
-    if (error?.name === "AbortError") {
-      throw new ApiRequestError("The upload was cancelled.", {
-        code: "aborted",
-      });
+    if (error?.name === 'AbortError') {
+      throw new ApiRequestError('The upload was cancelled.', { code: 'aborted' });
     }
-
-    throw new ApiRequestError("Could not reach the Remember API to upload photos.", {
-      code: "network_error",
+    throw new ApiRequestError('Could not reach the Remember API to upload photos.', {
+      code: 'network_error',
     });
   }
 
-  const contentType = response.headers.get("content-type") ?? "";
-  const data = contentType.includes("application/json")
+  const contentType = response.headers.get('content-type') ?? '';
+  const data = contentType.includes('application/json')
     ? await response.json().catch(() => null)
     : null;
 
-  if (!response.ok) {
-    throw new ApiRequestError(data?.error || `Photo upload failed with status ${response.status}.`, {
+  // 207 = partial success (some files uploaded, some failed) — treat as ok
+  if (!response.ok && response.status !== 207) {
+    let errorMessage = data?.error || `Photo upload failed with status ${response.status}.`;
+    let errorCode = 'photo_upload_failed';
+
+    if (response.status === 413 || data?.code === 'file_too_large') {
+      errorMessage = 'One or more files are too large. Maximum file size is 50 MB.';
+      errorCode = 'file_too_large';
+    }
+
+    throw new ApiRequestError(errorMessage, {
       status: response.status,
-      code: "photo_upload_failed",
+      code: errorCode,
       data,
     });
   }
 
+  // Backend returns { uploaded, files: [...], errors: [] }
   const backendAssets = Array.isArray(data?.files)
-    ? data.files.filter((file) => file?.id && file?.file_name)
+    ? data.files.filter((f) => f?.id && f?.file_name)
     : [];
 
   if (!backendAssets.length) {
-    throw new ApiRequestError("The Remember API responded, but did not confirm that any photos were saved.", {
-      status: response.status,
-      code: "upload_not_confirmed",
-      data,
-    });
+    throw new ApiRequestError(
+      'The Remember API responded, but did not confirm that any photos were saved.',
+      { status: response.status, code: 'upload_not_confirmed', data }
+    );
   }
 
   const finalAssets = backendAssets.map((file, index) => ({
     id: file.id,
     file_name: file.file_name,
-    file_type: file.file_type ?? files[index]?.type ?? "",
+    file_type: file.file_type ?? files[index]?.type ?? '',
     file_size_bytes: file.file_size_bytes ?? files[index]?.size ?? 0,
     storage_path: file.storage_path,
     storage_bucket: file.storage_bucket ?? 'memorial-assets',
@@ -1048,14 +1083,13 @@ export async function uploadVoice(token, file, contributorTitle) {
     file_name: file.name,
     file_type: mimeType,
     file_size_bytes: file.size,
-    storage_path: null, // populated by Daniel's upload system later
+    storage_path: null,
     storage_bucket: 'memorial-assets',
     duration_seconds: 0,
   };
 
   try {
     // Call real backend — marks voice_done=true in contributors table
-    // MVP endpoint returns { recording: { id: null, contributor_title, storage_path: null } }
     const formData = new FormData();
     formData.append('file', file);
     formData.append('contributor_title', contributorTitle.trim());
@@ -1068,8 +1102,6 @@ export async function uploadVoice(token, file, contributorTitle) {
 
     if (response.ok) {
       const data = await response.json();
-      // Use backend data if real (Daniel's system merged)
-      // Otherwise use local recording for preview
       const recording = {
         id: data.recording?.id || localRecording.id,
         contributor_title: data.recording?.contributor_title || contributorTitle.trim(),
@@ -1362,11 +1394,9 @@ function getMockMemorialOutput() {
  */
 export async function getMemorialOutput(memorialId) {
   try {
-    const session = getStoredSession();
+    const token = await getAuthToken();
     const response = await fetch(`${API_URL}/memorials/${memorialId}/output`, {
-      headers: {
-        Authorization: `Bearer ${session?.token || ''}`,
-      },
+      headers: { Authorization: `Bearer ${token}` },
     });
 
     if (!response.ok) throw new Error('Output not found');

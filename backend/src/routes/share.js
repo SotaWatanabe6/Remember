@@ -34,7 +34,13 @@ router.get('/:token', async (req, res) => {
       return res.status(404).json({ error: 'Memorial output not found.' })
     }
 
-    res.json(output.output_json)
+    const { data: memorial } = await supabase
+      .from('memorials')
+      .select('id, subject_name, date_of_birth, date_of_passing, cover_photo_url')
+      .eq('id', invite.memorial_id)
+      .single()
+
+    res.json({ ...output.output_json, memorial: memorial || null })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
