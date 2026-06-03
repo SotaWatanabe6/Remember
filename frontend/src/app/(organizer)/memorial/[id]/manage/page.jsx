@@ -206,7 +206,6 @@ function ArchiveTab() {
 function ContributionsTab({ contributorslist, loading, error, onRetry }) {
   const [value, setValue] = useState("contributors");
 
-  // Mock submissions for awaiting approval pagination
   const submissions = [
     { id: 1, user: "Jane Smith", contribution: "10 contributions", summary: "This can be an AI generated summary of the contribution, either mentioning surfaced themes or flagged submissions that may be sensitive or inappropriate." },
     { id: 2, user: "Michael Johnson", contribution: "7 contributions", summary: "AI generated summaries can highlight themes, relationships, and potentially sensitive submissions for moderators to review quickly." },

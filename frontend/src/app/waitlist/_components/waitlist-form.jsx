@@ -243,12 +243,14 @@ export default function WaitlistForm(props) {
                       type="checkbox"
                       name="interview"
                       id="interview"
+                      required
                       checked={formData.interview}
                       onChange={handleChange}
                     />
                     <span className="inline-block text-[#767676] font-semibold">
-                      I&apos;m open to a short interview or testimonial session
-                      in exchange for founder&apos;s pricing at launch.
+                      By checking this box, I agree to participate in a short
+                      follow-up survey about my experience using Remember during
+                      this early access period.
                     </span>
                   </div>
 
