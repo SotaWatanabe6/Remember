@@ -1384,11 +1384,9 @@ function getMockMemorialOutput() {
  */
 export async function getMemorialOutput(memorialId) {
   try {
-    const session = getStoredSession();
+    const token = await getAuthToken();
     const response = await fetch(`${API_URL}/memorials/${memorialId}/output`, {
-      headers: {
-        Authorization: `Bearer ${session?.token || ''}`,
-      },
+      headers: { Authorization: `Bearer ${token}` },
     });
 
     if (!response.ok) throw new Error('Output not found');
