@@ -543,9 +543,22 @@ export async function getContributors(memorialId) {
  * TODO: Replace with real fetch() on Day 9.
  */
 export async function createShareLink(memorialId) {
-  await delay(MOCK_DELAY);
-  const token = 'mock_share_' + Math.random().toString(36).slice(2);
-  return { share_link: { token, url: `http://localhost:3000/share/${token}` } };
+  try {
+    const token = await getAuthToken();
+    const response = await fetch(`${API_URL}/memorials/${memorialId}/share`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) throw new Error('Failed to create share link');
+    return response.json();
+  } catch {
+    await delay(MOCK_DELAY);
+    const mockToken = 'mock_share_' + Math.random().toString(36).slice(2);
+    return { share_link: { token: mockToken, url: `http://localhost:3000/share/${mockToken}` } };
+  }
 }
 
 // ─── ASHWINI: AI PIPELINE ─────────────────────────────────────────────────────
@@ -1371,11 +1384,9 @@ function getMockMemorialOutput() {
  */
 export async function getMemorialOutput(memorialId) {
   try {
-    const session = getStoredSession();
+    const token = await getAuthToken();
     const response = await fetch(`${API_URL}/memorials/${memorialId}/output`, {
-      headers: {
-        Authorization: `Bearer ${session?.token || ''}`,
-      },
+      headers: { Authorization: `Bearer ${token}` },
     });
 
     if (!response.ok) throw new Error('Output not found');
