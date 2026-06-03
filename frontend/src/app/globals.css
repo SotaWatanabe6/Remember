@@ -10,7 +10,7 @@
 
   /* =========================
      FONT FAMILY
-     Boska = display/serif font for headings (h1, h2, quotes)
+     Boska  = display/serif font for headings (h1, h2, quotes)
      Switzer = body/sans font for body text, labels, captions
   ========================== */
 
@@ -30,129 +30,112 @@
      FONT WEIGHTS
   ========================== */
 
-  --font-weight-regular: 400;
-  --font-weight-medium: 500;
+  --font-weight-regular:  400;
+  --font-weight-medium:   500;
   --font-weight-semibold: 600;
-  --font-weight-bold: 700;
+  --font-weight-bold:     700;
 
   /* =========================
      TYPOGRAPHY SCALE
   ========================== */
 
-  --text-h1-size: 40px;
-  --text-h1-line-height: 48px;
-
-  --text-h2-size: 36px;
-  --text-h2-line-height: 44px;
-
-  --text-h3-size: 24px;
-  --text-h3-line-height: 32px;
-
-  --text-h4-size: 14px;
-  --text-h4-line-height: 20px;
-
-  --text-body-size: 20px;
-  --text-body-line-height: 30px;
-
-  --text-body-2-size: 16px;
-  --text-body-2-line-height: 24px;
-
-  --text-caption-size: 12px;
-  --text-caption-line-height: 16px;
-
-  --text-display-size: 64px;
+  --text-display-size:        64px;
   --text-display-line-height: 72px;
 
+  --text-h1-size:        40px;
+  --text-h1-line-height: 48px;
+
+  --text-h2-size:        36px;
+  --text-h2-line-height: 44px;
+
+  --text-h3-size:        24px;
+  --text-h3-line-height: 32px;
+
+  --text-h4-size:        14px;
+  --text-h4-line-height: 20px;
+
+  --text-body-size:        20px;
+  --text-body-line-height: 30px;
+
+  --text-body-2-size:        16px;
+  --text-body-2-line-height: 24px;
+
+  --text-caption-size:        12px;
+  --text-caption-line-height: 16px;
+
   /* =========================
-     COLORS (tokens only)
-  ========================== */
-
-  --button-color: #0a0a0a;
-  --selection-box-color: #818487;
-
-  --text-color-1: #423f39;
-  --text-color-2: #5f5a52;
-  --text-color-muted: #97877b;
-
-  --background-soft: #f5f2ed;
-  --background-main: #ddd6cf;
-
-  --shape-fill: #788764;
-  --tag-color: #b4bc96;
-  --soft-green: #cfd3bf;
-
-  --link-color-light: #b8cae0;
-  --link-color-dark: #4b78ad;
-
-  --drop-down-border-color: #cad5e2;
-
-     COLORS — shared app tokens
-     Used via Tailwind classes: bg-r-bg, text-r-text, border-r-border etc
+     COLORS — Remember design tokens
+     Used via Tailwind classes: bg-r-bg, text-r-text, border-r-border, etc.
      Naming: r- prefix = Remember design tokens
   ========================== */
 
   /* Backgrounds */
-  --color-r-bg:           #F0EAE2;
-  --color-r-card:         #E8E0D8;
-  --color-r-modal:        #FBF9F6;
+  --color-r-bg:    #F0EAE2;
+  --color-r-card:  #E8E0D8;
+  --color-r-modal: #FBF9F6;
 
   /* Text */
-  --color-r-text:         #423F39;
-  --color-r-secondary:    #5F5A52;
-  --color-r-muted:        #97877B;
+  --color-r-text:      #423F39;
+  --color-r-secondary: #5F5A52;
+  --color-r-muted:     #97877B;
 
   /* Borders */
   --color-r-border:       #D4CAC0;
   --color-r-border-focus: #B8AEA4;
 
   /* Buttons */
-  --color-r-btn:          #C4B49A;
-  --color-r-btn-text:     #5F5A52;
+  --color-r-btn:      #C4B49A;
+  --color-r-btn-text: #5F5A52;
 
   /* Accents and status */
-  --color-r-accent:       #4A7FA5;
-  --color-r-shape:        #5F6848;
-  --color-r-danger:       #C0503A;
+  --color-r-accent:  #4A7FA5;
+  --color-r-shape:   #5F6848;
+  --color-r-danger:  #C0503A;
 
   /* Relationship colors (constellation, contributor tags) */
-  --color-r-family:       #AF5F42;
-  --color-r-friend:       #45556C;
-  --color-r-colleague:    #59763C;
+  --color-r-family:    #AF5F42;
+  --color-r-friend:    #45556C;
+  --color-r-colleague: #59763C;
 
   /* =========================
-     BLESSING'S EXISTING TOKENS — kept unchanged
+     LEGACY TOKENS — kept for backward compatibility
   ========================== */
 
-  --button-color: #0a0a0a;
-  --selection-box-color: #818487;
+  --button-color:           #0a0a0a;
+  --selection-box-color:    #818487;
 
-  --text-color-1: #423f39;
-  --text-color-2: #5f5a52;
+  --text-color-1:     #423f39;
+  --text-color-2:     #5f5a52;
   --text-color-muted: #97877b;
 
   --background-soft: #f5f2ed;
   --background-main: #ddd6cf;
 
-  --shape-fill: #788764;
-  --tag-color: #b4bc96;
-  --soft-green: #cfd3bf;
+  --shape-fill:  #788764;
+  --tag-color:   #b4bc96;
+  --soft-green:  #cfd3bf;
 
   --link-color-light: #b8cae0;
-  --link-color-dark: #4b78ad;
+  --link-color-dark:  #4b78ad;
 
   --drop-down-border-color: #cad5e2;
-  --border-soft: #cfc4b7;
+  --border-soft:            #cfc4b7;
 
   /* =========================
      SPACING
   ========================== */
 
-  --page-pad-x: clamp(1rem, 3vw, 3rem);
-  --page-pad-y: clamp(1.5rem, 5vw, 4rem);
-  --section-gap: clamp(2rem, 5vw, 5rem);
-  --content-gap: clamp(1rem, 2vw, 1.5rem);
+  --page-pad-x:   clamp(1rem, 3vw, 3rem);
+  --page-pad-y:   clamp(1.5rem, 5vw, 4rem);
+  --section-gap:  clamp(2rem, 5vw, 5rem);
+  --content-gap:  clamp(1rem, 2vw, 1.5rem);
   --card-padding: clamp(1rem, 2vw, 1.5rem);
-  --inline-gap: clamp(0.5rem, 1vw, 1rem);
+  --inline-gap:   clamp(0.5rem, 1vw, 1rem);
+
+  /* Page layout shells */
+  --page-section-gap: 32px;
+  --page-max-w:       680px;
+  --page-max-w-wide:  960px;
 
   /* =========================
      RADIUS
@@ -169,73 +152,40 @@
 
   --shadow-auth:
     0 1.27px 1.905px rgb(0 0 0 / 0.1),
-    0 1.27px 1.27px rgb(0 0 0 / 0.1);
+    0 1.27px 1.27px  rgb(0 0 0 / 0.1);
 
-  --shadow-soft:
-    0 4px 20px rgb(0 0 0 / 0.05);
+  --shadow-soft: 0 4px 20px rgb(0 0 0 / 0.05);
 }
 
 /* ─────────────────────────────────────────────────────────────
-   BASE LAYER (global defaults)
-───────────────────────────────────────────────────────────── */
-
-@layer base {
-  html {
-    font-family: var(--font-family-body);
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    text-rendering: optimizeLegibility;
-  }
-
-  body {
-    min-width: 320px;
-    background: var(--background);
-    color: var(--foreground);
-    font-family: var(--font-family-body);
-  }
-
-  *,
-  *::before,
-  *::after {
-    box-sizing: border-box;
-    border-color: var(--border);
-  }
-
-  button,
-  input,
-  select,
-  textarea {
-    font: inherit;
-  }
-}
-
-/* ─────────────────────────────────────────────────────────────
-   ROOT VARIABLES (runtime theme values)
+   ROOT VARIABLES
+   --background: #F0EAE2  ← cream, NOT white
+   This eliminates the white border flash on all pages.
 ───────────────────────────────────────────────────────────── */
 
 :root {
-  --background: #ffffff;
-  --foreground: #0a0a0a;
+  --background:          #F0EAE2;
+  --foreground:          #0a0a0a;
 
-  --card: #ffffff;
-  --card-foreground: #0a0a0a;
+  --card:                #ffffff;
+  --card-foreground:     #0a0a0a;
 
-  --primary: #0a0a0a;
-  --primary-foreground: #ffffff;
+  --primary:             #0a0a0a;
+  --primary-foreground:  #ffffff;
 
-  --secondary: #f5f2ed;
+  --secondary:           #f5f2ed;
   --secondary-foreground: #0a0a0a;
 
-  --muted: #f3f4f6;
-  --muted-foreground: #6b7280;
+  --muted:               #f3f4f6;
+  --muted-foreground:    #6b7280;
 
-  --accent: #ddd6cf;
-  --accent-foreground: #0a0a0a;
+  --accent:              #ddd6cf;
+  --accent-foreground:   #0a0a0a;
 
-  --border: #e5e7eb;
-  --input: #e5e7eb;
+  --border:              #e5e7eb;
+  --input:               #e5e7eb;
 
-  --ring: #d1d5db;
+  --ring:                #d1d5db;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -243,162 +193,28 @@
 ───────────────────────────────────────────────────────────── */
 
 .dark {
-  --background: #171717;
-  --foreground: #fafafa;
+  --background:           #171717;
+  --foreground:           #fafafa;
 
-  --card: #1f1f1f;
-  --card-foreground: #fafafa;
+  --card:                 #1f1f1f;
+  --card-foreground:      #fafafa;
 
-  --primary: #fafafa;
-  --primary-foreground: #171717;
+  --primary:              #fafafa;
+  --primary-foreground:   #171717;
 
-  --secondary: #262626;
+  --secondary:            #262626;
   --secondary-foreground: #fafafa;
 
-  --muted: #262626;
-  --muted-foreground: #a3a3a3;
+  --muted:                #262626;
+  --muted-foreground:     #a3a3a3;
 
-  --accent: #404040;
-  --accent-foreground: #fafafa;
+  --accent:               #404040;
+  --accent-foreground:    #fafafa;
 
   --border: rgb(255 255 255 / 10%);
-  --input: rgb(255 255 255 / 15%);
+  --input:  rgb(255 255 255 / 15%);
 
   --ring: #525252;
-}
-
-/* ─────────────────────────────────────────────────────────────
-   COMPONENTS (reusable multi-property classes)
-───────────────────────────────────────────────────────────── */
-
-@layer components {
-
-  /* =========================
-     DISPLAY
-  ========================== */
-
-  .display {
-    font-family: var(--font-family-display);
-    font-size: var(--text-display-size);
-    line-height: var(--text-display-line-height);
-    font-weight: var(--font-weight-bold);
-    color: var(--text-color-1);
-  }
-
-  /* =========================
-     HEADINGS
-  ========================== */
-
-  .header-1 {
-    font-family: var(--font-family-display);
-    font-size: var(--text-h1-size);
-    line-height: var(--text-h1-line-height);
-    font-weight: var(--font-weight-bold);
-    color: var(--text-color-1);
-    letter-spacing: 0.05em;
-  }
-
-  .header-2{
-    font-family: var(--font-family-display);
-    font-size: var(--text-h2-size);
-    line-height: var(--text-h2-line-height);
-    font-weight: var(--font-weight-medium);
-    color: var(--text-color-2);
-    font-style: italic;
-    letter-spacing: 0.05em;
-  }
-
-  .header-3 {
-    font-family: var(--font-family-body);
-    font-size: var(--text-h3-size);
-    line-height: var(--text-h3-line-height);
-    font-weight: var(--font-weight-medium);
-    color: var(--text-color-1);
-  }
-
-  .header-4 {
-    font-family: var(--font-family-body);
-    font-size: var(--text-h4-size);
-    line-height: var(--text-h4-line-height);
-    font-weight: var(--font-weight-medium);
-    color: var(--text-color-muted);
-  }
-
-  /* =========================
-     BODY TEXT
-  ========================== */
-
-  .body-1 {
-    font-family: var(--font-family-body);
-    font-size: var(--text-body-size);
-    line-height: var(--text-body-line-height);
-    font-weight: var(--font-weight-regular);
-    color: var(--text-color-2);
-  }
-
-  .body-2 {
-    font-family: var(--font-family-body);
-    font-size: var(--text-body-2-size);
-    line-height: var(--text-body-2-line-height);
-    font-weight: var(--font-weight-regular);
-    color: var(--text-color-1);
-  }
-
-  .caption {
-    font-family: var(--font-family-body);
-    font-size: var(--text-caption-size);
-    line-height: var(--text-caption-line-height);
-    font-weight: var(--font-weight-regular);
-    color: var(--text-color-2);
-  }
-}
-
-/* ─────────────────────────────────────────────────────────────
-   UTILITIES (single-purpose helpers)
-───────────────────────────────────────────────────────────── */
-
-@layer utilities {
-
-  .on-dark {
-    color: #fbf9f6;
-  }
-
-  .text-primary {
-    color: var(--text-color-1);
-  }
-
-  .text-secondary {
-    color: var(--text-color-2);
-  }
-
-  .text-muted {
-    color: var(--text-color-muted);
-  }
-  
-  /* Fixed values for contributor/viewer page shells */
-  --page-section-gap: 32px;
-  --page-max-w: 680px;
-  --page-max-w-wide: 960px;
-
-  /* =========================
-     RADIUS
-  ========================== */
-
-  --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
-  --radius-xl: 32px;
-
-  /* =========================
-     SHADOWS
-  ========================== */
-
-  --shadow-auth:
-    0 1.27px 1.905px rgb(0 0 0 / 0.1),
-    0 1.27px 1.27px rgb(0 0 0 / 0.1);
-
-  --shadow-soft:
-    0 4px 20px rgb(0 0 0 / 0.05);
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -436,167 +252,121 @@
 }
 
 /* ─────────────────────────────────────────────────────────────
-   ROOT VARIABLES
-   --background: #F0EAE2  ← cream, NOT white
-   This is the critical fix — eliminates the white border on all pages
-───────────────────────────────────────────────────────────── */
-
-:root {
-  --background: #F0EAE2;   /* ← was #ffffff — must stay cream */
-  --foreground: #0a0a0a;
-
-  --card: #ffffff;
-  --card-foreground: #0a0a0a;
-
-  --primary: #0a0a0a;
-  --primary-foreground: #ffffff;
-
-  --secondary: #f5f2ed;
-  --secondary-foreground: #0a0a0a;
-
-  --muted: #f3f4f6;
-  --muted-foreground: #6b7280;
-
-  --accent: #ddd6cf;
-  --accent-foreground: #0a0a0a;
-
-  --border: #e5e7eb;
-  --input: #e5e7eb;
-
-  --ring: #d1d5db;
-}
-
-/* ─────────────────────────────────────────────────────────────
-   DARK MODE
-───────────────────────────────────────────────────────────── */
-
-.dark {
-  --background: #171717;
-  --foreground: #fafafa;
-  --card: #1f1f1f;
-  --card-foreground: #fafafa;
-  --primary: #fafafa;
-  --primary-foreground: #171717;
-  --secondary: #262626;
-  --secondary-foreground: #fafafa;
-  --muted: #262626;
-  --muted-foreground: #a3a3a3;
-  --accent: #404040;
-  --accent-foreground: #fafafa;
-  --border: rgb(255 255 255 / 10%);
-  --input: rgb(255 255 255 / 15%);
-  --ring: #525252;
-}
-
-/* ─────────────────────────────────────────────────────────────
-   COMPONENTS — typography classes
-   Use these in className instead of inline style props
+   COMPONENTS — typography + reusable multi-property classes
    font-family-display = Boska (headings)
-   font-family-body = Switzer (body text)
+   font-family-body    = Switzer (body text)
 ───────────────────────────────────────────────────────────── */
 
 @layer components {
 
   /* =========================
-     DISPLAY (shared)
+     DISPLAY
   ========================== */
+
   .display {
-    font-family: var(--font-family-display);
-    font-size: var(--text-display-size);
-    line-height: var(--text-display-line-height);
-    font-weight: var(--font-weight-bold);
-    color: var(--color-r-text);
+    font-family:  var(--font-family-display);
+    font-size:    var(--text-display-size);
+    line-height:  var(--text-display-line-height);
+    font-weight:  var(--font-weight-bold);
+    color:        var(--color-r-text);
   }
 
   /* =========================
      H1
   ========================== */
+
   .header-1,
   .text-h1 {
-    font-family: var(--font-family-display);
-    font-size: var(--text-h1-size);
-    line-height: var(--text-h1-line-height);
-    font-weight: var(--font-weight-bold);
-    color: var(--color-r-text);
+    font-family:    var(--font-family-display);
+    font-size:      var(--text-h1-size);
+    line-height:    var(--text-h1-line-height);
+    font-weight:    var(--font-weight-bold);
+    color:          var(--color-r-text);
     letter-spacing: -0.01em;
   }
 
   /* =========================
      H2
   ========================== */
+
   .header-2,
   .text-h2 {
     font-family: var(--font-family-display);
-    font-size: var(--text-h2-size);
+    font-size:   var(--text-h2-size);
     line-height: var(--text-h2-line-height);
     font-weight: var(--font-weight-bold);
-    color: var(--color-r-text);
-    font-style: italic;
+    font-style:  italic;
+    color:       var(--color-r-text);
   }
 
   /* =========================
      H3
   ========================== */
+
   .header-3,
   .text-h3 {
     font-family: var(--font-family-body);
-    font-size: var(--text-h3-size);
+    font-size:   var(--text-h3-size);
     line-height: var(--text-h3-line-height);
     font-weight: var(--font-weight-medium);
-    color: var(--color-r-text);
+    color:       var(--color-r-text);
   }
 
   /* =========================
      H4
   ========================== */
+
   .header-4,
   .text-h4 {
     font-family: var(--font-family-body);
-    font-size: var(--text-h4-size);
+    font-size:   var(--text-h4-size);
     line-height: var(--text-h4-line-height);
     font-weight: var(--font-weight-medium);
-    color: var(--color-r-muted);
+    color:       var(--color-r-muted);
   }
 
   /* =========================
      BODY 1
   ========================== */
+
   .body-1,
   .text-body-1 {
     font-family: var(--font-family-body);
-    font-size: var(--text-body-size);
+    font-size:   var(--text-body-size);
     line-height: var(--text-body-line-height);
     font-weight: var(--font-weight-regular);
-    color: var(--color-r-secondary);
+    color:       var(--color-r-secondary);
   }
 
   /* =========================
      BODY 2
   ========================== */
+
   .body-2,
   .text-body-2 {
     font-family: var(--font-family-body);
-    font-size: var(--text-body-2-size);
+    font-size:   var(--text-body-2-size);
     line-height: var(--text-body-2-line-height);
     font-weight: var(--font-weight-regular);
-    color: var(--color-r-text);
+    color:       var(--color-r-text);
   }
 
   /* =========================
      CAPTION
   ========================== */
+
   .caption,
   .text-caption {
     font-family: var(--font-family-body);
-    font-size: var(--text-caption-size);
+    font-size:   var(--text-caption-size);
     line-height: var(--text-caption-line-height);
     font-weight: var(--font-weight-regular);
-    color: var(--color-r-muted);
+    color:       var(--color-r-muted);
   }
 }
 
 /* ─────────────────────────────────────────────────────────────
-   UTILITIES
+   UTILITIES — single-purpose helpers
 ───────────────────────────────────────────────────────────── */
 
 @layer utilities {
@@ -607,15 +377,7 @@
   .text-secondary { color: var(--color-r-secondary); }
   .text-muted     { color: var(--color-r-muted); }
 
-  /* Background helpers */
-  .bg-r-bg    { background-color: var(--color-r-bg); }
-  .bg-r-card  { background-color: var(--color-r-card); }
-  .bg-r-modal { background-color: var(--color-r-modal); }
-  .bg-r-btn   { background-color: var(--color-r-btn); }
-  .bg-r-shape { background-color: var(--color-r-shape); }
-  .bg-r-border { background-color: var(--color-r-border); }
-
-  /* Text color helpers */
+  /* Remember text color helpers */
   .text-r-text      { color: var(--color-r-text); }
   .text-r-secondary { color: var(--color-r-secondary); }
   .text-r-muted     { color: var(--color-r-muted); }
@@ -623,33 +385,41 @@
   .text-r-accent    { color: var(--color-r-accent); }
   .text-r-danger    { color: var(--color-r-danger); }
 
-  /* Border helpers */
-  .border-r-border       { border-color: var(--color-r-border); }
-  .border-r-border-focus { border-color: var(--color-r-border-focus); }
-
   /* Relationship color helpers */
   .text-r-family    { color: var(--color-r-family); }
   .text-r-friend    { color: var(--color-r-friend); }
   .text-r-colleague { color: var(--color-r-colleague); }
 
+  /* Background helpers */
+  .bg-r-bg     { background-color: var(--color-r-bg); }
+  .bg-r-card   { background-color: var(--color-r-card); }
+  .bg-r-modal  { background-color: var(--color-r-modal); }
+  .bg-r-btn    { background-color: var(--color-r-btn); }
+  .bg-r-shape  { background-color: var(--color-r-shape); }
+  .bg-r-border { background-color: var(--color-r-border); }
+
+  /* Border helpers */
+  .border-r-border       { border-color: var(--color-r-border); }
+  .border-r-border-focus { border-color: var(--color-r-border-focus); }
+
   /* Page layout shells */
   .page-shell {
-    margin-left: auto;
-    margin-right: auto;
-    width: 100%;
-    max-width: var(--page-max-w);
-    display: flex;
+    margin-left:    auto;
+    margin-right:   auto;
+    width:          100%;
+    max-width:      var(--page-max-w);
+    display:        flex;
     flex-direction: column;
-    gap: var(--page-section-gap);
+    gap:            var(--page-section-gap);
   }
 
   .page-shell-wide {
-    margin-left: auto;
-    margin-right: auto;
-    width: 100%;
-    max-width: var(--page-max-w-wide);
-    display: flex;
+    margin-left:    auto;
+    margin-right:   auto;
+    width:          100%;
+    max-width:      var(--page-max-w-wide);
+    display:        flex;
     flex-direction: column;
-    gap: var(--page-section-gap);
+    gap:            var(--page-section-gap);
   }
 }

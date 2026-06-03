@@ -141,16 +141,16 @@ export default function ConstellationGraph({ ai_output }) {
   const [memorial, setMemorial] = useState();
   const [relationshipCounts, setRelationshipCounts] = useState([]);
   const [nodes, setNodes] = useState(
-    ai_output.constellation.nodes.map(t => ({
+    ai_output?.constellation?.nodes?.map(t => ({
       id: t.id,
-      name: t.label,          // common for display
-      group: t.category,      // useful for coloring / clustering
+      name: t.label,
+      group: t.category,
       prominence: t.prominence_score,
       summary: t.summary,
       photos: t.photo_ids,
       quotes: t.quotes
-    }))    
-  );
+    })) || []
+);
 
     const [constellationLoading, setConstellationLoading] = useState(true);
   
@@ -166,12 +166,12 @@ export default function ConstellationGraph({ ai_output }) {
     x: Math.random() * 600,
     y: Math.random() * 400,
   }));  const [links, setLinks] = useState(
-    ai_output.constellation.edges.map(d => ({
+    ai_output?.constellation?.edges?.map(d => ({
       source: d.source,
       target: d.target,
       type: d.relationship_type,
       weight: d.weight
-    }))    
+    })) || []
   );
 
 
