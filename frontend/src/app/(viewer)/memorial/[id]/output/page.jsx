@@ -5,13 +5,36 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getMemorialOutput, getMemorialById, getContributors, createInviteLink, createShareLink } from '@/lib/api';
+import { getMemorialOutput, getMemorialById, createInviteLink, createShareLink } from '@/lib/api';
+import { getMemorialContributors } from '@/services/contributorService';
+import { getSupabaseClient } from '@/lib/supabaseClient.js';
 import ConstellationGraph from "@/components/output/constellation";
 import MemorialContributionsPage from "@/components/output/contribution-list";
 import MemorialContributionApproval from "@/components/output/contribution-awaiting";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { mockMemorials } from '@/data/mockMemorials.js';
 import StorySlideshow from '@/components/output/StorySlideshow';
+
+// ─── Auth token helper ────────────────────────────────────────────────────────
+
+const SUPABASE_AUTH_TOKEN_KEY = "sb-tbpdhybqbjucoxdizlgw-auth-token";
+
+async function getCurrentAuthToken() {
+  try {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.auth.getSession();
+    if (!error && data.session?.access_token) return data.session.access_token;
+  } catch { /* fall through */ }
+  if (typeof window === "undefined") return null;
+  const stored = window.localStorage.getItem(SUPABASE_AUTH_TOKEN_KEY);
+  if (!stored) return null;
+  try {
+    const parsed = JSON.parse(stored);
+    return parsed?.access_token || parsed?.currentSession?.access_token || parsed;
+  } catch {
+    return stored;
+  }
+}
 
 // ─── Relationship color ───────────────────────────────────────────────────────
 
@@ -46,7 +69,7 @@ function BottomNav({ active, onChange }) {
   );
 }
 
-// ─── Slideshow — Sungjun's StorySlideshow component ──────────────────────────
+// ─── Slideshow ────────────────────────────────────────────────────────────────
 
 function SlideshowSection({ output }) {
   if (!output?.story || output.story.length === 0) {
@@ -64,9 +87,9 @@ function SlideshowSection({ output }) {
   );
 }
 
-// ─── Constellations — Mendrika's component ────────────────────────────────────
+// ─── Constellations ───────────────────────────────────────────────────────────
 
-function ConstellationsSection({ output, memorial,contributor }) {
+function ConstellationsSection({ output, memorial, contributor }) {
   if (!output?.constellation) {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
@@ -74,8 +97,8 @@ function ConstellationsSection({ output, memorial,contributor }) {
         <p className="mt-2 max-w-xs text-body-2 text-r-muted">Constellation will appear here once the memorial has been generated.</p>
       </div>
     );
-  } 
-  return <div className="py-4"><ConstellationGraph ai_output={output} memorial={memorial} contributor={contributor} width={1250} height={800}/></div>;
+  }
+  return <div className="py-4"><ConstellationGraph ai_output={output} memorial={memorial} contributor={contributor} width={1250} height={800} /></div>;
 }
 
 // ─── Waveform Player ──────────────────────────────────────────────────────────
@@ -89,34 +112,34 @@ function WaveformPlayer({ audioUrl, color }) {
   const [duration, setDuration] = useState(0);
 
   useEffect(() => {
-  if (!containerRef.current) return;
-  let mounted = true;
+    if (!containerRef.current) return;
+    let mounted = true;
 
-  import('wavesurfer.js').then((WaveSurfer) => {
-    if (!mounted) return;
-    if (wavesurferRef.current) wavesurferRef.current.destroy();
-    const ws = WaveSurfer.default.create({
-      container: containerRef.current,
-      waveColor: color || 'var(--color-r-colleague)',
-      progressColor: 'var(--color-r-text)',
-      cursorColor: 'transparent',
-      barWidth: 3, barGap: 2, barRadius: 3, height: 48,
-      normalize: true, interact: true, backend: 'WebAudio',
-    });
-    if (audioUrl) {
-      ws.load(audioUrl);
-      ws.on('ready', () => { setReady(true); setDuration(ws.getDuration()); });
-      ws.on('timeupdate', (time) => setCurrentTime(time));
-      ws.on('finish', () => setPlaying(false));
-    } else { setReady(false); }
-    wavesurferRef.current = ws;
-  }).catch(() => { if (mounted) setReady(false); });
+    import('wavesurfer.js').then((WaveSurfer) => {
+      if (!mounted) return;
+      if (wavesurferRef.current) wavesurferRef.current.destroy();
+      const ws = WaveSurfer.default.create({
+        container: containerRef.current,
+        waveColor: color || 'var(--color-r-colleague)',
+        progressColor: 'var(--color-r-text)',
+        cursorColor: 'transparent',
+        barWidth: 3, barGap: 2, barRadius: 3, height: 48,
+        normalize: true, interact: true, backend: 'WebAudio',
+      });
+      if (audioUrl) {
+        ws.load(audioUrl);
+        ws.on('ready', () => { setReady(true); setDuration(ws.getDuration()); });
+        ws.on('timeupdate', (time) => setCurrentTime(time));
+        ws.on('finish', () => setPlaying(false));
+      } else { setReady(false); }
+      wavesurferRef.current = ws;
+    }).catch(() => { if (mounted) setReady(false); });
 
-  return () => {
-    mounted = false;
-    if (wavesurferRef.current) { wavesurferRef.current.destroy(); wavesurferRef.current = null; }
-  };
-}, [audioUrl, color]);
+    return () => {
+      mounted = false;
+      if (wavesurferRef.current) { wavesurferRef.current.destroy(); wavesurferRef.current = null; }
+    };
+  }, [audioUrl, color]);
 
   function togglePlay() {
     if (!wavesurferRef.current || !ready) return;
@@ -164,13 +187,6 @@ function WaveformPlayer({ audioUrl, color }) {
 
 function ContributionsSection({ contributorslist }) {
   const [value, setValue] = useState("contributors");
-  // const submissions = [
-  //   { id: 1, user: "Jane Smith", contribution: "10 contributions", summary: "This can be an AI generated summary of the contribution, either mentioning surfaced themes or flagged submissions that may be sensitive or inappropriate." },
-  //   { id: 2, user: "Michael Johnson", contribution: "7 contributions", summary: "AI generated summaries can highlight themes, relationships, and potentially sensitive submissions for moderators to review quickly." },
-  //   { id: 3, user: "Emily Davis", contribution: "4 contributions", summary: "This summary may contain surfaced insights generated automatically from uploaded stories, photos, and audio." },
-  //   { id: 4, user: "Chris Brown", contribution: "15 contributions", summary: "AI can help identify emotional themes and summarize media content for easier moderation workflows." },
-  //   { id: 5, user: "Sarah Wilson", contribution: "3 contributions", summary: "Potentially sensitive content or highlighted themes may appear here after automatic AI analysis." },
-  // ];
   const submissions = contributorslist.filter(c => c.status === "submitted");
   const nonSubmissions = contributorslist.filter(c => c.status !== "submitted");
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -374,26 +390,29 @@ function AlbumView({ albums }) {
 }
 
 // ─── Contributors view ────────────────────────────────────────────────────────
+// Uses real contributors from the backend. Per-contributor photo grouping is not
+// yet available in the output shape — photos column shows placeholders for now.
 
-const MOCK_CONTRIBUTOR_PHOTOS = [
-  { id: 'c1', name: 'Sarah', relationship: 'Friend', contributions: 4, lastSubmitted: 'May 20, 2026', photos: [{ id: 'p1', url: null, caption: null, taken_at: '2019-12-25' }, { id: 'p2', url: null, caption: 'Summer BBQ', taken_at: '2018-07-04' }] },
-  { id: 'c2', name: 'Michael', relationship: 'Family', contributions: 3, lastSubmitted: 'May 18, 2026', photos: [{ id: 'p3', url: null, caption: null, taken_at: '2022-06-15' }, { id: 'p4', url: null, caption: null, taken_at: '2021-09-03' }] },
-  { id: 'c3', name: 'Tom Harris', relationship: 'Colleague', contributions: 2, lastSubmitted: 'May 15, 2026', photos: [{ id: 'p5', url: null, caption: null, taken_at: null }] },
-];
-
-function ContributorsView() {
+function ContributorsView({ contributors }) {
   const [expanded, setExpanded] = useState(null);
-  const [lightboxPhoto, setLightboxPhoto] = useState(null);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
-  const currentPhotos = expanded ? (MOCK_CONTRIBUTOR_PHOTOS.find(c => c.id === expanded)?.photos || []) : [];
 
-  function openLightbox(photo, i) { setLightboxPhoto(photo); setLightboxIndex(i); }
-  function prevPhoto() { const i = (lightboxIndex - 1 + currentPhotos.length) % currentPhotos.length; setLightboxIndex(i); setLightboxPhoto(currentPhotos[i]); }
-  function nextPhoto() { const i = (lightboxIndex + 1) % currentPhotos.length; setLightboxIndex(i); setLightboxPhoto(currentPhotos[i]); }
+  if (!contributors || contributors.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <div className="h-16 w-16 rounded-full flex items-center justify-center mb-4 bg-r-card">
+          <svg width="24" height="24" fill="none" stroke="var(--color-r-muted)" strokeWidth="1.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </div>
+        <p className="text-body-2 font-medium text-r-text">No contributors yet</p>
+        <p className="mt-1 max-w-xs text-body-2 text-r-muted">Contributors will appear here once people have submitted memories.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
-      {MOCK_CONTRIBUTOR_PHOTOS.map((contributor) => (
+      {contributors.map((contributor) => (
         <div key={contributor.id} className="rounded-2xl overflow-hidden border border-r-border">
           <div className="flex items-stretch">
             <div className="w-[220px] shrink-0 p-4 flex flex-col justify-between bg-r-card">
@@ -401,20 +420,24 @@ function ContributorsView() {
                 <div className="w-10 h-10 rounded-full shrink-0 bg-r-border" />
                 <div className="min-w-0">
                   <p className="text-body-2 font-medium text-r-text">{contributor.name}</p>
-                  <p className="text-caption text-r-muted mt-0.5">{contributor.contributions} contributions</p>
-                  <p className="text-caption text-r-muted">Last submitted {contributor.lastSubmitted}</p>
+                  <p className="text-caption text-r-muted mt-0.5">
+                    {contributor.submitted_at
+                      ? `Last submitted ${new Date(contributor.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
+                      : 'In progress'}
+                  </p>
                 </div>
               </div>
               <span className="mt-3 self-start inline-block rounded-full px-3 py-1 text-caption bg-r-bg"
-                style={{ border: '1px solid var(--color-r-border)', color: relationshipColor(contributor.relationship) }}>
-                {contributor.relationship || "No Relationship Provided"}
+                style={{ border: '1px solid var(--color-r-border)', color: relationshipColor(contributor.relationship_type) }}>
+                {contributor.relationship_type || 'No relationship provided'}
               </span>
             </div>
+            {/* Photo slots — placeholders until per-contributor photo grouping is available in output */}
             <div className="flex flex-1">
-              {contributor.photos.slice(0, 2).map((photo, i) => (
-                <button key={photo.id} onClick={() => openLightbox(photo, i)} className="flex-1 relative overflow-hidden group bg-r-card">
-                  {photo.url ? <img src={photo.url} alt="" className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" /> : <div className="h-full w-full" style={{ backgroundColor: '#D0C8C0' }} />}
-                </button>
+              {[0, 1].map((i) => (
+                <div key={i} className="flex-1 relative overflow-hidden bg-r-card">
+                  <div className="h-full w-full" style={{ backgroundColor: '#D0C8C0' }} />
+                </div>
               ))}
             </div>
             <button onClick={() => setExpanded(expanded === contributor.id ? null : contributor.id)}
@@ -425,18 +448,12 @@ function ContributorsView() {
             </button>
           </div>
           {expanded === contributor.id && (
-            <div className="p-4 grid grid-cols-3 gap-3 bg-r-bg" style={{ borderTop: '1px solid var(--color-r-border)' }}>
-              {contributor.photos.map((photo, index) => (
-                <button key={photo.id} onClick={() => openLightbox(photo, index)}
-                  className="group relative aspect-square overflow-hidden rounded-xl bg-r-card">
-                  {photo.url ? <img src={photo.url} alt="" className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" /> : <div className="h-full w-full" style={{ backgroundColor: '#D0C8C0' }} />}
-                </button>
-              ))}
+            <div className="p-4 bg-r-bg" style={{ borderTop: '1px solid var(--color-r-border)' }}>
+              <p className="text-caption text-r-muted">Photos will appear here once the memorial has been generated.</p>
             </div>
           )}
         </div>
       ))}
-      {lightboxPhoto && <Lightbox photo={lightboxPhoto} onClose={() => setLightboxPhoto(null)} onPrev={prevPhoto} onNext={nextPhoto} />}
     </div>
   );
 }
@@ -499,7 +516,7 @@ function normalizePhotos(photos) {
 
 // ─── Photo Archive section ────────────────────────────────────────────────────
 
-function PhotoArchiveSection({ output }) {
+function PhotoArchiveSection({ output, contributors }) {
   const [view, setView] = useState('Album');
   const albums = normalizePhotos(output?.photos);
   const allPhotos = albums.flatMap((album) => (album.photos || []).map((p) => ({ ...p, album_name: album.album_name })));
@@ -529,7 +546,7 @@ function PhotoArchiveSection({ output }) {
         )}
       </div>
       {view === 'Album' && <AlbumView albums={albums} />}
-      {view === 'Contributors' && <ContributorsView />}
+      {view === 'Contributors' && <ContributorsView contributors={contributors} />}
       {view === 'All Photos' && <MasonryView photos={allPhotos} />}
     </div>
   );
@@ -667,7 +684,11 @@ export default function MemorialOutputPage() {
   useEffect(() => {
     if (!id) return;
     async function loadContributors() {
-      try { const result = await getContributors(id); setContributors(result.contributors || []); } catch {}
+      try {
+        const token = await getCurrentAuthToken();
+        const result = await getMemorialContributors(id, token);
+        setContributors(result.contributors || []);
+      } catch {}
     }
     loadContributors();
   }, [id]);
@@ -723,11 +744,12 @@ export default function MemorialOutputPage() {
           <OutputError onRetry={load} />
         ) : (
           <>
+            <MemorialHeader memorial={memorial} onShare={() => setShowShare(true)} />
             {activeTab === 'Slideshow' && <SlideshowSection output={output} />}
             {activeTab === 'Constellations' && <ConstellationsSection output={output} memorial={memorial} contributor={contributors} />}
             {activeTab === 'Voices' && <VoicesSection voices={output?.voices} />}
             {activeTab === 'Contributions' && <ContributionsSection contributorslist={contributors} />}
-            {activeTab === 'Photo Archive' && <PhotoArchiveSection output={output} />}
+            {activeTab === 'Photo Archive' && <PhotoArchiveSection output={output} contributors={contributors} />}
           </>
         )}
       </main>
