@@ -291,7 +291,7 @@ export default function SharePage() {
       try {
         const data = await getShareToken(shareToken);
         console.log("Share token data:", data);
-        setOutput(data.output_json);
+        setOutput(data);
         setContributors(data.contributor || []);
         setMemorial(data.memorial || mockMemorials[0]);
       } catch (err) { setError(err.message); }

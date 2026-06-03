@@ -222,7 +222,7 @@ function ContributionsTab({ contributorslist, loading, error, onRetry }) {
           <option value="contributors">Contributors</option>
           <option value="awaiting">Awaiting Approval</option>
         </select>
-        {value === "awaiting" && (
+        {(value === "awaiting" && submissions.length > 0) && (
           <div className="flex items-center gap-4 text-sm text-gray-600">
             <button onClick={handlePrev} className="rounded p-1 transition hover:bg-gray-200">
               <ChevronLeft size={18} />
@@ -274,7 +274,7 @@ function ContributionsTab({ contributorslist, loading, error, onRetry }) {
         </div>
       )}
       {value === "awaiting" && (
-        <MemorialContributionApproval contributors={current} />
+        <MemorialContributionApproval contributors={current} gallery={submissions.length} />
       )}
     </div>
   );
