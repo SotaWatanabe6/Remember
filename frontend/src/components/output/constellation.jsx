@@ -114,39 +114,19 @@ export default function ConstellationGraph({ ai_output ,memorial, contributor, w
   const ref = useRef(null);
   console.log(memorial);
   const { id } = useParams();
+  // Don't need to add constellation Loading since D3.js made the transition
+  // Removed also the sitetimeout cause that causes the problem filter features
   const [constellationLoading, setConstellationLoading] = useState(false);
   const [selectedNode, setSelectedNode] = useState(null);
   const [tab, setTab] = useState("Themes");
-  // const [hiddenItems, setHiddenItems] = useState({});
   const [hiddenContributors, setHiddenContributors] = useState({});
   const [hiddenRelationshipType, setHiddenRelationshipType] = useState({});
   const [hiddenThemes, setHiddenThemes] = useState({});  
-  // const toggleEye = (id) => {
-  //   setHiddenItems((prev) => ({
-  //     ...prev,
-  //     [id]: !prev[id],
-  //   }));
-    
-    // Use setTimeout to allow D3 to apply smooth exit transitions
-    // setTimeout(() => {
-    //   const filteredNodes = nodes.filter(item => {
-    //     const shouldHide = !(!prev[item.id] ? true : (prev[item.id] !== true));
-    //     return !shouldHide;
-    //   });
-    //   console.log("Filtered Nodes: ", prev);
-    //   const filteredLinks = links.filter(
-    //     l => !prev[l.target.id]
-    //   );
-    //   setNodes(filteredNodes);
-    //   setLinks(filteredLinks);
-    // }, 300);
-  // };
   const handleThemesChange = (nodeId) => {
     setHiddenThemes((prev) => ({
       ...prev,
       [nodeId]: !prev[nodeId],
-    }));
-    
+    }));    
   };  
 
   function capitalizeFirstLetter(str) {
@@ -168,7 +148,6 @@ export default function ConstellationGraph({ ai_output ,memorial, contributor, w
     }));
 
   };  
-  // const [contributor, setContributors] = useState([]);
   const [relationshipCounts, setRelationshipCounts] = useState(
     Object.entries(
       contributor.reduce((acc, item) => {
@@ -215,18 +194,11 @@ export default function ConstellationGraph({ ai_output ,memorial, contributor, w
     x: Math.random() * 600,
     y: Math.random() * 400,
   }));
-  // useEffect(() => {    
-  //   if (!tab) return;
-  //   if (!id) return;
-  // }, [tab,id]);   
 
   
   const handleChange = (e) => {
       setTab(e.target.value);
       if (e.target.value === "Themes") {
-      // setHiddenItems(ai_output.constellation.nodes.map(t => ({
-      //   [t.id]: false,
-      // })));        
 
         setNodes(ai_output?.constellation?.nodes.map(t => ({
           id: t.id,
@@ -245,9 +217,6 @@ export default function ConstellationGraph({ ai_output ,memorial, contributor, w
         })));
     }
     else{
-      // setHiddenItems(contributor.map(t => ({
-      //   [t.id]: false,
-      // })));
       setNodes(contributor.map(t => ({
         id: t.id,
         name: t.name,
@@ -492,7 +461,6 @@ export default function ConstellationGraph({ ai_output ,memorial, contributor, w
                     <input
                       type="checkbox"
                       defaultChecked
-                      // checked={hiddenThemes[item.id] || true}
                       onChange={() => handleThemesChange(item.id)}                            
                       className="
                         h-4
@@ -547,7 +515,6 @@ export default function ConstellationGraph({ ai_output ,memorial, contributor, w
                       type="checkbox"
                       defaultChecked                      
                       onChange={() => handleRelationshipTypesChange(item.relationship_type)}                        
-                      // checked={hiddenRelationshipType[item.relationship_type]|| true}
                       className="
                         h-4
                         w-4
