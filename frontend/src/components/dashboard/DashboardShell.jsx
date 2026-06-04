@@ -17,7 +17,7 @@ function MemorialAvatar({ name }) {
 
 export default function DashboardShell({ memorial, children }) {
   return (
-    <main className="min-h-screen bg-white px-5 pb-12 pt-8 text-neutral-950 sm:px-[50px] sm:pb-[47px] sm:pt-[50px]">
+    <main className="min-h-screen bg-r-bg px-5 pb-12 pt-8 text-neutral-950 sm:px-[50px] sm:pb-[47px] sm:pt-[50px]">
       <div className="mx-auto flex w-full max-w-[1340px] flex-col gap-[34px]">
         <DashboardHeader />
 

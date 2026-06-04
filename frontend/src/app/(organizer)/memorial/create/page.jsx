@@ -3,7 +3,7 @@ import MemorialCreateHeader from "@/components/memorial/MemorialCreateHeader.jsx
 
 export default function MemorialCreatePage() {
   return (
-    <main className="min-h-screen bg-white px-6 py-8 text-neutral-950 sm:px-[50px] sm:py-[50px]">
+    <main className="min-h-screen bg-r-bg px-6 py-8 text-neutral-950 sm:px-[50px] sm:py-[50px]">
       <MemorialCreateHeader />
 
       <section className="mx-auto mt-20 flex w-full max-w-[886px] flex-col items-center gap-[50px] sm:mt-[100px]">

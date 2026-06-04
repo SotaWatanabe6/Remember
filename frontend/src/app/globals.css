@@ -70,7 +70,7 @@
   ========================== */
 
   /* Backgrounds */
-  --color-r-bg:    #F0EAE2;
+  --color-r-bg:    #F2ECE4;
   --color-r-card:  #E8E0D8;
   --color-r-modal: #FBF9F6;
 
@@ -159,12 +159,12 @@
 
 /* ─────────────────────────────────────────────────────────────
    ROOT VARIABLES
-   --background: #F0EAE2  ← cream, NOT white
+   --background: #F2ECE4  ← cream, NOT white
    This eliminates the white border flash on all pages.
 ───────────────────────────────────────────────────────────── */
 
 :root {
-  --background:          #F0EAE2;
+  --background:          #F2ECE4;
   --foreground:          #0a0a0a;
 
   --card:                #ffffff;
