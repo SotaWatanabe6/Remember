@@ -14,7 +14,7 @@ function isStaticAsset(pathname) {
   );
 }
 
-export function middleware(request) {
+export function proxy(request) {
   const { pathname } = request.nextUrl;
 
   if (LAUNCH_MODE !== "waitlist") {
