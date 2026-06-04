@@ -390,40 +390,65 @@ export async function saveContributorRelationship(
 }
 
 export async function getContributorQuestionnaireDraft(inviteToken) {
-  const invite = await validateContributorInvite(inviteToken);
-
-  if (invite.status !== "valid") {
-    return {
-      status: invite.status,
-      invite,
-      session: null,
-    };
-  }
-
+  // Check localStorage first — skip the network call on every autosave.
+  // The session was already validated when the contributor started their draft.
   const session = getStoredContributorSession(inviteToken);
 
-  if (!hasValidContributorSession(session, invite)) {
+  if (
+    session?.contributorId &&
+    session?.contributorToken &&
+    session?.memorialId &&
+    !isMockContributorSession(session)
+  ) {
+    // Build a minimal invite object from session data — no network needed
+    const invite = {
+      inviteToken,
+      memorialId: session.memorialId,
+      status: 'valid',
+      deceased: {
+        name: session.deceasedName ?? '',
+        photoUrl: session.deceasedPhotoUrl ?? null,
+      },
+      memorial: null,
+      invite: null,
+    };
+
+    if (!hasCompletedRelationship(session)) {
+      return { status: 'relationship_missing', invite, session };
+    }
+
     return {
-      status: "missing",
+      status: 'ready',
       invite,
-      session: null,
+      session,
+      relationship_type: session.relationship_type,
+      relationship_custom_label: session.relationship_custom_label ?? null,
     };
   }
 
-  if (!hasCompletedRelationship(session)) {
-    return {
-      status: "relationship_missing",
-      invite,
-      session,
-    };
+  // No valid session in localStorage — fall through to real network validation
+  const invite = await validateContributorInvite(inviteToken);
+
+  if (invite.status !== 'valid') {
+    return { status: invite.status, invite, session: null };
+  }
+
+  const freshSession = getStoredContributorSession(inviteToken);
+
+  if (!hasValidContributorSession(freshSession, invite)) {
+    return { status: 'missing', invite, session: null };
+  }
+
+  if (!hasCompletedRelationship(freshSession)) {
+    return { status: 'relationship_missing', invite, session: freshSession };
   }
 
   return {
-    status: "ready",
+    status: 'ready',
     invite,
-    session,
-    relationship_type: session.relationship_type,
-    relationship_custom_label: session.relationship_custom_label ?? null,
+    session: freshSession,
+    relationship_type: freshSession.relationship_type,
+    relationship_custom_label: freshSession.relationship_custom_label ?? null,
   };
 }
 
