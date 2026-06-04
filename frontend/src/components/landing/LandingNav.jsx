@@ -4,7 +4,7 @@ export default function LandingNav() {
   return (
     <header className="w-full">
       <nav
-        className="mx-auto flex h-10 w-full max-w-[1340px] items-center justify-between"
+        className="mx-auto flex h-10 w-full max-w-[1340px] items-center justify-between font-(--font-family-body)"
         aria-label="Primary"
       >
         <div className="text-2xl leading-8 text-neutral-950">Remember</div>
