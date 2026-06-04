@@ -1,30 +1,45 @@
 # =========================================================
+# INSTALL
+# =========================================================
+#!pip install pymupdf faiss-cpu assemblyai pytesseract python-docx supabase openai sentence-transformers moviepy pillow -q
+
+#!apt-get -qq install tesseract-ocr ffmpeg
+
+# =========================================================
 # IMPORTS
 # =========================================================
-# !pip install pymupdf faiss-cpu assemblyai pytesseract python-docx supabase openai google-generativeai sentence-transformers moviepy pillow -q
-
 import os
 import base64
 import shutil
 import logging
-import fitz
-import faiss
-import numpy as np
-import assemblyai as aai
+import sys # Import sys
 
-from PIL import Image
-from docx import Document
-from moviepy.editor import VideoFileClip
-from sentence_transformers import SentenceTransformer
-from supabase import create_client
-from openai import OpenAI
-import google.generativeai as genai
+# Add the path to the installed packages
+sys.path.append('/usr/local/lib/python3.10/dist-packages') # Adjust path if necessary
+
+import fitz # Moved import here
+import faiss # Moved import here
+import numpy as np # Moved import here
+import assemblyai as aai # Moved import here
+
+from PIL import Image # Moved import here
+from docx import Document # Moved import here
+from moviepy.editor import VideoFileClip # Moved import here
+from sentence_transformers import SentenceTransformer # Moved import here
+from supabase import create_client # Moved import here
+from openai import OpenAI # Moved import here
+import google.generativeai as genai # Moved import here
+import pytesseract # Moved import here
 
 logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
+
+# Configure basic logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # =========================================================
 # CONFIG
 # =========================================================
+
 
 SUPABASE_URL = "https://tbpdhybqbjucoxdizlgw.supabase.co"
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
@@ -35,49 +50,31 @@ GEMINI_API_KEY     = os.environ.get("GEMINI_API_KEY", "")
 
 missing = [
     name for name, val in {
-        "SUPABASE_KEY":       SUPABASE_KEY,
         "OPENAI_API_KEY":     OPENAI_API_KEY,
-        "GEMINI_API_KEY":     GEMINI_API_KEY,
         "ASSEMBLYAI_API_KEY": ASSEMBLYAI_API_KEY,
     }.items()
-    if not val or val.startswith("YOUR_")
+    if not val
 ]
 if missing:
-    raise ValueError(f"Missing or placeholder API keys: {', '.join(missing)}")
+    raise ValueError(f"Missing env vars: {', '.join(missing)}")
 
 # =========================================================
 # INIT CLIENTS
 # =========================================================
 
-supabase           = create_client(SUPABASE_URL, SUPABASE_KEY)
+supabase             = create_client(SUPABASE_URL, SUPABASE_KEY)
 aai.settings.api_key = ASSEMBLYAI_API_KEY
-openai_client      = OpenAI(api_key=OPENAI_API_KEY)
-genai.configure(api_key=GEMINI_API_KEY)
+openai_client        = OpenAI(api_key=OPENAI_API_KEY)
 
 embed_model = SentenceTransformer("all-MiniLM-L6-v2")
 index       = faiss.IndexFlatL2(384)
 
 # =========================================================
-# SCENE PROMPTS
+# CONTENT THRESHOLDS
 # =========================================================
 
-SCENE_PROMPTS = {
-    "warm_to_deep":    "FIRST MEMORY emotional depth analysis",
-    "scene_first":     "ORDINARY DAY narrative reconstruction",
-    "relational_lens": "RELATIONSHIPS emotional mapping",
-}
-
-# =========================================================
-# CONTENT THRESHOLDS  — tune these if needed
-# =========================================================
-
-# Text: minimum meaningful word count before we attempt analysis
-MIN_WORDS_TEXT = 30
-
-# Audio transcripts: even stricter (short recordings are rarely meaningful)
+MIN_WORDS_TEXT  = 30
 MIN_WORDS_AUDIO = 20
-
-# Image: minimum file size in bytes (tiny files are icons / corrupt)
 MIN_IMAGE_BYTES = 10_000
 
 # =========================================================
@@ -94,40 +91,29 @@ def _word_count(text: str) -> int:
 
 
 def check_text_quality(text: str, source: str = "text", min_words: int = MIN_WORDS_TEXT):
-    """
-    Raise InsufficientContentError when the text is too short or generic
-    to support meaningful emotional / narrative analysis.
-    """
     words = _word_count(text)
     if words < min_words:
         raise InsufficientContentError(
             f"{source} has only {words} words (minimum {min_words}). "
-            "Skipping analysis to prevent hallucination."
+            "Skipping to prevent hallucination."
         )
-
-    # Flag purely transactional / logistical documents
     TRANSACTIONAL_SIGNALS = [
         "tracking number", "usps", "fedex", "ups", "order number",
         "shipping label", "return label", "fulfillment center",
         "invoice", "purchase order", "bill of lading",
     ]
-    lower = text.lower()
-    hits = sum(1 for s in TRANSACTIONAL_SIGNALS if s in lower)
+    hits = sum(1 for s in TRANSACTIONAL_SIGNALS if s in text.lower())
     if hits >= 2:
         raise InsufficientContentError(
-            f"{source} appears to be a transactional/logistical document "
-            f"({hits} commercial signals detected). "
-            "No emotional or narrative content to analyse."
+            f"{source} appears transactional ({hits} commercial signals). Skipping."
         )
 
 
 def check_image_quality(path: str):
-    """Raise InsufficientContentError for corrupt or suspiciously small images."""
     size = os.path.getsize(path)
     if size < MIN_IMAGE_BYTES:
         raise InsufficientContentError(
-            f"Image too small ({size:,} bytes < {MIN_IMAGE_BYTES:,}). "
-            "Likely an icon or corrupt file — skipping."
+            f"Image too small ({size:,} bytes). Likely icon or corrupt — skipping."
         )
     try:
         img = Image.open(path)
@@ -148,8 +134,8 @@ def log(msg: str):
 
 def transcribe_audio(path: str) -> str:
     transcriber = aai.Transcriber()
-    config = aai.TranscriptionConfig(punctuate=True, format_text=True)
-    result = transcriber.transcribe(path, config=config)
+    config      = aai.TranscriptionConfig(punctuate=True, format_text=True)
+    result      = transcriber.transcribe(path, config=config)
     if not result.text or not result.text.strip():
         raise RuntimeError("AssemblyAI returned an empty transcription.")
     return result.text
@@ -183,7 +169,7 @@ def process_video(path: str) -> str:
     clip = VideoFileClip(path)
     if clip.audio is None:
         raise ValueError("Video has no audio track.")
-    temp_audio = "temp.wav"
+    temp_audio = "/tmp/pipeline_audio.wav"
     clip.audio.write_audiofile(temp_audio, verbose=False, logger=None)
     clip.close()
     return transcribe_audio(temp_audio)
@@ -199,32 +185,58 @@ def encode_image_base64(path: str) -> tuple:
         return base64.b64encode(f.read()).decode("utf-8"), media_type
 
 # =========================================================
-# SYSTEM PROMPT  — shared anti-hallucination instruction
+# SYSTEM PROMPT — strict anti-hallucination
 # =========================================================
 
 SYSTEM_PROMPT = """\
-You are a deep emotional intelligence system.
+You are a precise emotional intelligence system.
 
-STRICT RULES — follow without exception:
-1. Only analyse what is ACTUALLY present in the content. Never invent, speculate,
-   or pad with plausible-sounding filler.
-2. If a category (emotions, relationships, personality, narrative, meaning) has NO
-   evidence in the content, respond for that field with exactly: null
-3. If the content is too thin, transactional, or ambiguous to support a field,
-   respond with: null
-4. Do NOT use phrases like "could suggest", "might imply", or "possibly indicates"
-   when there is no real evidence. Use null instead.
-5. Your analysis must be directly traceable to specific words, phrases, or visual
-   elements in the content.
+STRICT RULES — no exceptions:
+1. Only report what is DIRECTLY OBSERVABLE in the content. No speculation.
+2. If a field has no clear visual or textual evidence, respond with exactly: null
+3. Never use hedging phrases like "could suggest", "might imply", or "possibly".
+   If you are not certain from direct evidence, use null.
+4. Every claim must be traceable to a specific visible element or exact quote.
+5. Do not pad responses with filler. Concise and grounded only.
 """
 
 # =========================================================
-# GPT-4o VISION
+# PROMPTS — 3 fields only, no personality or meaning
 # =========================================================
 
-def analyze_gpt4o_vision(image_path: str, scene: str) -> str:
-    check_image_quality(image_path)          # ← quality gate
-    b64, media_type = encode_image_base64(image_path)
+USER_PROMPT_IMAGE = """\
+Analyse this image. For each field, respond only with what you can DIRECTLY observe.
+Use null if there is no clear evidence — do not guess.
+
+1. EMOTIONS      — emotions that are clearly visible (facial expressions, body language)
+2. RELATIONSHIPS — only state what is physically demonstrated (touching, shared action,
+                   matching clothing, name tags). Do NOT infer bonds from proximity alone.
+3. NARRATIVE     — describe only what is factually happening in the scene
+
+Do not invent or infer beyond what is visible.
+"""
+
+USER_PROMPT_TEXT = """\
+Analyse the following content. For each field, respond only with what is DIRECTLY stated.
+Use null if there is no evidence — do not guess.
+
+1. EMOTIONS      — emotions explicitly expressed or clearly described
+2. RELATIONSHIPS — relationships between people that are explicitly mentioned
+3. NARRATIVE     — summarise only what is factually present in the content
+
+Do not invent or infer beyond what is written.
+
+CONTENT:
+{content}
+"""
+
+# =========================================================
+# ANALYSIS — single pass
+# =========================================================
+
+def analyze_image(file_path: str) -> str:
+    check_image_quality(file_path)
+    b64, media_type = encode_image_base64(file_path)
 
     response = openai_client.chat.completions.create(
         model="gpt-4o",
@@ -240,129 +252,41 @@ def analyze_gpt4o_vision(image_path: str, scene: str) -> str:
                             "detail": "high",
                         },
                     },
-                    {
-                        "type": "text",
-                        "text": (
-                            f"Scene context: {SCENE_PROMPTS.get(scene, '')}\n\n"
-                            "Analyse this image. For each field below, respond only "
-                            "with what you can DIRECTLY observe. Use null if there "
-                            "is no evidence.\n\n"
-                            "1. EMOTIONS — emotions present or clearly implied\n"
-                            "2. RELATIONSHIPS — visible relationships between subjects\n"
-                            "3. PERSONALITY — personality traits with visual evidence\n"
-                            "4. NARRATIVE — the moment or story this captures\n"
-                            "5. MEANING — deeper significance if clearly present\n\n"
-                            "Do not invent details."
-                        ),
-                    },
+                    {"type": "text", "text": USER_PROMPT_IMAGE},
                 ],
             },
         ],
-        max_tokens=1000,
+        max_tokens=600,
     )
     return response.choices[0].message.content
 
-# =========================================================
-# GPT-4o TEXT  (audio / pdf / docx / txt)
-# =========================================================
 
-def analyze_gpt4o_text(text: str, scene: str, source: str = "text") -> str:
-    # ← quality gate (audio gets a stricter threshold)
+def analyze_text(text: str, source: str = "text") -> str:
     min_w = MIN_WORDS_AUDIO if source == "audio" else MIN_WORDS_TEXT
     check_text_quality(text, source=source, min_words=min_w)
 
-    prompt = (
-        f"Scene context: {SCENE_PROMPTS.get(scene, '')}\n\n"
-        "Analyse the following content. For each field, respond only with what is "
-        "DIRECTLY present. Use null if there is no evidence in the text.\n\n"
-        "Fields: Emotions | Relationships | Personality | Narrative | Meaning\n\n"
-        f"CONTENT:\n{text[:8000]}"
-    )
     response = openai_client.chat.completions.create(
         model="gpt-4o",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user",   "content": prompt},
+            {"role": "user",   "content": USER_PROMPT_TEXT.format(content=text[:8000])},
         ],
-        max_tokens=1000,
+        max_tokens=600,
     )
     return response.choices[0].message.content
 
 # =========================================================
-# GEMINI FALLBACK  (text only)
+# SUPABASE SAVE — correct fields matching your schema
 # =========================================================
 
-def analyze_gemini(text: str, scene: str) -> str:
-    prompt = (
-        f"Scene context: {SCENE_PROMPTS.get(scene, '')}\n\n"
-        f"{SYSTEM_PROMPT}\n\n"
-        "Analyse the following content. Use null for any field lacking evidence.\n\n"
-        "Fields: Emotions | Relationships | Personality | Narrative | Meaning\n\n"
-        f"CONTENT:\n{text[:8000]}"
-    )
-    model    = genai.GenerativeModel("gemini-1.5-pro")
-    response = model.generate_content(prompt)
-    if not response or not response.text:
-        raise ValueError("Empty Gemini response")
-    return response.text
-
-# =========================================================
-# ANALYSIS ROUTER
-# =========================================================
-
-def analyze(file_path: str, scene: str, is_image: bool, text: str,
-            source: str = "text") -> str:
-    log("Running GPT-4o analysis...")
-
-    # --- primary ---
-    try:
-        if is_image:
-            gpt4o_result = analyze_gpt4o_vision(file_path, scene)
-        else:
-            gpt4o_result = analyze_gpt4o_text(text, scene, source=source)
-    except InsufficientContentError as e:
-        # Surface the gate cleanly — no analysis, no hallucination
-        msg = f"[SKIPPED — insufficient content]\n{e}"
-        log(msg)
-        return msg
-    except Exception as e:
-        gpt4o_result = f"GPT-4o error: {e}"
-
-    print("\nGPT-4o OUTPUT:\n")
-    print(gpt4o_result[:1500])
-
-    # --- gemini fallback (text only) ---
-    gemini_result = ""
-    if "error" in gpt4o_result.lower() and not is_image:
-        log("Switching to Gemini Pro fallback...")
-        try:
-            # Gemini also goes through the quality gate inside analyze_gemini
-            check_text_quality(text, source="text (gemini fallback)")
-            gemini_result = analyze_gemini(text, scene)
-        except InsufficientContentError as e:
-            gemini_result = f"[SKIPPED — insufficient content]\n{e}"
-        except Exception as e:
-            gemini_result = f"Gemini error: {e}"
-
-    return (
-        f"================ GPT-4o OUTPUT ================\n{gpt4o_result}\n\n"
-        f"================ GEMINI OUTPUT ================\n"
-        f"{gemini_result if gemini_result else 'Not used / not required'}\n"
-        f"===============================================\n"
-    )
-
-# =========================================================
-# SUPABASE SAVE
-# =========================================================
-
-def save_to_supabase(text: str, analysis: str, scene: str, file_path: str):
+def save_to_supabase(text: str, analysis: str, file_path: str):
     try:
         response = supabase.table("documents").insert({
-            "type_name":     "memory_pipeline",
+            "memorial_id":   '7638e909-d995-437c-b01e-b913854009a7', # Hardcoded memorial_id for testing
+            "type_name":     "gpt4o_analysis",
             "content":       text[:10000],
             "mini_analysis": analysis,
-            "question_set":  scene,
-            "source_file":   os.path.basename(file_path),
+            "file_url":      os.path.basename(file_path),
         }).execute()
         log("Supabase insert successful")
         return response.data
@@ -371,19 +295,18 @@ def save_to_supabase(text: str, analysis: str, scene: str, file_path: str):
         return None
 
 # =========================================================
-# MAIN PIPELINE
+# MAIN PIPELINE — single pass
 # =========================================================
 
-def run(file_path: str, scene: str = "scene_first"):
-    log(f"Processing: {os.path.basename(file_path)}  |  scene: {scene}")
+def run(file_path: str):
+    log(f"Processing: {os.path.basename(file_path)}")
 
     ext      = file_path.rsplit(".", 1)[-1].lower()
     is_image = ext in ("jpg", "jpeg", "png", "webp")
     text     = ""
-    source   = "text"   # used to pick the right word threshold
+    source   = "text"
 
     try:
-        # ---- extract content ----
         if ext in ("mp3", "wav", "m4a"):
             text   = transcribe_audio(file_path)
             source = "audio"
@@ -406,7 +329,7 @@ def run(file_path: str, scene: str = "scene_first"):
 
         elif ext in ("mp4", "mov"):
             text   = process_video(file_path)
-            source = "audio"   # video → audio transcript
+            source = "audio"
 
         else:
             raise ValueError(f"Unsupported file type: .{ext}")
@@ -414,8 +337,18 @@ def run(file_path: str, scene: str = "scene_first"):
         if not is_image and not text.strip():
             raise ValueError("No content extracted from file.")
 
-        # ---- analyse (quality gate runs inside analyze()) ----
-        result = analyze(file_path, scene, is_image, text, source=source)
+        # ---- single analysis pass ----
+        try:
+            if is_image:
+                result = analyze_image(file_path)
+            else:
+                result = analyze_text(text, source=source)
+        except InsufficientContentError as e:
+            log(f"[SKIPPED — insufficient content]\n{e}")
+            return
+
+        print("\nOUTPUT:\n")
+        print(result)
 
         # ---- embed & index ----
         embed_src = result[:512] if is_image else text[:512]
@@ -423,8 +356,7 @@ def run(file_path: str, scene: str = "scene_first"):
         index.add(vec)
 
         # ---- persist ----
-        save_to_supabase(text, result, scene, file_path)
-
+        save_to_supabase(text, result, file_path)
         log(f"DONE: {os.path.basename(file_path)}")
 
     except Exception as e:
@@ -434,31 +366,59 @@ def run(file_path: str, scene: str = "scene_first"):
 # COLAB RUNNER
 # =========================================================
 
-from google.colab import files
+if __name__ == "__main__":
+    from google.colab import files
 
-print("\nUPLOAD FILES\n")
-uploaded = files.upload()
+    print("\nUPLOAD FILES\n")
+    uploaded = files.upload()
 
-upload_dir = "/content/uploads"
-os.makedirs(upload_dir, exist_ok=True)
+    upload_dir = "/content/uploads"
+    os.makedirs(upload_dir, exist_ok=True)
 
-confirmed_files = []
-for filename in uploaded.keys():
-    for candidate in (f"/content/{filename}", filename):
-        if os.path.exists(candidate):
-            dst = f"{upload_dir}/{filename}"
-            shutil.move(candidate, dst)
-            size = os.path.getsize(dst)
-            print(f"✓ {filename} ({size:,} bytes)")
-            confirmed_files.append(dst)
-            break
-    else:
-        print(f"✗ Could not locate {filename} — skipping")
+    confirmed_files = []
+    for filename in uploaded.keys():
+        for candidate in (f"/content/{filename}", filename):
+            if os.path.exists(candidate):
+                dst = f"{upload_dir}/{filename}"
+                shutil.move(candidate, dst)
+                size = os.path.getsize(dst)
+                print(f"✓ {filename} ({size:,} bytes)")
+                confirmed_files.append(dst)
+                break
+        else:
+            print(f"✗ Could not locate {filename} — skipping")
 
-print(f"\n{len(confirmed_files)} file(s) ready\n")
+    print(f"\n{len(confirmed_files)} file(s) ready\n")
 
-SCENES = ["warm_to_deep", "scene_first", "relational_lens"]
+    for file_path in confirmed_files:
+        run(file_path)
 
-for file_path in confirmed_files:
-    for scene in SCENES:
-        run(file_path, scene)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
