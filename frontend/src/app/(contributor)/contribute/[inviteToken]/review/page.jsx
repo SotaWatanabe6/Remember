@@ -160,7 +160,7 @@ export default function ReviewPage() {
     setIsSubmitting(true);
     setSubmitError("");
     try {
-      await submitContributorDraft(inviteToken);
+      await submitContributorDraft(inviteToken, draft);
       router.push(`/contribute/${inviteToken}/submitted`);
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "We could not submit your contribution. Please try again.");

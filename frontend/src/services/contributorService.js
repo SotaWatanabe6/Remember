@@ -583,8 +583,8 @@ export async function getContributorReviewDraft(inviteToken) {
   };
 }
 
-export async function submitContributorDraft(inviteToken) {
-  const draft = await getContributorReviewDraft(inviteToken);
+export async function submitContributorDraft(inviteToken, readyDraft = null) {
+  const draft = readyDraft?.status === "ready" ? readyDraft : await getContributorReviewDraft(inviteToken);
 
   if (draft.status !== "ready") {
     throw new Error("Your contribution could not be found. Please return to the invitation page.");
