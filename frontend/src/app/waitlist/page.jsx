@@ -111,17 +111,17 @@ export default function WaitListPage() {
 
         <div className="product-output-cards flex flex-col  gap-6 md:gap-12">
           <ProductOutfitCard
-            src="/images/slide-show-2.png"
+            src="/images/slideshow-4.png"
             alt="Slideshow preview"
             description="Their story, told by the people who knew them best"
           />
           <ProductOutfitCard
-            src="/images/constellation-2.png"
+            src="/images/constellation-4.png"
             alt="Constellation preview"
             description="Every part of who they were, all connected"
           />
           <ProductOutfitCard
-            src="/images/voices-2.png"
+            src="/images/voice-11.png"
             alt="Voices preview"
             description="The words the people who loved them still carry"
           />
