@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useEffect, useState } from "react";
-import { getSupabaseClient } from "../../../lib/supabaseClient";
+import { motion, useReducedMotion } from "framer-motion";
 
 export default function WaitlistForm(props) {
   const defaultFormFields = {
@@ -17,6 +17,7 @@ export default function WaitlistForm(props) {
   const [errors, setErrors] = useState(defaultFormFields);
   const [touched, setTouched] = useState(defaultFormFields);
   const [isSubmitted, setSubmitted] = useState(false);
+  const shouldReduceMotion = useReducedMotion();
 
   const patterns = {
     firstName: /^[a-zA-Z\s\-']{2,}$/,
@@ -126,13 +127,18 @@ export default function WaitlistForm(props) {
     <>
       <dialog
         ref={formModal}
-        className="backdrop:bg-[#F2ECE4] bg-transparent max-w-[804px] h-full flex justify-center items-center mx-auto backdrop:opacity-100"
+        className="mx-auto flex h-full w-full max-w-[804px] items-center justify-center bg-transparent px-4 backdrop:bg-[#F2ECE4] backdrop:opacity-100 sm:px-6"
       >
         {/* form */}
         {!isSubmitted && (
-          <div className="relative bg-white w-full mx-auto px-6 py-12 flex flex-col gap-10 rounded-3xl">
+          <motion.div
+            className="relative mx-auto flex max-h-[90vh] w-full flex-col gap-8 overflow-y-auto rounded-3xl bg-white px-5 py-10 sm:px-6 sm:py-12"
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 24, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+          >
             <button
-              className="absolute right-6 top-5 w-6 h-6"
+              className="absolute right-5 top-5 h-6 w-6"
               onClick={handleModalClose}
             >
               x
@@ -140,10 +146,10 @@ export default function WaitlistForm(props) {
 
             {/* text */}
             <div>
-              <h2 className="text-[28px] uppercase text-center font-family-display font-bold leading-[34px] tracking-[0.05em]">
+              <h2 className="text-center text-2xl font-bold uppercase leading-[34px] tracking-[0.05em] font-family-display sm:text-[28px]">
                 Get Early Access
               </h2>
-              <p className="text-center">
+              <p className="mx-auto mt-2 max-w-[34rem] text-center text-sm text-[#4f4f4f] sm:text-base">
                 Join the waitlist and we&apos;ll reach out personally when
                 Remember is ready for you.
               </p>
@@ -152,8 +158,8 @@ export default function WaitlistForm(props) {
             <form action="" onSubmit={handleSubmit}>
               <div className="w-full flex flex-col gap-7">
                 {/* name */}
-                <div className="flex gap-3">
-                  <div className="w-[50%] flex flex-col gap-1">
+                <div className="flex flex-col gap-4 sm:flex-row sm:gap-3">
+                  <div className="flex w-full flex-col gap-1">
                     <label>First Name</label>
                     <input
                       className={getInputStyles("firstName")}
@@ -172,7 +178,7 @@ export default function WaitlistForm(props) {
                     )}
                   </div>
 
-                  <div className="w-[50%] flex flex-col gap-1">
+                  <div className="flex w-full flex-col gap-1">
                     <label>Last Name</label>
                     <input
                       className={getInputStyles("lastName")}
@@ -237,9 +243,9 @@ export default function WaitlistForm(props) {
                 {/* bottom wrapper */}
                 <div className="flex flex-col gap-5">
                   {/* checkbox */}
-                  <div className="flex gap-2 text-[16px] accent-[#6C7C5B]">
+                  <div className="flex items-start gap-3 text-[16px] accent-[#6C7C5B]">
                     <input
-                      className="w-5"
+                      className="mt-1 w-5 shrink-0"
                       type="checkbox"
                       name="interview"
                       id="interview"
@@ -247,7 +253,7 @@ export default function WaitlistForm(props) {
                       checked={formData.interview}
                       onChange={handleChange}
                     />
-                    <span className="inline-block text-[#767676] font-semibold">
+                    <span className="inline-block text-sm font-semibold text-[#767676] sm:text-[16px]">
                       By checking this box, I agree to participate in a short
                       follow-up survey about my experience using Remember during
                       this early access period.
@@ -256,7 +262,7 @@ export default function WaitlistForm(props) {
 
                   {/* message to subscriber */}
                   <div>
-                    <p className="text-[#767676] text-[10px] uppercase text-center">
+                    <p className="text-center text-[10px] uppercase text-[#767676]">
                       After your experience, you will receive a short feedback
                       form that helps shape what Remember becomes.
                     </p>
@@ -272,27 +278,32 @@ export default function WaitlistForm(props) {
                 </div>
               </div>
             </form>
-          </div>
+          </motion.div>
         )}
 
         {/* after form submission */}
         {isSubmitted && (
-          <div className="relative bg-white w-full mx-auto px-6 py-12 flex flex-col gap-10 rounded-3xl">
+          <motion.div
+            className="relative mx-auto flex w-full flex-col gap-8 rounded-3xl bg-white px-5 py-10 sm:px-6 sm:py-12"
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 24, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+          >
             <button
-              className="absolute right-6 top-5 w-6 h-6"
+              className="absolute right-5 top-5 h-6 w-6"
               onClick={handleModalClose}
             >
               x
             </button>
 
             {/* text */}
-            <div className="w-[500px] h-[300px] flex flex-col items-center justify-center gap-4">
-              <h2 className="text-[28px] uppercase text-center font-family-display font-bold leading-[34px] tracking-[0.02em]">
+            <div className="flex min-h-[220px] w-full flex-col items-center justify-center gap-4 text-center sm:min-h-[300px] sm:max-w-[500px] sm:self-center">
+              <h2 className="text-2xl font-bold uppercase leading-[34px] tracking-[0.02em] font-family-display sm:text-[28px]">
                 Thank you!
               </h2>
               <p className="text-center">We&apos;ll be in touch</p>
             </div>
-          </div>
+          </motion.div>
         )}
       </dialog>
     </>

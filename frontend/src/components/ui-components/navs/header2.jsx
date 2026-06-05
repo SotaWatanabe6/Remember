@@ -15,9 +15,11 @@ export default function Header2({ backHref }) {
   };
 
   return (
-    <header className="mx-auto flex w-full max-w-[1340px] items-center justify-between">
+    <header className="mx-auto flex w-full max-w-[1340px] items-center  font-(--font-family-body) justify-between">
       <div className="logo">
-        <p className="text-[24px] font-normal text-(--text-color-1)">Remember</p>
+        <p className="text-[24px] font-normal text-(--text-color-1)">
+          Remember
+        </p>
       </div>
       <div>
         <button
