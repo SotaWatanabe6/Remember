@@ -6,7 +6,7 @@ export default function DashboardButton({
   return (
     <button
       type={type}
-      className={`flex h-[67px] w-[207px] items-center justify-center rounded-full bg-(--button-color) text-[20px] font-bold leading-[30px] text-white transition hover:bg-neutral-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-400 ${className}`}
+      className={`flex h-[67px] w-[207px] items-center justify-center rounded-full bg-r-btn text-[20px] font-bold leading-[30px] text-r-btn-text transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-r-border-focus ${className}`}
     >
       {text}
     </button>

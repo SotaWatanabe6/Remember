@@ -44,14 +44,16 @@ export default function AccountBoardPage() {
   }, []);
 
   return (
-    <>
+    <div className="p-(--page-pad-x)">
       <Header2 />
 
-      <main className="mx-auto flex w-full max-w-[1340px] flex-col pb-16 pt-[96px] sm:pb-24 sm:pt-[110px]">
+      <main className="mx-auto flex w-full max-w-[1340px] flex-col px-6 pb-16 pt-[96px] sm:px-[50px] sm:pb-24 sm:pt-[110px]">
         <section className="relative flex min-h-[200px] sm:min-h-[280px] flex-col items-center justify-center px-4 text-center">
           <div className="mb-6 sm:mb-9 flex size-[80px] sm:size-[124px] items-center justify-center rounded-full bg-[#C4D2E3]" />
-          <h1 className="text-2xl sm:text-h1 text-[#0A0A0A]">Your Memorials</h1>
-          <p className="mt-5 text-body-1 text-(--text-color-2)">
+          <h1 className="font-family-display text-2xl text-r-text sm:text-h1">
+            Your Memorials
+          </h1>
+          <p className="mt-5 font-family-body text-body-1 text-r-secondary">
             All memorials you created will be stored here
           </p>
         </section>
@@ -62,12 +64,12 @@ export default function AccountBoardPage() {
         >
           <Link
             href="/memorial/create"
-            className="flex min-h-[365px] flex-col items-center justify-center rounded-[20px] border border-[#D7DBE2] bg-white px-8 text-center shadow-[0_1px_10px_rgba(0,0,0,0.04)] transition hover:border-[#0A0A0A] hover:shadow-[0_10px_24px_rgba(0,0,0,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-400"
+            className="flex min-h-[365px] flex-col items-center justify-center rounded-[20px] border border-r-border bg-white px-8 text-center shadow-[0_1px_10px_rgba(0,0,0,0.04)] transition hover:border-r-border-focus hover:shadow-[0_10px_24px_rgba(0,0,0,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-r-border-focus"
           >
-            <span className="flex size-[52px] items-center justify-center rounded-full border border-[#5F5F5F] text-[40px] font-light leading-none text-[#5F5F5F]">
+            <span className="flex size-[52px] items-center justify-center rounded-full border border-r-btn-text text-[40px] font-light leading-none text-r-btn-text">
               +
             </span>
-            <span className="mt-6 text-[24px] font-medium leading-[32px] text-[#0A0A0A]">
+            <span className="mt-6 font-family-display text-[24px] font-medium leading-[32px] text-r-text">
               Create new
             </span>
           </Link>
@@ -113,6 +115,6 @@ export default function AccountBoardPage() {
             : null}
         </section>
       </main>
-    </>
+    </div>
   );
 }

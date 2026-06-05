@@ -41,7 +41,7 @@ const initialRemembered = {
 };
 
 const fieldClassName =
-  "h-[63px] w-full rounded-[13px] border border-[#CAD5E2] bg-white px-5 text-[20px] leading-[30px] text-[#0A0A0A] outline-none transition placeholder:text-[#0A0A0A80] focus:border-slate-500 focus:ring-2 focus:ring-slate-200";
+  "h-[63px] w-full rounded-[13px] border border-r-border bg-white px-5 text-[20px] leading-[30px] text-[#0A0A0A] outline-none transition placeholder:text-[#0A0A0A80] focus:border-r-border-focus focus:ring-2 focus:ring-r-border/40";
 
 const labelClassName = "text-[24px] font-medium leading-none text-[#0A0A0A]";
 
@@ -412,7 +412,7 @@ export default function MemorialCreateForm() {
           value={remembered.briefBiography}
           onChange={updateField}
           placeholder="Please share a few words about who they were, what they loved, and any other details you feel is important to preserve their memory."
-          className="min-h-[252px] w-full resize-none rounded-[13px] border border-[#CAD5E2] bg-white px-5 py-4 text-[20px] leading-[30px] text-[#0A0A0A] outline-none transition placeholder:text-[#818487] focus:border-slate-500 focus:ring-2 focus:ring-slate-200 disabled:opacity-50"
+          className="min-h-[252px] w-full resize-none rounded-[13px] border border-r-border bg-white px-5 py-4 text-[20px] leading-[30px] text-[#0A0A0A] outline-none transition placeholder:text-[#818487] focus:border-r-border-focus focus:ring-2 focus:ring-r-border/40 disabled:opacity-50"
           disabled={isSubmitting}
         />
       </div>
@@ -489,7 +489,7 @@ export default function MemorialCreateForm() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="flex h-[72px] w-full max-w-[434px] items-center justify-center rounded-full bg-[#0A0A0A] px-10 text-[20px] font-bold leading-[30px] text-white transition hover:bg-neutral-800 disabled:opacity-50"
+          className="flex h-[72px] w-full max-w-[434px] items-center justify-center rounded-full bg-r-btn px-10 text-[20px] font-bold leading-[30px] text-r-btn-text transition hover:brightness-95 disabled:opacity-50"
         >
           {isSubmitting ? "Creating..." : "Continue"}
         </button>

@@ -24,7 +24,7 @@ const reviewErrorCopy = {
 
 function ContributorNav({ backHref }) {
   return (
-    <nav className="flex h-10 items-center justify-between">
+    <nav className="flex h-10 items-center justify-between pt-2 sm:pt-4">
       <span className="text-2xl leading-8 text-r-text">Remember</span>
       <Link href={backHref} className="flex items-center gap-1.5 text-body-2 text-r-secondary transition-colors">
         <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">

@@ -9,7 +9,7 @@ import Link from 'next/link';
 
 function ContributorNav({ backHref }) {
   return (
-    <nav className="flex h-10 items-center justify-between">
+    <nav className="flex h-10 items-center justify-between pt-2 sm:pt-4">
       <span className="text-r-text text-2xl leading-8">Remember</span>
       <Link
         href={backHref}

@@ -19,8 +19,8 @@ export default function AuthInput({
         id={id}
         aria-invalid={Boolean(error)}
         aria-describedby={errorId}
-        className={`h-[63px] w-full rounded-[13px] border bg-white px-5 text-xl text-neutral-950 outline-none transition placeholder:text-neutral-950/50 focus:border-slate-500 focus:ring-2 focus:ring-slate-200 ${
-          error ? "border-red-400" : "border-slate-300"
+        className={`h-[63px] w-full rounded-[13px] border bg-white px-5 text-xl text-neutral-950 outline-none transition placeholder:text-neutral-950/50 focus:border-r-border-focus focus:ring-2 focus:ring-r-border/40 ${
+          error ? "border-red-400" : "border-r-border"
         }`}
         {...inputProps}
       />

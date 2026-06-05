@@ -48,8 +48,8 @@ export default function WaitlistForm(props) {
     const newValue = type === "checkbox" ? checked : value;
 
     setFormData((prev) => ({ ...prev, [name]: newValue }));
-
-    if (touched[name]) {
+    if (type !== "checkbox") {
+      setTouched((prev) => ({ ...prev, [name]: true }));
       setErrors((prev) => ({ ...prev, [name]: validate(name, newValue) }));
     }
   }
@@ -73,13 +73,11 @@ export default function WaitlistForm(props) {
   }
 
   const isFormValid =
-    !errors.firstName &&
-    touched.firstName &&
-    !errors.lastName &&
-    touched.lastName &&
-    !errors.email &&
-    touched.email &&
-    (formData.phone === "" || !errors.phone);
+    !validate("firstName", formData.firstName) &&
+    !validate("lastName", formData.lastName) &&
+    !validate("email", formData.email) &&
+    !validate("phone", formData.phone) &&
+    formData.interview;
 
   // open modal
   useEffect(() => {
@@ -271,7 +269,7 @@ export default function WaitlistForm(props) {
                   <button
                     disabled={!isFormValid}
                     type="submit"
-                    className="h-12.5 w-full rounded-sm bg-(--shape-fill) font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="h-12.5 w-full rounded-sm bg-(--shape-fill) font-bold text-white transition-colors disabled:cursor-not-allowed disabled:bg-[#AEB99F]"
                   >
                     reserve my spot
                   </button>

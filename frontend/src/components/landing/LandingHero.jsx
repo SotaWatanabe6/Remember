@@ -6,7 +6,7 @@ export default function LandingHero() {
       className="flex w-full flex-col items-center text-center"
       aria-labelledby="landing-hero-title"
     >
-      <div className="flex size-[160px] items-center justify-center rounded-full bg-[#cad5e2] text-xs leading-normal text-black sm:size-[200px]">
+      <div className="flex size-[160px] items-center justify-center rounded-full bg-[#6C7C5B] text-xs leading-normal text-black sm:size-[200px]">
         logo
       </div>
 
@@ -18,13 +18,14 @@ export default function LandingHero() {
           Preserve Their Legacy Together
         </h1>
         <p className="max-w-[768px] text-lg leading-snug text-slate-600 sm:text-xl sm:leading-none">
-          Create a private, dignified space where family and friends can share memories of your loved one.
+          Create a private, dignified space where family and friends can share
+          memories of your loved one.
         </p>
       </div>
 
       <Link
         href="/signup"
-        className="mt-[50px] flex h-[67px] w-full max-w-[434px] items-center justify-center rounded-full bg-[#0a0a0a] px-10 text-center text-[20px] font-bold leading-[30px] text-white transition hover:bg-neutral-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-500"
+        className="mt-[50px] flex h-[67px] w-full max-w-[434px] items-center justify-center rounded-full bg-[#D0BFAA] px-10 text-center text-[20px] font-normal leading-[30px] text-[#H2B1C1] transition hover:bg-[rgb(206,200,170)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-500"
       >
         Create a memorial
       </Link>
