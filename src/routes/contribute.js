@@ -4,6 +4,13 @@ const { randomUUID } = require('crypto')
 const { Readable } = require('stream')
 const router = express.Router()
 const supabase = require('../supabase')
+const {
+  resolveStorageUrl,
+  resolveMediaRecord,
+  enrichMemorialForClient,
+} = require('../services/storageUrls')
+const { analyzeAndUpdateMediaAsset } = require('../services/photoIdentity')
+const { processVoiceRecording } = require('../services/voiceProcessing')
 
 const PHOTO_STORAGE_BUCKET =
   process.env.CONTRIBUTOR_PHOTO_BUCKET ||
@@ -138,11 +145,13 @@ router.get('/:token', async (req, res) => {
       return res.status(410).json({ error: 'This link has reached its maximum uses.' })
     }
 
-    const { data: memorial } = await supabase
+    const { data: memorialRow } = await supabase
       .from('memorials')
-      .select('id, subject_name, cover_photo_url')
+      .select('id, subject_name, cover_photo_url, nickname')
       .eq('id', invite.memorial_id)
       .single()
+
+    const memorial = await enrichMemorialForClient(supabase, memorialRow)
 
     res.json({
       memorial,
@@ -307,6 +316,71 @@ router.post('/:token/submit', async (req, res) => {
   }
 })
 
+// GET /contribute/:token/photos — list uploaded photos for a contributor session
+router.get('/:token/photos', async (req, res) => {
+  try {
+    const contributor_token = req.query.contributor_token
+    if (!contributor_token) {
+      return res.status(400).json({ error: 'contributor_token is required' })
+    }
+
+    const { data: invite, error: inviteError } = await supabase
+      .from('invite_links')
+      .select('id, memorial_id, is_active')
+      .eq('token', req.params.token)
+      .single()
+
+    if (inviteError || !invite || !invite.is_active) {
+      return res.status(410).json({ error: 'This link is no longer active.' })
+    }
+
+    const { data: contributor } = await supabase
+      .from('contributors')
+      .select('id, memorial_id')
+      .eq('id', contributor_token)
+      .single()
+
+    if (!contributor || contributor.memorial_id !== invite.memorial_id) {
+      return res.status(403).json({ error: 'Contributor does not belong to this invitation.' })
+    }
+
+    const { data: memorial } = await supabase
+      .from('memorials')
+      .select('id, subject_name, cover_photo_url, nickname')
+      .eq('id', invite.memorial_id)
+      .single()
+
+    const { data: assets, error } = await supabase
+      .from('media_assets')
+      .select('id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption, ai_labels, ai_people_count, people_labels, ai_analysis_status')
+      .eq('contributor_id', contributor.id)
+      .eq('memorial_id', contributor.memorial_id)
+      .order('created_at', { ascending: true })
+
+    if (error) return res.status(400).json({ error: error.message })
+
+    const analyzed = memorial?.cover_photo_url
+      ? await Promise.all((assets || []).map((asset) => analyzeAndUpdateMediaAsset(supabase, memorial, asset)))
+      : assets || []
+
+    const photos = await Promise.all(analyzed.map((asset) => resolveMediaRecord(supabase, asset)))
+    const memorialForClient = memorial
+      ? await enrichMemorialForClient(supabase, memorial)
+      : null
+    res.json({
+      photos,
+      memorial: memorialForClient
+        ? {
+            subject_name: memorialForClient.subject_name,
+            cover_photo_url: memorialForClient.cover_photo_url,
+          }
+        : null,
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // POST /contribute/:token/photos
 router.post('/:token/photos', async (req, res) => {
   try {
@@ -330,6 +404,12 @@ router.post('/:token/photos', async (req, res) => {
     if (inviteError || !invite || !invite.is_active) {
       return res.status(410).json({ error: 'This link is no longer active.' })
     }
+
+    const { data: memorial } = await supabase
+      .from('memorials')
+      .select('id, subject_name, cover_photo_url, nickname')
+      .eq('id', invite.memorial_id)
+      .single()
 
     const { data: contributor } = await supabase
       .from('contributors')
@@ -391,7 +471,12 @@ router.post('/:token/photos', async (req, res) => {
         continue
       }
 
-      uploadedFiles.push(mediaAsset)
+      let withUrl = await resolveMediaRecord(supabase, mediaAsset)
+      if (memorial?.cover_photo_url) {
+        const analyzed = await analyzeAndUpdateMediaAsset(supabase, memorial, mediaAsset)
+        withUrl = await resolveMediaRecord(supabase, analyzed)
+      }
+      uploadedFiles.push(withUrl)
     }
 
     if (!uploadedFiles.length) {
@@ -411,10 +496,93 @@ router.post('/:token/photos', async (req, res) => {
     res.status(uploadErrors.length ? 207 : 201).json({
       uploaded: uploadedFiles.length,
       files: uploadedFiles,
-      errors: uploadErrors
+      errors: uploadErrors,
+      reference_portrait_set: Boolean(memorial?.cover_photo_url),
     })
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message })
+  }
+})
+
+function normalizePeopleLabels(raw) {
+  if (!Array.isArray(raw)) return null
+  const labels = raw
+    .map((entry) => ({
+      name: typeof entry?.name === 'string' ? entry.name.trim() : '',
+      relationship: typeof entry?.relationship === 'string' ? entry.relationship.trim() : '',
+    }))
+    .filter((entry) => entry.name || entry.relationship)
+    .filter((entry) => {
+      if (entry.relationship === 'memorial_subject') return true
+      return Boolean(entry.name)
+    })
+
+  return labels.length ? labels : null
+}
+
+// POST /contribute/:token/photos/:photoId/label — save who is in the photo
+router.post('/:token/photos/:photoId/label', async (req, res) => {
+  try {
+    const { contributor_token, people_labels } = req.body
+
+    if (!contributor_token) {
+      return res.status(400).json({ error: 'contributor_token is required' })
+    }
+
+    const normalizedLabels = normalizePeopleLabels(people_labels)
+    if (!normalizedLabels) {
+      return res.status(400).json({
+        error: 'Please enter their name so they appear on the relationship tree (not "Someone").',
+      })
+    }
+
+    const { data: invite, error: inviteError } = await supabase
+      .from('invite_links')
+      .select('id, memorial_id, is_active')
+      .eq('token', req.params.token)
+      .single()
+
+    if (inviteError || !invite || !invite.is_active) {
+      return res.status(410).json({ error: 'This link is no longer active.' })
+    }
+
+    const { data: contributor } = await supabase
+      .from('contributors')
+      .select('id, memorial_id')
+      .eq('id', contributor_token)
+      .single()
+
+    if (!contributor || contributor.memorial_id !== invite.memorial_id) {
+      return res.status(403).json({ error: 'Contributor does not belong to this invitation.' })
+    }
+
+    const { data: asset, error: assetError } = await supabase
+      .from('media_assets')
+      .select('id, contributor_id, memorial_id')
+      .eq('id', req.params.photoId)
+      .eq('contributor_id', contributor.id)
+      .eq('memorial_id', invite.memorial_id)
+      .single()
+
+    if (assetError || !asset) {
+      return res.status(404).json({ error: 'Photo not found' })
+    }
+
+    const { data: updated, error: updateError } = await supabase
+      .from('media_assets')
+      .update({
+        people_labels: normalizedLabels,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', asset.id)
+      .select('id, people_labels, ai_labels, ai_people_count')
+      .single()
+
+    if (updateError) return res.status(400).json({ error: updateError.message })
+
+    res.json({ photo: updated })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
   }
 })
 
@@ -507,7 +675,7 @@ router.post('/:token/voice', async (req, res) => {
 
     const { data: contributor } = await supabase
       .from('contributors')
-      .select('id, memorial_id')
+      .select('id, memorial_id, name')
       .eq('id', contributor_token)
       .single()
 
@@ -515,6 +683,12 @@ router.post('/:token/voice', async (req, res) => {
     if (contributor.memorial_id !== invite.memorial_id) {
       return res.status(403).json({ error: 'Contributor does not belong to this invitation.' })
     }
+
+    const { data: memorial } = await supabase
+      .from('memorials')
+      .select('subject_name')
+      .eq('id', contributor.memorial_id)
+      .single()
 
     const safeFileName = sanitizeFileName(submittedFile.name || 'voice-recording')
     const storagePath = `memorials/${contributor.memorial_id}/contributions/${contributor.id}/voice/${randomUUID()}-${safeFileName}`
@@ -551,13 +725,46 @@ router.post('/:token/voice', async (req, res) => {
       return res.status(400).json({ error: recordingError.message })
     }
 
+    let voiceMeta = {}
+    try {
+      voiceMeta = await processVoiceRecording({
+        fileBuffer,
+        mimeType,
+        fileName: safeFileName,
+        subjectName: memorial?.subject_name || 'their loved one',
+        contributorName: contributor.name,
+      })
+    } catch (voiceErr) {
+      console.error('[voice] processing failed:', voiceErr.message)
+    }
+
+    const { data: enrichedRecording } = await supabase
+      .from('voice_recordings')
+      .update({
+        transcript_text: voiceMeta.transcript_text || null,
+        key_quote: voiceMeta.key_quote || null,
+        ai_category: voiceMeta.ai_category || 'memory',
+        transcription_status: voiceMeta.transcript_text ? 'complete' : 'pending',
+        ai_tags: {
+          intro_line: voiceMeta.intro_line || null,
+          clip_start_seconds: voiceMeta.clip_start_seconds ?? 0,
+          clip_end_seconds: voiceMeta.clip_end_seconds ?? null,
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', recording.id)
+      .select(
+        'id, contributor_title, storage_path, storage_bucket, file_name, transcript_text, key_quote, ai_category, ai_tags, transcription_status',
+      )
+      .single()
+
     await supabase
       .from('contributors')
       .update({ voice_done: true, updated_at: new Date().toISOString() })
       .eq('id', contributor_token)
 
     res.status(201).json({
-      recording
+      recording: enrichedRecording || recording,
     })
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message })

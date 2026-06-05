@@ -70,6 +70,7 @@ CREATE TABLE media_assets (
   ai_emotion text,
   ai_scene text,
   ai_people_count integer,
+  people_labels jsonb,
   theme_ids jsonb,
   is_flagged boolean DEFAULT false,
   flagged_reason text,

@@ -223,8 +223,8 @@ export default function ReviewPage() {
             <div className="grid grid-cols-3 gap-3">
               {summary.photos.map((photo) => (
                 <div key={photo.id} className="relative aspect-square overflow-hidden rounded-xl bg-r-card">
-                  {photo.previewUrl ? (
-                    <Image src={photo.previewUrl} alt={photo.file_name} fill sizes="(min-width: 640px) 200px, 30vw" className="object-cover" unoptimized />
+                  {photo.previewUrl || photo.url ? (
+                    <Image src={photo.previewUrl || photo.url} alt={photo.file_name} fill sizes="(min-width: 640px) 200px, 30vw" className="object-cover" unoptimized />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center px-2 text-center text-caption text-r-muted">{photo.file_name}</div>
                   )}

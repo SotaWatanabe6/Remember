@@ -248,7 +248,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
   }, [inviteToken, router]);
 
   const saveAnswer = useCallback(
-    async (questionId, answerSnapshot) => {
+    async (questionId, answerSnapshot, { force = false } = {}) => {
       const questionIndex = CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.findIndex(
         (question) => question.id === questionId,
       );
@@ -259,6 +259,13 @@ export default function QuestionnaireFlow({ inviteToken }) {
 
       const answerToSave = answerSnapshot ?? createEmptyAnswer();
       const serializedAnswer = serializeAnswer(answerToSave);
+
+      if (!force && !(answerToSave.answer_text ?? "").trim()) {
+        if (currentQuestionIdRef.current === questionId) {
+          setAutosaveStatus("idle");
+        }
+        return true;
+      }
 
       if (lastSavedAnswersRef.current[questionId] === serializedAnswer) {
         if (currentQuestionIdRef.current === questionId) {
@@ -330,11 +337,11 @@ export default function QuestionnaireFlow({ inviteToken }) {
         }
       }
     },
-    [inviteToken],
+    [draft, inviteToken],
   );
 
   const queueSave = useCallback(
-    (questionId, answerSnapshot, delayMs = 1000) => {
+    (questionId, answerSnapshot, delayMs = 2000) => {
       window.clearTimeout(saveTimerRef.current);
 
       if (currentQuestionIdRef.current === questionId) {
@@ -414,7 +421,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
         ...currentAnswers,
         [questionId]: nextAnswer,
       }));
-      queueSave(questionId, nextAnswer, 200);
+      queueSave(questionId, nextAnswer, 1200);
     },
     [queueSave],
   );
@@ -466,6 +473,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
     const didSave = await saveAnswer(
       currentQuestion.id,
       answersRef.current[currentQuestion.id] ?? createEmptyAnswer(),
+      { force: true },
     );
     if (!didSave) {
       setIsNavigating(false);
@@ -487,6 +495,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
   const didSave = await saveAnswer(
     currentQuestion.id,
     answersRef.current[currentQuestion.id] ?? createEmptyAnswer(),
+    { force: true },
   );
   if (!didSave) {
     setIsNavigating(false);
@@ -504,7 +513,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
         return;
       }
 
-      saveAnswer(questionId, answersRef.current[questionId] ?? createEmptyAnswer());
+      saveAnswer(questionId, answersRef.current[questionId] ?? createEmptyAnswer(), { force: true });
     };
 
     const handleVisibilityChange = () => {

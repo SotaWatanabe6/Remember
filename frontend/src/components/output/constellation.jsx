@@ -7,7 +7,103 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import { getContributors,getMemorial} from '@/lib/api';
+import { getMemorialLabeledPeople, renameMemorialLabeledPerson } from '@/lib/api';
+
+function needsPersonName(person) {
+  if (!person) return false;
+  return (
+    person.needs_name === true || /^someone$/i.test(String(person?.name || '').trim())
+  );
+}
+
+function capitalizeFirstLetter(str) {
+  if (!str || str === 'null') return str;
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function personToGraphNode(person) {
+  return {
+    id: person.id,
+    name: person.name,
+    relationship_type: capitalizeFirstLetter(person.relationship_type) || 'Other',
+    prominence: 0.5 + Math.min((person.photo_count || 1) * 0.1, 0.4),
+    summary: '',
+    photos: person.photo_urls || [],
+    photo_urls: person.photo_urls || [],
+    photo_ids: person.photo_ids || [],
+    quotes: [],
+    contributions: person.photo_count || 0,
+    needs_name: needsPersonName(person),
+  };
+}
+
+function PersonNameEditor({ memorialId, personId, relationshipType, onSaved, compact = false }) {
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    if (!memorialId || !personId) return;
+    setSaving(true);
+    setError('');
+    try {
+      const result = await renameMemorialLabeledPerson(memorialId, personId, name);
+      onSaved?.(result.people || [], personId);
+      setName('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save name.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className={
+        compact
+          ? 'mt-3 space-y-2'
+          : 'rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3'
+      }
+    >
+      {!compact ? (
+        <p className="text-sm text-amber-900">
+          This person is labeled as &ldquo;Someone&rdquo; on the relationship tree. Add their name
+          {relationshipType ? ` (${relationshipType})` : ''} so it appears on every tagged photo.
+        </p>
+      ) : (
+        <p className="text-xs text-gray-600">Name this person for the constellation</p>
+      )}
+      <div className={compact ? 'flex flex-wrap gap-2' : 'flex flex-col gap-2 sm:flex-row'}>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Their name"
+          required
+          className={
+            compact
+              ? 'min-w-[140px] flex-1 rounded border border-gray-300 px-3 py-2 text-sm'
+              : 'flex-1 rounded-lg border border-amber-300 bg-white px-4 py-2.5 text-base'
+          }
+        />
+        <button
+          type="submit"
+          disabled={saving || !name.trim()}
+          className={
+            compact
+              ? 'rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50'
+              : 'rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50'
+          }
+        >
+          {saving ? 'Saving…' : 'Save name'}
+        </button>
+      </div>
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+    </form>
+  );
+}
 
 
 
@@ -110,18 +206,38 @@ function PulsingPlaceholder() {
   );
 }
 
-export default function ConstellationGraph({ ai_output ,memorial, contributor, width, height}) {
+function buildRelationshipCounts(people = []) {
+  const counts = people.reduce((acc, person) => {
+    const type = person.relationship_type || 'Other';
+    const key = type.charAt(0).toUpperCase() + type.slice(1);
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  return Object.entries(counts).map(([relationship_type, count]) => ({
+    relationship_type,
+    count,
+  }));
+}
+
+export default function ConstellationGraph({
+  ai_output,
+  memorial,
+  contributor = [],
+  labeledPeople: labeledPeopleProp,
+  allowRename = false,
+  width,
+  height,
+}) {
   const ref = useRef(null);
-  console.log(memorial);
-  const { id } = useParams();
-  // Don't need to add constellation Loading since D3.js made the transition
-  // Removed also the sitetimeout cause that causes the problem filter features
+  const { id: routeMemorialId } = useParams();
+  const memorialId = memorial?.id || routeMemorialId;
   const [constellationLoading, setConstellationLoading] = useState(false);
   const [selectedNode, setSelectedNode] = useState(null);
   const [tab, setTab] = useState("Themes");
   const [hiddenContributors, setHiddenContributors] = useState({});
   const [hiddenRelationshipType, setHiddenRelationshipType] = useState({});
-  const [hiddenThemes, setHiddenThemes] = useState({});  
+  const [hiddenThemes, setHiddenThemes] = useState({});
+  const [labeledPeople, setLabeledPeople] = useState(labeledPeopleProp || []);
   const handleThemesChange = (nodeId) => {
     setHiddenThemes((prev) => ({
       ...prev,
@@ -129,10 +245,6 @@ export default function ConstellationGraph({ ai_output ,memorial, contributor, w
     }));    
   };  
 
-  function capitalizeFirstLetter(str) {
-    if(!str || str=='null') return str;
-    return str.charAt(0).toUpperCase() + str.slice(1);
-  }
   const handleRelationshipTypesChange = (nodeId) => {
     setHiddenRelationshipType((prev) => ({
       ...prev,
@@ -149,18 +261,82 @@ export default function ConstellationGraph({ ai_output ,memorial, contributor, w
 
   };  
   const [relationshipCounts, setRelationshipCounts] = useState(
-    Object.entries(
-      contributor.reduce((acc, item) => {
-          acc[capitalizeFirstLetter(item.relationship_type)] =
-            (acc[capitalizeFirstLetter(item.relationship_type)] || 0) + 1;
-          return acc;
-        }, {})
-      ).map(([relationship_type, count]) => ({
-        relationship_type: capitalizeFirstLetter(relationship_type),
-        count,
-      }))    
+    buildRelationshipCounts(labeledPeopleProp || []),
   );
-  console.log(ai_output.constellation);
+
+  const applyLabeledPeople = (people) => {
+    const list = people || [];
+    setLabeledPeople(list);
+    setRelationshipCounts(buildRelationshipCounts(list));
+    if (tab === 'Relationships') {
+      const graph = buildRelationshipGraph(list);
+      setNodes(graph.nodes);
+      setLinks(graph.links);
+    }
+  };
+
+  const handlePersonRenamed = (people, oldPersonId) => {
+    applyLabeledPeople(people);
+    if (!selectedNode) return;
+    const match = (people || []).find((person) =>
+      (person.photo_ids || []).some((id) => (selectedNode.photo_ids || []).includes(id)),
+    );
+    if (match) {
+      setSelectedNode(personToGraphNode(match));
+    } else if (selectedNode.id === oldPersonId) {
+      setSelectedNode(null);
+    }
+  };
+
+  useEffect(() => {
+    if (labeledPeopleProp?.length) {
+      setLabeledPeople(labeledPeopleProp);
+      setRelationshipCounts(buildRelationshipCounts(labeledPeopleProp));
+      return;
+    }
+    if (!memorialId) return;
+
+    let cancelled = false;
+    (async () => {
+      const { people } = await getMemorialLabeledPeople(memorialId);
+      if (cancelled) return;
+      setLabeledPeople(people || []);
+      setRelationshipCounts(buildRelationshipCounts(people || []));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [memorialId, labeledPeopleProp]);
+
+  const buildRelationshipGraph = (people) => {
+    const centerId = memorial?.id || 'memorial-center';
+    const centerName = memorial?.subject_name || memorial?.deceased_name || 'Memorial';
+    const personNodes = (people || []).map((person) => personToGraphNode(person));
+
+    return {
+      nodes: [
+        {
+          id: centerId,
+          name: centerName,
+          relationship_type: 'Memorial',
+          prominence: 1,
+          summary: '',
+          photos: [],
+          quotes: [],
+          contributions: 0,
+        },
+        ...personNodes,
+      ],
+      links: personNodes.map((person) => ({
+        source: centerId,
+        target: person.id,
+        type: person.relationship_type,
+        weight: person.contributions || 1,
+      })),
+    };
+  };
+
   const [nodes, setNodes] = useState(
       ai_output?.constellation?.nodes?.map(t => ({
         id: t.id,
@@ -168,8 +344,10 @@ export default function ConstellationGraph({ ai_output ,memorial, contributor, w
         group: capitalizeFirstLetter(t.category),
         prominence: t.prominence_score,
         summary: t.summary,
-        photos: t.photo_ids,
-        quotes: t.quotes
+        photo_urls: t.photo_urls || [],
+        photos: t.photo_urls || t.photo_ids || [],
+        quotes: t.quotes || [],
+        contributions: (t.photo_urls || []).length,
       }))
   );
   const [links, setLinks] = useState(
@@ -202,12 +380,14 @@ export default function ConstellationGraph({ ai_output ,memorial, contributor, w
 
         setNodes(ai_output?.constellation?.nodes.map(t => ({
           id: t.id,
-          name: t.label,          // common for display
-          group: t.category,      // useful for coloring / clustering
+          name: t.label,
+          group: t.category,
           prominence: t.prominence_score,
           summary: t.summary,
-          photos: t.photo_ids,
-          quotes: t.quotes
+          photo_urls: t.photo_urls || [],
+          photos: t.photo_urls || t.photo_ids || [],
+          quotes: t.quotes || [],
+          contributions: (t.photo_urls || []).length,
         })));    
         setLinks(ai_output?.constellation?.edges.map(d => ({
           source: d.source,
@@ -216,30 +396,19 @@ export default function ConstellationGraph({ ai_output ,memorial, contributor, w
           weight: d.weight
         })));
     }
-    else{
-      setNodes(contributor.map(t => ({
-        id: t.id,
-        name: t.name,
-        prominence: 0.7,
-        summary: t.summary,
-        photos: t.photo_ids,
-        quotes: t.quotes        
-      })));    
-      if (memorial) {
-        setNodes((prevItems) => [...prevItems, {
-          id: memorial.user_id,
-          name: memorial.subject_name,
-          prominence: 1,
-        }]);
-      }
-      setLinks(contributor.map(d => ({
-        source: memorial.user_id,
-        target: d.id,
-        type: capitalizeFirstLetter(d.relationship_type),
-        weight: d.weight
-      })));         
+    else {
+      const graph = buildRelationshipGraph(labeledPeople);
+      setNodes(graph.nodes);
+      setLinks(graph.links);
     }
   }
+
+  useEffect(() => {
+    if (tab !== 'Relationships' || !labeledPeople.length) return;
+    const graph = buildRelationshipGraph(labeledPeople);
+    setNodes(graph.nodes);
+    setLinks(graph.links);
+  }, [tab, labeledPeople, memorial?.id, memorial?.subject_name]);
   useEffect(() => {
     if (!nodes || nodes.length === 0) return;
     if (!links || links.length === 0) return;
@@ -276,20 +445,22 @@ export default function ConstellationGraph({ ai_output ,memorial, contributor, w
       );
     }
     else {
-      displayNode=nodes.filter(
-        (node) => !hiddenRelationshipType[node.type]
+      const centerId = memorial?.id || 'memorial-center';
+      displayNode = nodes.filter(
+        (node) =>
+          node.id === centerId || !hiddenRelationshipType[node.relationship_type],
       );
-      displayLink=links.filter(
+      displayLink = links.filter((link) => !hiddenRelationshipType[link.type]);
+      displayNode = displayNode.filter(
+        (item) => item.id === centerId || !hiddenContributors[item.id],
+      );
+      displayLink = displayLink.filter(
         (link) =>
-          !hiddenRelationshipType[link.type]
-      );        
-      console.log("After relationship type filter - Nodes: ", displayNode);
-      console.log("After relationship type filter - Links: ", displayLink);
-      displayNode=displayNode.filter(item => !hiddenContributors[item.id]);
-      displayLink=displayLink.filter(
-        l => !hiddenContributors[l.target.id]
+          !hiddenContributors[
+            typeof link.target === 'object' ? link.target.id : link.target
+          ],
       );
-    }        
+    }
 
     const svg = d3
       .select(ref.current)
@@ -480,13 +651,25 @@ export default function ConstellationGraph({ ai_output ,memorial, contributor, w
                     </p>
 
                     <p className="text-[10px] mt-3 font-medium text-gray-800">
-                      {item?.contributions || "No"} tagged contributions
+                      {(item?.photo_urls?.length ?? item?.contributions ?? 0)} tagged photo{(item?.photo_urls?.length ?? item?.contributions ?? 0) === 1 ? '' : 's'}
                     </p>
                   </div>
                   <div className="w-[240px] h-full overflow-y-auto rounded-sm bg-transparent lg:w-[430px]">
                     <div className="space-y-4 pr-2">
-                      <div className="h-[160px] rounded bg-[#dddddd]" />
-                      <div className="h-[180px] rounded bg-[#dddddd]" />
+                      {(item?.photo_urls?.length ? item.photo_urls : []).slice(0, 4).map((photoUrl, photoIndex) => (
+                        <div key={`${item.id}-photo-${photoIndex}`} className="h-[160px] overflow-hidden rounded bg-[#dddddd]">
+                          {photoUrl ? (
+                            <img
+                              src={photoUrl}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : null}
+                        </div>
+                      ))}
+                      {!item?.photo_urls?.length ? (
+                        <p className="text-[11px] text-gray-500 py-8 text-center">No photos matched this theme yet.</p>
+                      ) : null}
                     </div>
                   </div>
 
@@ -531,45 +714,67 @@ export default function ConstellationGraph({ ai_output ,memorial, contributor, w
               </div>
             </div>
 
-            {/* Relationship Cards */}
+            {/* Relationship Cards — people labeled in photos */}
             <div className="space-y-4">
-              {contributor.map((item) => {
-
-                const isHidden = hiddenContributors[item.id];
-                return (
-
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between rounded border border-gray-300 bg-white px-6 py-5"
-                >
-                  <div className="flex items-center gap-6">
-                    <button className="cursor-pointer" onClick={() => toggleEye(item.id)}>
-                      {isHidden ? (
-                        <EyeOff size={20} />
-                      ) : (
-                        <Eye size={20} />
-                      )}
-                    </button>                    
-                    <div className="h-20 w-20 rounded-full bg-[#d9d9d9]" />
-
-                    <div>
-                      <h3 className="font-serif text-lg italic">
-                        {item.name}
-                      </h3>
-
-                      <p className="text-xs text-gray-500">
-                        {contributor.length || "No"} tagged contributions
-                      </p>
-
-                      <button className="mt-3 rounded bg-[#d9d9d9] px-6 py-1 text-xs">
-                        {item.relationship_type == "null" || item.relationship_type == undefined ? "No relationship type" : item.relationship_type}
-                      </button>
-                    </div>
-                  </div>
+              {labeledPeople.length === 0 ? (
+                <div className="rounded border border-gray-300 bg-white px-6 py-8 text-center text-sm text-gray-600">
+                  No one has been labeled in photos yet. Contributors can tag people during the
+                  label-photos step of the invite flow.
                 </div>
-                )
-              })
-            }
+              ) : (
+                labeledPeople.map((item) => {
+                  const isHidden = hiddenContributors[item.id];
+                  const relationshipLabel =
+                    item.relationship_type == null || item.relationship_type === undefined
+                      ? 'No relationship type'
+                      : capitalizeFirstLetter(item.relationship_type);
+
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between rounded border border-gray-300 bg-white px-6 py-5"
+                    >
+                      <div className="flex items-center gap-6">
+                        <button type="button" className="cursor-pointer" onClick={() => toggleEye(item.id)}>
+                          {isHidden ? <EyeOff size={20} /> : <Eye size={20} />}
+                        </button>
+                        <div className="h-20 w-20 overflow-hidden rounded-full bg-[#d9d9d9]">
+                          {item.photo_urls?.[0] ? (
+                            <img
+                              src={item.photo_urls[0]}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : null}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-serif text-lg italic">{item.name}</h3>
+
+                          <p className="text-xs text-gray-500">
+                            {item.photo_count || 0} tagged contribution
+                            {(item.photo_count || 0) === 1 ? '' : 's'}
+                          </p>
+
+                          <button type="button" className="mt-3 rounded bg-[#d9d9d9] px-6 py-1 text-xs">
+                            {relationshipLabel}
+                          </button>
+
+                          {allowRename && memorialId && needsPersonName(item) ? (
+                            <PersonNameEditor
+                              memorialId={memorialId}
+                              personId={item.id}
+                              relationshipType={relationshipLabel}
+                              compact
+                              onSaved={handlePersonRenamed}
+                            />
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
@@ -578,15 +783,20 @@ export default function ConstellationGraph({ ai_output ,memorial, contributor, w
         {selectedNode && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
             <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl overflow-hidden modal-enter">
-              {/* HEADER */}
               <div className="flex items-center justify-between border-b px-6 py-4">
                 <div>
                   <h2 className="text-3xl font-bold capitalize text-gray-900">
-                    {selectedNode.label}
+                    {selectedNode.name || selectedNode.label}
                   </h2>
+                  {selectedNode.relationship_type && selectedNode.relationship_type !== 'Memorial' ? (
+                    <p className="mt-1 text-sm text-gray-500 capitalize">
+                      {selectedNode.relationship_type}
+                    </p>
+                  ) : null}
                 </div>
 
                 <button
+                  type="button"
                   onClick={() => setSelectedNode(null)}
                   className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium hover:bg-gray-200"
                 >
@@ -594,55 +804,82 @@ export default function ConstellationGraph({ ai_output ,memorial, contributor, w
                 </button>
               </div>
 
-              {/* CONTENT */}
               <div className="max-h-[75vh] overflow-y-auto p-6">
-                {/* SUMMARY */}
-                <div className="mb-8">
-                  <h3 className="mb-3 text-lg font-semibold text-gray-900">
-                    Summary
-                  </h3>
-
-                  <div className="rounded-xl bg-gray-50 p-4 text-gray-700 leading-relaxed">
-                    {selectedNode.summary || "No summary available for "+selectedNode.name}
+                {allowRename && memorialId && tab === 'Relationships' && needsPersonName(selectedNode) ? (
+                  <div className="mb-8">
+                    <PersonNameEditor
+                      memorialId={memorialId}
+                      personId={selectedNode.id}
+                      relationshipType={selectedNode.relationship_type}
+                      onSaved={handlePersonRenamed}
+                    />
                   </div>
-                </div>
+                ) : null}
 
-                {/* QUOTES */}
-                <div>
-                  <h3 className="mb-4 text-lg font-semibold text-gray-900">
-                    Quotes & Memories
-                  </h3>
-
-                  <div className="space-y-4">
-                    {selectedNode?.quotes?.map((quote, index) => (
-                      <div
-                        key={index}
-                        className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
-                      >
-                        <p className="text-gray-800 italic leading-relaxed">
-                          {quote.text}
-                        </p>
-
-                        <div className="mt-4 flex items-center justify-between">
-                          <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium capitalize text-indigo-700">
-                            {quote.relationship_type}
-                          </span>
-
-                          <span className="text-xs text-gray-400">
-                            Contributor ID
-                          </span>
+                {(selectedNode.photo_urls?.length || selectedNode.photos?.length) ? (
+                  <div className="mb-8">
+                    <h3 className="mb-4 text-lg font-semibold text-gray-900">
+                      {tab === 'Relationships'
+                        ? `Photos with ${selectedNode.name || 'them'}`
+                        : 'Photos in this theme'}
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      {(selectedNode.photo_urls || selectedNode.photos || []).map((photoUrl, index) => (
+                        <div
+                          key={`${selectedNode.id}-modal-photo-${index}`}
+                          className="aspect-square overflow-hidden rounded-lg bg-gray-100"
+                        >
+                          {photoUrl ? (
+                            <img
+                              src={photoUrl}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : null}
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                ) : null}
 
-                {/* EMPTY STATE */}
-                {!selectedNode?.quotes && (
-                  <div className="rounded-xl bg-gray-50 p-6 text-center text-gray-500">
-                    No quotes available
+                {selectedNode.summary ? (
+                  <div className="mb-8">
+                    <h3 className="mb-3 text-lg font-semibold text-gray-900">Summary</h3>
+                    <div className="rounded-xl bg-gray-50 p-4 text-gray-700 leading-relaxed">
+                      {selectedNode.summary}
+                    </div>
                   </div>
-                )}
+                ) : null}
+
+                {selectedNode?.quotes?.length > 0 ? (
+                  <div>
+                    <h3 className="mb-4 text-lg font-semibold text-gray-900">Quotes &amp; memories</h3>
+                    <div className="space-y-4">
+                      {selectedNode.quotes.map((quote, index) => (
+                        <div
+                          key={index}
+                          className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
+                        >
+                          <p className="text-gray-800 italic leading-relaxed">{quote.text}</p>
+                          {quote.relationship_type ? (
+                            <div className="mt-4">
+                              <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium capitalize text-indigo-700">
+                                {quote.relationship_type}
+                              </span>
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {!selectedNode?.quotes?.length &&
+                !(selectedNode.photo_urls?.length || selectedNode.photos?.length) ? (
+                  <div className="rounded-xl bg-gray-50 p-6 text-center text-gray-500">
+                    No photos or memories for this node yet.
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>

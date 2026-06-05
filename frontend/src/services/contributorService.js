@@ -1,8 +1,8 @@
 import {
   ApiRequestError,
+  getAuthToken,
   getInviteToken,
   getContributorSummary,
-  getContributors,
   getResponses,
   saveRelationship,
   saveResponses,
@@ -188,12 +188,32 @@ function normalizeStartContributionResponse(response, invite, contributorName) {
   };
 }
 
+const inviteValidationCache = new Map();
+const INVITE_CACHE_TTL_MS = 60_000;
+
+export function clearContributorInviteCache(inviteToken) {
+  if (inviteToken) {
+    inviteValidationCache.delete(inviteToken);
+    return;
+  }
+  inviteValidationCache.clear();
+}
+
 export async function validateContributorInvite(inviteToken) {
+  const cached = inviteValidationCache.get(inviteToken);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
   try {
     const invite = await getInviteToken(inviteToken);
     const status = getInviteStatus(invite);
-
-    return normalizeInvite(inviteToken, invite, status);
+    const value = normalizeInvite(inviteToken, invite, status);
+    inviteValidationCache.set(inviteToken, {
+      value,
+      expiresAt: Date.now() + INVITE_CACHE_TTL_MS,
+    });
+    return value;
   } catch (error) {
     return {
       inviteToken,
@@ -458,29 +478,42 @@ export async function getQuestionnaireResponses(inviteToken) {
 export async function getMemorialContributors(memorialId, token) {
   if (!memorialId) throw new Error("memorialId is required");
 
+  const accessToken = token?.access_token || token || (await getAuthToken()) || "";
+  if (!accessToken) {
+    return { contributors: [] };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15_000);
+
   try {
-    const accessToken = token?.access_token || token || "";
     const res = await fetch(
-      `${API_BASE_URL}/memorials/${memorialId}/contributors`,
+      `${API_BASE_URL}/memorials/${encodeURIComponent(memorialId)}/contributors`,
       {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          Authorization: `Bearer ${accessToken}`,
         },
-      }
+        signal: controller.signal,
+      },
     );
 
     if (!res.ok) throw new Error("Failed to fetch contributors");
-
     return res.json();
   } catch {
-    return getContributors(memorialId);
+    return { contributors: [] };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
 export async function saveQuestionnaireResponse(inviteToken, response, options = {}) {
-  const draft = await getContributorQuestionnaireDraft(inviteToken);
+  const draft =
+    options.draft ??
+    (options.session
+      ? { status: "ready", session: options.session }
+      : await getContributorQuestionnaireDraft(inviteToken));
 
   if (draft.status !== "ready") {
     throw new Error("Your contribution could not be found.");

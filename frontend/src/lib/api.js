@@ -11,6 +11,7 @@
 // Field names match DB schema: subject_name, date_of_birth, date_of_passing, cover_photo_url
 import { mockMemorials } from "@/data/mockMemorials.js";
 import { getSupabaseClient } from "@/lib/supabaseClient.js";
+import { normalizeShareUrl } from "@/lib/copyToClipboard.js";
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 const MOCK_DELAY = 500;
@@ -44,13 +45,29 @@ export class ApiRequestError extends Error {
   }
 }
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+
 async function requestJson(path, options = {}) {
-  const { baseUrl = API_URL, ...fetchOptions } = options;
+  const {
+    baseUrl = API_URL,
+    timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
+    signal: externalSignal,
+    ...fetchOptions
+  } = options;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  if (externalSignal) {
+    if (externalSignal.aborted) controller.abort();
+    else externalSignal.addEventListener("abort", () => controller.abort(), { once: true });
+  }
+
   let response;
 
   try {
     response = await fetch(`${baseUrl.replace(/\/$/, "")}${path}`, {
       ...fetchOptions,
+      signal: controller.signal,
       headers: {
         Accept: "application/json",
         ...(fetchOptions.body ? { "Content-Type": "application/json" } : {}),
@@ -59,14 +76,19 @@ async function requestJson(path, options = {}) {
     });
   } catch (error) {
     if (error?.name === "AbortError") {
-      throw new ApiRequestError("The request was cancelled.", {
-        code: "aborted",
-      });
+      throw new ApiRequestError(
+        externalSignal?.aborted
+          ? "The request was cancelled."
+          : "The request timed out. Check that the API is running and try again.",
+        { code: "aborted" },
+      );
     }
 
     throw new ApiRequestError("Could not reach the Remember API.", {
       code: "network_error",
     });
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   const contentType = response.headers.get("content-type") ?? "";
@@ -75,14 +97,44 @@ async function requestJson(path, options = {}) {
     : null;
 
   if (!response.ok) {
-    throw new ApiRequestError(data?.error || `Request failed with status ${response.status}.`, {
+    throw new ApiRequestError(
+      data?.error || data?.message || `Request failed with status ${response.status}.`,
+      {
       status: response.status,
-      code: response.status === 404 ? "not_found" : "request_error",
+      code:
+        response.status === 404
+          ? "not_found"
+          : response.status === 429
+            ? "rate_limited"
+            : "request_error",
       data,
     });
   }
 
   return data;
+}
+
+async function requestJsonWithRetry(path, options = {}, maxAttempts = 3) {
+  let lastError;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      return await requestJson(path, options);
+    } catch (error) {
+      lastError = error;
+      if (
+        error instanceof ApiRequestError &&
+        error.status === 429 &&
+        attempt < maxAttempts - 1
+      ) {
+        await delay(800 * (attempt + 1));
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw lastError;
 }
 
 function isLocalFrontendApiUrl() {
@@ -106,18 +158,67 @@ function isLocalApiUrl(baseUrl = API_URL) {
 // ─── Helper to get real Supabase JWT token ────────────────────────────────────
 // Used by Blessing's memorial endpoints — gets real session from Supabase Auth
 // Falls back to mock session token if Supabase session not available
-async function getAuthToken() {
+const SUPABASE_AUTH_STORAGE_KEY = 'sb-tbpdhybqbjucoxdizlgw-auth-token';
+
+function parseSupabaseAuthPayload(raw) {
+  if (!raw) return null;
+  try {
+    const decoded = raw.startsWith('base64-')
+      ? JSON.parse(atob(raw.replace('base64-', '')))
+      : JSON.parse(raw);
+    return decoded?.access_token || decoded?.currentSession?.access_token || null;
+  } catch {
+    return null;
+  }
+}
+
+function getAuthTokenFromCookie() {
+  if (!isBrowser()) return null;
+  const cookie = document.cookie
+    .split('; ')
+    .find((row) => row.startsWith(`${SUPABASE_AUTH_STORAGE_KEY}=`));
+  if (!cookie) return null;
+  return parseSupabaseAuthPayload(decodeURIComponent(cookie.split('=').slice(1).join('=')));
+}
+
+function getAuthTokenFromLocalStorage() {
+  if (!isBrowser()) return null;
+  return parseSupabaseAuthPayload(window.localStorage.getItem(SUPABASE_AUTH_STORAGE_KEY));
+}
+
+const GET_SESSION_TIMEOUT_MS = 3_000;
+
+async function getAuthTokenFromSession() {
   try {
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase.auth.getSession();
-    if (!error && data.session?.access_token) {
+    const sessionResult = await Promise.race([
+      supabase.auth.getSession(),
+      new Promise((resolve) => {
+        setTimeout(() => resolve({ data: { session: null }, error: null }), GET_SESSION_TIMEOUT_MS);
+      }),
+    ]);
+    const { data, error } = sessionResult;
+    if (!error && data?.session?.access_token) {
       return data.session.access_token;
     }
   } catch {
-    // Supabase not available — fall through to mock
+    // fall through
   }
-  // Fall back to mock session token
-  return getStoredSession()?.token || '';
+  return null;
+}
+
+export async function getAuthToken() {
+  const cookieToken = getAuthTokenFromCookie();
+  if (cookieToken) return cookieToken;
+
+  const storageToken = getAuthTokenFromLocalStorage();
+  if (storageToken) return storageToken;
+
+  const mockToken = getStoredSession()?.token;
+  if (mockToken) return mockToken;
+
+  const sessionToken = await getAuthTokenFromSession();
+  return sessionToken || "";
 }
 
 const now = () => new Date().toISOString();
@@ -373,6 +474,62 @@ export async function getCurrentUser() {
  * Sends backend-aligned fields: nickname, biography, related_people
  * Falls back to mock if backend fails
  */
+/**
+ * POST /memorials/cover-photo
+ * Uploads the memorial portrait via the API (service role storage).
+ */
+export async function uploadMemorialCoverPhoto(file, { signal, timeoutMs = 20_000 } = {}) {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new ApiRequestError("You must be logged in to upload a photo.", {
+      status: 401,
+      code: "unauthorized",
+    });
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener("abort", () => controller.abort(), { once: true });
+  }
+
+  let response;
+  try {
+    response = await fetch(`${API_URL.replace(/\/$/, "")}/memorials/cover-photo`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new ApiRequestError("Photo upload timed out. Try again or continue without a photo.", {
+        code: "aborted",
+      });
+    }
+    throw new ApiRequestError("Could not reach the Remember API.", { code: "network_error" });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new ApiRequestError(
+      data?.error || data?.message || `Upload failed with status ${response.status}.`,
+      {
+      status: response.status,
+      data,
+    },
+    );
+  }
+
+  return data;
+}
+
 export async function createMemorial({
   subject_name,
   nickname,
@@ -382,50 +539,48 @@ export async function createMemorial({
   related_people,
   cover_photo_url,
 }) {
-  try {
-    const token = await getAuthToken();
-    const response = await fetch(`${API_URL}/memorials`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        subject_name: subject_name?.trim() || '',
-        nickname: (nickname || '').trim(),
-        date_of_birth: date_of_birth ?? null,
-        date_of_passing: date_of_passing ?? null,
-        biography: (biography || '').trim(),
-        related_people: related_people ?? [],
-        cover_photo_url: cover_photo_url ?? null,
-      }),
+  const token = await getAuthToken();
+  if (!token) {
+    throw new ApiRequestError("You must be logged in to create a memorial.", {
+      status: 401,
+      code: "unauthorized",
     });
-    if (!response.ok) throw new Error('Failed to create memorial');
-    return response.json();
-  } catch {
-    // Fallback to mock
-    await delay(MOCK_DELAY);
-    const currentUser = getActiveUser();
-    const createdAt = now();
-    const normalizedBiography = (biography || '').trim();
-    const memorial = {
-      id: makeId('memorial'),
-      user_id: currentUser.id,
-      subject_name: subject_name?.trim() || '',
-      nickname: (nickname || '').trim(),
-      biography: normalizedBiography,
-      description: normalizedBiography,
-      related_people: related_people ?? [],
+  }
+
+  return requestJson("/memorials", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      subject_name: subject_name?.trim() || "",
+      nickname: (nickname || "").trim(),
       date_of_birth: date_of_birth ?? null,
       date_of_passing: date_of_passing ?? null,
+      biography: (biography || "").trim(),
+      related_people: related_people ?? [],
       cover_photo_url: cover_photo_url ?? null,
-      status: 'collecting',
-      created_at: createdAt,
-      updated_at: createdAt,
-    };
-    writeStoredValue(MEMORIALS_STORAGE_KEY, [memorial, ...getStoredMemorials()]);
-    return { memorial };
+    }),
+    timeoutMs: 30_000,
+  });
+}
+
+/**
+ * PATCH /memorials/:id — update memorial fields (e.g. cover photo after create).
+ */
+export async function updateMemorial(memorialId, fields) {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new ApiRequestError("You must be logged in to update this memorial.", {
+      status: 401,
+      code: "unauthorized",
+    });
   }
+
+  return requestJson(`/memorials/${encodeURIComponent(memorialId)}`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(fields),
+    timeoutMs: 30_000,
+  });
 }
 
 /**
@@ -434,23 +589,121 @@ export async function createMemorial({
  * PHASE 4: Blessing wired to real backend — using correct port 3001
  * Falls back to mock if backend fails
  */
-export async function getMemorials() {
+/**
+ * GET /memorials/:id/labeled-people
+ * People tagged in contributor photos (from label-photos flow).
+ */
+export async function getMemorialLabeledPeople(memorialId) {
+  const token = await getAuthToken();
+  if (!token) return { people: [] };
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15_000);
+
   try {
-    const token = await getAuthToken();
-    const response = await fetch(`${API_URL}/memorials`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) throw new Error('Failed to fetch memorials');
-    return response.json();
+    const response = await fetch(
+      `${API_URL}/memorials/${encodeURIComponent(memorialId)}/labeled-people`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      },
+    );
+    if (!response.ok) return { people: [] };
+    return await response.json();
   } catch {
-    await delay(MOCK_DELAY);
-    const currentUser = getActiveUser();
-    return {
-      memorials: getStoredMemorials()
-        .filter((m) => m.user_id === currentUser.id)
-        .sort((a, b) => new Date(b.updated_at ?? b.created_at).getTime() - new Date(a.updated_at ?? a.created_at).getTime()),
-    };
+    return { people: [] };
+  } finally {
+    clearTimeout(timeoutId);
   }
+}
+
+/**
+ * PATCH /memorials/:id/labeled-people/rename — name a "Someone" relationship node.
+ */
+/**
+ * POST /tts/speak — ElevenLabs MP3 for story narration (server holds API key).
+ */
+function getTtsSpeakUrl() {
+  if (typeof window !== 'undefined') {
+    return '/api/tts/speak';
+  }
+  return `${API_URL}/tts/speak`;
+}
+
+export async function fetchStoryNarrationAudio(text) {
+  const trimmed = String(text || '').trim();
+  if (!trimmed) {
+    throw new Error('No narration text');
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 90_000);
+
+  try {
+    const response = await fetch(getTtsSpeakUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: trimmed }),
+      signal: controller.signal,
+    });
+
+    const contentType = response.headers.get('content-type') || '';
+    if (!response.ok) {
+      const err = contentType.includes('json')
+        ? await response.json().catch(() => ({}))
+        : {};
+      throw new Error(err.error || `Narration request failed (${response.status})`);
+    }
+
+    if (!contentType.includes('audio')) {
+      throw new Error('Narration server returned a non-audio response. Is the API running?');
+    }
+
+    return response.blob();
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error('Narration timed out — try again or shorten the slide text.');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+export async function renameMemorialLabeledPerson(memorialId, personId, newName) {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('You must be signed in to name people on the memorial.');
+  }
+
+  const response = await fetch(
+    `${API_URL}/memorials/${encodeURIComponent(memorialId)}/labeled-people/rename`,
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ person_id: personId, new_name: newName }),
+    },
+  );
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || 'Could not save this name.');
+  }
+  return data;
+}
+
+export async function getMemorials() {
+  const token = await getAuthToken();
+  if (!token) {
+    return { memorials: [] };
+  }
+
+  return requestJson("/memorials", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
 }
 
 /**
@@ -460,18 +713,17 @@ export async function getMemorials() {
  * Falls back to mock if backend fails
  */
 export async function getMemorial(id) {
-  try {
-    const token = await getAuthToken();
-    const response = await fetch(`${API_URL}/memorials/${id}`, {
-      headers: { Authorization: `Bearer ${token}` },
+  const token = await getAuthToken();
+  if (!token) {
+    throw new ApiRequestError("You must be logged in to view this memorial.", {
+      status: 401,
+      code: "unauthorized",
     });
-    if (!response.ok) throw new Error('Failed to fetch memorial');
-    return response.json();
-  } catch {
-    await delay(MOCK_DELAY);
-    const memorial = getStoredMemorials().find((m) => m.id === id) ?? null;
-    return { memorial };
   }
+
+  return requestJson(`/memorials/${encodeURIComponent(id)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
 }
 
 // ─── BLESSING: INVITE LINK ────────────────────────────────────────────────────
@@ -483,30 +735,27 @@ export async function getMemorial(id) {
  * Falls back to mock if backend fails
  */
 export async function createInviteLink(memorialId, { expires_at, max_uses } = {}) {
-  try {
-    const token = await getAuthToken();
-    const response = await fetch(`${API_URL}/memorials/${memorialId}/invite-link`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ expires_at: expires_at ?? null, max_uses: max_uses ?? null }),
+  const token = await getAuthToken();
+  if (!token) {
+    throw new ApiRequestError("You must be logged in to create an invite link.", {
+      status: 401,
+      code: "unauthorized",
     });
-    if (!response.ok) throw new Error('Failed to create invite link');
-    return response.json();
-  } catch {
-    await delay(MOCK_DELAY);
-    return {
-      invite_link: {
-        ...MOCK_INVITE_LINK,
-        id: makeId('invite-uuid'),
-        expires_at,
-        max_uses,
-        created_at: now(),
-      },
-    };
   }
+
+  const data = await requestJson(`/memorials/${encodeURIComponent(memorialId)}/invite-link`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ expires_at: expires_at ?? null, max_uses: max_uses ?? null }),
+  });
+
+  if (data?.invite_link?.url) {
+    data.invite_link.url = normalizeShareUrl(data.invite_link.url);
+  }
+  if (data?.invite_link?.token === MOCK_INVITE_TOKEN) {
+    throw new ApiRequestError("Received a mock invite token from the API.", { code: "invalid_response" });
+  }
+  return data;
 }
 
 // Alias for consistency — some pages call generateInviteLink
@@ -553,22 +802,23 @@ export async function getContributors(memorialId) {
  * TODO: Replace with real fetch() on Day 9.
  */
 export async function createShareLink(memorialId) {
-  try {
-    const token = await getAuthToken();
-    const response = await fetch(`${API_URL}/memorials/${memorialId}/share`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
+  const token = await getAuthToken();
+  if (!token) {
+    throw new ApiRequestError("You must be logged in to create a share link.", {
+      status: 401,
+      code: "unauthorized",
     });
-    if (!response.ok) throw new Error('Failed to create share link');
-    return response.json();
-  } catch {
-    await delay(MOCK_DELAY);
-    const mockToken = 'mock_share_' + Math.random().toString(36).slice(2);
-    return { share_link: { token: mockToken, url: `http://localhost:3000/share/${mockToken}` } };
   }
+
+  const data = await requestJson(`/memorials/${encodeURIComponent(memorialId)}/share`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (data?.share_link?.url) {
+    data.share_link.url = normalizeShareUrl(data.share_link.url);
+  }
+  return data;
 }
 
 // ─── ASHWINI: AI PIPELINE ─────────────────────────────────────────────────────
@@ -579,7 +829,7 @@ export async function createShareLink(memorialId) {
  * Calls the real backend with a local-dev mock fallback when the API is unreachable.
  */
 export async function triggerGeneration(memorialId, token) {
-  const accessToken = token?.access_token || token || getStoredSession()?.token || '';
+  const accessToken = token?.access_token || token || (await getAuthToken()) || '';
   const requestOptions = {
     method: 'POST',
     headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
@@ -588,17 +838,6 @@ export async function triggerGeneration(memorialId, token) {
   try {
     return await requestJson(`/ai/memorials/${encodeURIComponent(memorialId)}/generate`, requestOptions);
   } catch (error) {
-    if (
-      error instanceof ApiRequestError &&
-      [401, 403].includes(error.status) &&
-      process.env.NODE_ENV !== 'production' &&
-      isLocalApiUrl()
-    ) {
-      await delay(MOCK_DELAY);
-      _mockProgress = 0;
-      return createMockGenerationJob();
-    }
-
     if (error instanceof ApiRequestError && error.status === 404 && isLocalFrontendApiUrl()) {
       try {
         return await requestJson(`/ai/memorials/${encodeURIComponent(memorialId)}/generate`, {
@@ -672,7 +911,7 @@ function createMockJobStatus(jobId) {
 }
 
 export async function getJobStatus(jobId, token) {
-  const accessToken = token?.access_token || token || getStoredSession()?.token || '';
+  const accessToken = token?.access_token || token || (await getAuthToken()) || '';
   const requestOptions = {
     headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
   };
@@ -680,16 +919,6 @@ export async function getJobStatus(jobId, token) {
   try {
     return await requestJson(`/ai/jobs/${encodeURIComponent(jobId)}/status`, requestOptions);
   } catch (error) {
-    if (
-      error instanceof ApiRequestError &&
-      [401, 403, 404].includes(error.status) &&
-      process.env.NODE_ENV !== 'production' &&
-      isLocalApiUrl()
-    ) {
-      await delay(MOCK_DELAY);
-      return createMockJobStatus(jobId);
-    }
-
     if (error instanceof ApiRequestError && error.status === 404 && isLocalFrontendApiUrl()) {
       try {
         return await requestJson(`/ai/jobs/${encodeURIComponent(jobId)}/status`, {
@@ -841,7 +1070,7 @@ export async function saveResponses(token, responses, options = {}) {
     return { success: true, saved: savedResponses.length, responses: savedResponses };
   }
 
-  const result = await requestJson(`/contribute/${encodeURIComponent(token)}/responses`, {
+  const result = await requestJsonWithRetry(`/contribute/${encodeURIComponent(token)}/responses`, {
     method: "POST",
     signal: options.signal,
     body: JSON.stringify({
@@ -1023,7 +1252,8 @@ export async function uploadPhotos(token, files) {
     storage_bucket: file.storage_bucket ?? 'memorial-assets',
     taken_at: file.taken_at ?? null,
     caption: file.caption ?? null,
-    previewUrl: null,
+    url: file.url || file.photo_url || null,
+    previewUrl: file.url || file.photo_url || null,
   }));
 
   const existing = readStoredPhotos(token);
@@ -1186,9 +1416,78 @@ export async function deleteVoice(token, recordingId) {
  * Backend-backed review/resume is blocked until the API exposes saved response
  * and media read endpoints. Do not call fake GET contribution endpoints here.
  */
+export async function fetchContributorPhotos(token, contributorToken) {
+  if (!contributorToken || isLocalMockInviteToken(token)) {
+    return readStoredPhotos(token);
+  }
+
+  try {
+    const data = await requestJson(
+      `/contribute/${encodeURIComponent(token)}/photos?contributor_token=${encodeURIComponent(contributorToken)}`,
+    );
+    const photos = (data?.photos || []).map((photo) => ({
+      id: photo.id,
+      file_name: photo.file_name,
+      file_type: photo.file_type ?? '',
+      file_size_bytes: photo.file_size_bytes ?? 0,
+      storage_path: photo.storage_path,
+      storage_bucket: photo.storage_bucket ?? 'memorial-assets',
+      taken_at: photo.taken_at ?? null,
+      caption: photo.caption ?? null,
+      ai_labels: photo.ai_labels ?? null,
+      ai_people_count: photo.ai_people_count ?? null,
+      people_labels: photo.people_labels ?? null,
+      url: photo.url || photo.photo_url || null,
+      previewUrl: photo.url || photo.photo_url || null,
+      previewFailed: false,
+    }));
+    writeStoredPhotos(token, photos);
+    return photos;
+  } catch {
+    return readStoredPhotos(token);
+  }
+}
+
+/**
+ * POST /contribute/:token/photos/:photoId/label
+ * Saves contributor-confirmed people labels for a photo.
+ */
+export async function labelPhoto(token, photoId, peopleLabels, contributorToken) {
+  const sessionToken =
+    contributorToken ||
+    readContributorSession(token)?.contributorToken ||
+    readContributorSession(token)?.contributorId;
+
+  if (!sessionToken) {
+    throw new ApiRequestError("A contributor session is required before labeling photos.", {
+      code: "missing_contributor_token",
+    });
+  }
+
+  if (isLocalMockInviteToken(token)) {
+    await delay(MOCK_DELAY / 2);
+    const stored = readStoredPhotos(token).map((photo) =>
+      photo.id === photoId ? { ...photo, people_labels: peopleLabels } : photo,
+    );
+    writeStoredPhotos(token, stored);
+    return { photo: { id: photoId, people_labels: peopleLabels } };
+  }
+
+  return requestJson(`/contribute/${encodeURIComponent(token)}/photos/${encodeURIComponent(photoId)}/label`, {
+    method: "POST",
+    body: JSON.stringify({
+      contributor_token: sessionToken,
+      people_labels: peopleLabels,
+    }),
+  });
+}
+
 export async function getContributorSummary(token) {
   const session = readContributorSession(token);
-  const photos = readStoredPhotos(token);
+  const contributorToken = session?.contributorToken || session?.contributorId;
+  const photos = contributorToken
+    ? await fetchContributorPhotos(token, contributorToken)
+    : readStoredPhotos(token);
   const voice = readStoredVoice(token);
 
   const contributorId = session?.contributorId ?? null;
@@ -1393,15 +1692,24 @@ function getMockMemorialOutput() {
  * Falls back to mock data if backend call fails (token not in DB yet)
  */
 export async function getMemorialOutput(memorialId) {
+  const token = await getAuthToken();
+  if (!token) return null;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30_000);
+
   try {
-    const token = await getAuthToken();
-    const response = await fetch(`${API_URL}/memorials/${memorialId}/output`, {
+    const response = await fetch(`${API_URL}/memorials/${encodeURIComponent(memorialId)}/output`, {
       headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
     });
-    if (!response.ok) throw new Error('Output not found');
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error("Output not found");
     return await response.json();
   } catch {
-    return null; // no mock fallback — let the page show empty state
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -1416,8 +1724,13 @@ export async function getMemorialOutput(memorialId) {
 export async function getShareToken(shareToken) {
   if (shareToken === 'invalid') throw new Error('This share link is invalid or has expired');
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30_000);
+
   try {
-    const response = await fetch(`${API_URL}/share/${shareToken}`);
+    const response = await fetch(`${API_URL}/share/${encodeURIComponent(shareToken)}`, {
+      signal: controller.signal,
+    });
 
     if (!response.ok) {
       if (response.status === 404) throw new Error('This share link is invalid or has expired');
@@ -1434,9 +1747,14 @@ export async function getShareToken(shareToken) {
     if (shareToken === 'invalid' || error.message === 'This share link is invalid or has expired') {
       throw error;
     }
+    if (error?.name === 'AbortError') {
+      throw new Error('Loading the memorial timed out. Please try again.');
+    }
 
     await delay(MOCK_DELAY);
     return getMockMemorialOutput();
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -1448,20 +1766,23 @@ export async function getShareToken(shareToken) {
  * Falls back to mockMemorials if backend fails or memorial not in DB yet
  */
 export async function getMemorialById(memorialId) {
+  const token = await getAuthToken();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15_000);
+
   try {
-    const token = await getAuthToken();
-    const response = await fetch(`${API_URL}/memorials/${memorialId}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+    const response = await fetch(`${API_URL}/memorials/${encodeURIComponent(memorialId)}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      signal: controller.signal,
     });
 
-    if (!response.ok) throw new Error('Memorial not found');
+    if (!response.ok) throw new Error("Memorial not found");
 
     const data = await response.json();
     return data.memorial;
   } catch {
-    // Fallback to mockMemorials if backend fails
     return mockMemorials.find((m) => m.id === memorialId) ?? mockMemorials[0];
+  } finally {
+    clearTimeout(timeoutId);
   }
 }

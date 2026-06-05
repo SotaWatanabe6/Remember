@@ -9,6 +9,7 @@ import { mockMemorials } from '@/data/mockMemorials.js';
 import ConstellationGraph from "@/components/output/constellation";
 import StorySlideshow from '@/components/output/StorySlideshow';
 import VoicesTab from '@/components/output/VoicesTab';
+import MemorialCoverImage from '@/components/memorial/MemorialCoverImage.jsx';
 
 // ─── Tab bar ──────────────────────────────────────────────────────────────────
 
@@ -40,10 +41,13 @@ function MemorialHeader({ memorial }) {
 
   return (
     <div className="flex items-start gap-8">
-      <div className="h-36 w-36 shrink-0 overflow-hidden rounded-full bg-r-shape">
-        {memorial?.cover_photo_url
-          ? <img src={memorial.cover_photo_url} alt={memorial.subject_name} className="h-full w-full object-cover" />
-          : <div className="h-full w-full bg-r-shape" />}
+      <div className="relative h-36 w-36 shrink-0 overflow-hidden">
+        <MemorialCoverImage
+          src={memorial?.cover_photo_url}
+          name={memorial?.subject_name || memorial?.deceased_name}
+          fill
+          className="h-full w-full"
+        />
       </div>
       <div className="flex-1 min-w-0 pt-2">
         <h1 className="text-h1 text-r-text">{memorial?.subject_name || memorial?.deceased_name || 'Memorial'}</h1>
@@ -64,7 +68,7 @@ function MemorialHeader({ memorial }) {
 
 // ─── Constellation tab ────────────────────────────────────────────────────────
 
-function ConstellationTab({ data ,memorial, contributor}) {
+function ConstellationTab({ data, memorial, contributor, labeledPeople }) {
   if (!data) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -73,7 +77,18 @@ function ConstellationTab({ data ,memorial, contributor}) {
       </div>
     );
   }
-  return <div className="py-4"><ConstellationGraph ai_output={data} memorial={memorial} contributor={contributor} width={800} height={800}/></div>;
+  return (
+    <div className="py-4">
+      <ConstellationGraph
+        ai_output={data}
+        memorial={memorial}
+        contributor={contributor}
+        labeledPeople={labeledPeople}
+        width={800}
+        height={800}
+      />
+    </div>
+  );
 }
 
 // ─── Lightbox ─────────────────────────────────────────────────────────────────
@@ -283,6 +298,7 @@ export default function SharePage() {
   const [output, setOutput] = useState(null);
   const [memorial, setMemorial] = useState(null);
   const [contributors, setContributors] = useState([]);
+  const [labeledPeople, setLabeledPeople] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -292,7 +308,8 @@ export default function SharePage() {
         const data = await getShareToken(shareToken);
         console.log("Share token data:", data);
         setOutput(data);
-        setContributors(data.contributor || []);
+        setContributors(data.contributors || data.contributor || []);
+        setLabeledPeople(data.labeled_people || []);
         setMemorial(data.memorial || mockMemorials[0]);
       } catch (err) { setError(err.message); }
       finally { setLoading(false); }
@@ -318,7 +335,14 @@ export default function SharePage() {
             <TabBar active={activeTab} onChange={setActiveTab} />
             <div>
               {activeTab === 'Story' && <StorySlideshow output={output} story={output?.story} />}
-              {activeTab === 'Constellation' && <ConstellationTab data={output} memorial={memorial} contributor={contributors} />}
+              {activeTab === 'Constellation' && (
+                <ConstellationTab
+                  data={output}
+                  memorial={memorial}
+                  contributor={contributors}
+                  labeledPeople={labeledPeople}
+                />
+              )}
               {activeTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} />}
               {activeTab === 'All Photos' && <AllPhotosTab albums={normalizePhotos(output?.photos)} />}
             </div>

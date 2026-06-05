@@ -119,13 +119,14 @@ function DropZone({ onFiles, disabled }) {
 // Styling uses CSS tokens
 
 function PhotoThumb({ asset, onDelete, uploading, onPreviewError }) {
-  const canRenderPreview = asset.previewUrl && !asset.previewFailed;
+  const previewSrc = asset.previewUrl || asset.url;
+  const canRenderPreview = previewSrc && !asset.previewFailed;
 
   return (
     <div className="relative aspect-square overflow-hidden rounded-xl bg-r-card">
       {canRenderPreview ? (
         <Image
-          src={asset.previewUrl}
+          src={previewSrc}
           alt={asset.file_name}
           fill
           sizes="(min-width: 640px) 200px, 30vw"
@@ -238,7 +239,11 @@ export default function PhotosPage() {
       const uploadedPreviewIds = new Set();
       const uploadedWithPreviews = result.assets.map((asset, index) => ({
         ...asset,
-        previewUrl: (previewQueues.get(asset.file_name)?.shift() ?? selectedAtUpload[index])?.previewUrl ?? null,
+        previewUrl:
+          asset.previewUrl ||
+          asset.url ||
+          (previewQueues.get(asset.file_name)?.shift() ?? selectedAtUpload[index])?.previewUrl ||
+          null,
         previewFailed: false,
       })).map((asset) => {
         const matchingPhoto = selectedAtUpload.find(
@@ -299,6 +304,10 @@ export default function PhotosPage() {
   }
 
   function handleContinue() {
+    if (uploadedCount > 0) {
+      router.push(`/contribute/${inviteToken}/label-photos`);
+      return;
+    }
     router.push(`/contribute/${inviteToken}/voice`);
   }
 

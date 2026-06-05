@@ -7,7 +7,7 @@ import {
   createMemorial as apiCreateMemorial,
   getMemorials as apiGetMemorials,
   getMemorial as apiGetMemorial,
-  getMemorialOutput as apiGetMemorialOutput,
+  getAuthToken,
   getJobStatus as apiGetJobStatus,
   triggerGeneration as apiTriggerGeneration,
 } from "../lib/api.js";
@@ -108,25 +108,30 @@ export async function getMemorial(id) {
  * token = Supabase session access_token
  */
 export async function getMemorialOutput(id, token, options = {}) {
-  const { fallbackToMock = false } = options;
+  const accessToken = token?.access_token || token || (await getAuthToken()) || '';
+  if (!accessToken) return null;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30_000);
 
   try {
-    const response = await fetch(`${API_BASE_URL}/memorials/${id}/output`, {
+    const response = await fetch(`${API_BASE_URL}/memorials/${encodeURIComponent(id)}/output`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token?.access_token || token || ''}`,
+        Authorization: `Bearer ${accessToken}`,
       },
+      signal: controller.signal,
     });
 
-    if (response.status === 404) {
-      return fallbackToMock ? apiGetMemorialOutput(id) : null;
-    }
+    if (response.status === 404) return null;
     if (!response.ok) throw new Error(`Failed to fetch memorial output: ${response.status}`);
 
     return await response.json();
   } catch {
-    return apiGetMemorialOutput(id);
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

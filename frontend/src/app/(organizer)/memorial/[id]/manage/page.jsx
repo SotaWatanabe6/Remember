@@ -8,19 +8,19 @@ import Link from 'next/link';
 import { generateMemorialOutput, getGenerationJobStatus, getMemorialOutput } from '@/services/memorialService';
 import { getMemorialContributors } from '@/services/contributorService';
 import { getMemorial, createInviteLink, createShareLink } from '@/lib/api';
-import { mockMemorials } from '@/data/mockMemorials.js';
+import { copyTextToClipboard, normalizeShareUrl } from '@/lib/copyToClipboard';
 import ConstellationGraph from "@/components/output/constellation";
 import MemorialContributionsPage from "@/components/output/contribution-list";
 import MemorialContributionApproval from "@/components/output/contribution-awaiting";
 import StorySlideshow from "@/components/output/StorySlideshow";
 import VoicesTab from "@/components/output/VoicesTab";
 import ProcessingTextSequence from "@/components/dashboard/ProcessingTextSequence";
-import { getSupabaseClient } from "@/lib/supabaseClient.js";
+import { getAuthToken } from "@/lib/api.js";
+import MemorialCoverImage from "@/components/memorial/MemorialCoverImage.jsx";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 // ─── Generation constants ─────────────────────────────────────────────────────
 
-const SUPABASE_AUTH_TOKEN_KEY = "sb-tbpdhybqbjucoxdizlgw-auth-token";
 const GENERATION_POLL_INTERVAL_MS = 1500;
 const GENERATION_MAX_POLL_ATTEMPTS = 60;
 const GENERATION_SUCCESS_STATUSES = new Set(["complete", "completed", "succeeded", "success"]);
@@ -28,41 +28,18 @@ const GENERATION_FAILURE_STATUSES = new Set(["failed", "error"]);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function isLocalDevAuthError(error) {
-  if (process.env.NODE_ENV === 'production') return false;
-  const message = error instanceof Error ? error.message.toLowerCase() : String(error || "").toLowerCase();
-  return message.includes("not authorized") || message.includes("401") || message.includes("403");
-}
-
-async function getCurrentAuthToken() {
-  try {
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase.auth.getSession();
-    if (!error && data.session?.access_token) return data.session.access_token;
-  } catch { /* fall through */ }
-
-  if (typeof window === "undefined") return null;
-  const stored = window.localStorage.getItem(SUPABASE_AUTH_TOKEN_KEY);
-  if (!stored) return null;
-  try {
-    const parsed = JSON.parse(stored);
-    return parsed?.access_token || parsed?.currentSession?.access_token || parsed;
-  } catch {
-    return stored;
-  }
-}
-
 // ─── Memorial Header ──────────────────────────────────────────────────────────
 
 function MemorialHeader({ memorial, onShare }) {
   return (
     <div className="flex items-start gap-8">
-      <div className="h-36 w-36 shrink-0 overflow-hidden rounded-full bg-r-shape">
-        {memorial?.cover_photo_url ? (
-          <img src={memorial.cover_photo_url} alt={memorial.subject_name} className="h-full w-full object-cover" />
-        ) : (
-          <div className="h-full w-full bg-r-shape" />
-        )}
+      <div className="relative h-36 w-36 shrink-0 overflow-hidden">
+        <MemorialCoverImage
+          src={memorial?.cover_photo_url}
+          name={memorial?.subject_name}
+          fill
+          className="h-full w-full"
+        />
       </div>
       <div className="flex-1 min-w-0 pt-2">
         <h1 className="text-[32px] font-medium text-neutral-950 leading-tight">
@@ -206,8 +183,10 @@ function ArchiveTab() {
 function ContributionsTab({ contributorslist, loading, error, onRetry }) {
   const [value, setValue] = useState("contributors");
 
-  const submissions = contributorslist.filter(c => c.status === "submitted");
-  const nonSubmissions = contributorslist.filter(c => c.status !== "submitted");
+  const submissions = contributorslist.filter((c) => {
+    const status = String(c.status || "").toLowerCase();
+    return status === "submitted" || Boolean(c.submitted_at);
+  });
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const current = submissions[currentIndex];
@@ -243,21 +222,26 @@ function ContributionsTab({ contributorslist, loading, error, onRetry }) {
           onRetry={onRetry}
         />
       )}
-      {value === "contributors" && !loading && !error && nonSubmissions.length === 0 && (
+      {value === "contributors" && !loading && !error && contributorslist.length === 0 && (
         <TabEmpty
           title="No contributors yet"
           message="Contributors will appear here once people begin sharing memories."
         />
       )}
-      {value === "contributors" && !loading && !error && nonSubmissions.length > 0 && (
+      {value === "contributors" && !loading && !error && contributorslist.length > 0 && (
         <div className="grid grid-cols-3 gap-4">
-          {nonSubmissions.map((contributor) => (
+          {contributorslist.map((contributor) => (
             <div key={contributor.id} className="rounded-2xl p-5 flex flex-col gap-3 bg-r-modal border border-r-border">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full shrink-0 bg-r-card" />
                 <div className="min-w-0">
                   <p className="text-body-2 font-semibold text-r-text">{contributor.name}</p>
-                  <p className="text-caption text-r-muted mt-0.5">{nonSubmissions.length} contributions</p>
+                  <p className="text-caption text-r-muted mt-0.5">
+                    {String(contributor.status || '').toLowerCase() === 'submitted' ||
+                    contributor.submitted_at
+                      ? 'Submitted'
+                      : 'In progress'}
+                  </p>
                   <p className="text-caption text-r-muted">
                     Last submitted {contributor.submitted_at
                       ? new Date(contributor.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
@@ -327,7 +311,10 @@ function AllPhotosSection({ albums }) {
   const [openAlbum, setOpenAlbum] = useState(null);
   const [lightboxPhoto, setLightboxPhoto] = useState(null);
   const [lightboxIndex, setLightboxIndex] = useState(0);
-  const albumList = Array.isArray(albums) ? albums : albums?.albums ?? [];
+  const albumList = (Array.isArray(albums) ? albums : albums?.albums ?? []).map((album) => ({
+    ...album,
+    album_name: album.album_name || album.name || "Album",
+  }));
   const currentAlbumPhotos = openAlbum?.photos || [];
 
   function openLightbox(photo, index) { setLightboxPhoto(photo); setLightboxIndex(index); }
@@ -503,7 +490,14 @@ function OutputsTab({memorial, contributors, canGenerate, disabledMessage, gener
       </CollapsibleSection>
       <CollapsibleSection title="Constellation">
         <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6 aspect-video flex items-center justify-center">
-          <ConstellationGraph ai_output={output} memorial={memorial} contributor={contributors} width={800} height={800} />
+          <ConstellationGraph
+            ai_output={output}
+            memorial={memorial}
+            contributor={contributors}
+            allowRename
+            width={800}
+            height={800}
+          />
         </div>
       </CollapsibleSection>
       <CollapsibleSection title="Voices">
@@ -519,20 +513,75 @@ function OutputsTab({memorial, contributors, canGenerate, disabledMessage, gener
 // ─── Share Modal ──────────────────────────────────────────────────────────────
 
 function ShareModal({ onClose, memorialId }) {
+  const [contributorUrl, setContributorUrl] = useState('');
+  const [viewerUrl, setViewerUrl] = useState('');
+  const [linksLoading, setLinksLoading] = useState(true);
+  const [linksError, setLinksError] = useState(null);
+  const [copyError, setCopyError] = useState(null);
   const [copiedContributor, setCopiedContributor] = useState(false);
   const [copiedViewer, setCopiedViewer] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadShareLinks() {
+      setLinksLoading(true);
+      setLinksError(null);
+      setContributorUrl('');
+      setViewerUrl('');
+      try {
+        const invite = await createInviteLink(memorialId);
+        if (cancelled) return;
+        setContributorUrl(normalizeShareUrl(invite?.invite_link?.url ?? ''));
+
+        try {
+          const share = await createShareLink(memorialId);
+          if (!cancelled) {
+            setViewerUrl(normalizeShareUrl(share?.share_link?.url ?? ''));
+          }
+        } catch (shareErr) {
+          console.warn('Viewer share link unavailable:', shareErr);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          const message = err instanceof Error ? err.message : 'Could not load share links.';
+          if (message.toLowerCase().includes('not authorized') || message.toLowerCase().includes('do not own')) {
+            setLinksError(
+              'This memorial is not linked to your account. Go to Dashboard, open a memorial you created, then try Share again.',
+            );
+          } else if (message.toLowerCase().includes('logged in')) {
+            setLinksError(`${message} Sign in and try again.`);
+          } else {
+            setLinksError(`${message} Close and try again.`);
+          }
+        }
+      } finally {
+        if (!cancelled) setLinksLoading(false);
+      }
+    }
+
+    loadShareLinks();
+    return () => { cancelled = true; };
+  }, [memorialId]);
+
   async function copyLink(type) {
-    if (type === 'contributor') {
-      const data = await createInviteLink(memorialId);
-      await navigator.clipboard.writeText(data.invite_link.url);
-      setCopiedContributor(true);
-      setTimeout(() => setCopiedContributor(false), 2000);
-    } else {
-      const data = await createShareLink(memorialId);
-      await navigator.clipboard.writeText(data.share_link.url);
-      setCopiedViewer(true);
-      setTimeout(() => setCopiedViewer(false), 2000);
+    setCopyError(null);
+    const url = type === 'contributor' ? contributorUrl : viewerUrl;
+    if (!url) {
+      setCopyError('Link is not ready yet.');
+      return;
+    }
+    try {
+      await copyTextToClipboard(url);
+      if (type === 'contributor') {
+        setCopiedContributor(true);
+        setTimeout(() => setCopiedContributor(false), 2000);
+      } else {
+        setCopiedViewer(true);
+        setTimeout(() => setCopiedViewer(false), 2000);
+      }
+    } catch {
+      setCopyError('Copy failed. Select the link below and copy manually.');
     }
   }
 
@@ -545,19 +594,31 @@ function ShareModal({ onClose, memorialId }) {
           </button>
           <h2 className="text-h2 text-r-text">Share</h2>
         </div>
+        {linksError ? (
+          <p className="text-body-2 text-red-600 mb-4">{linksError}</p>
+        ) : null}
+        {copyError ? (
+          <p className="text-body-2 text-red-600 mb-4">{copyError}</p>
+        ) : null}
         {[
-          { label: 'Invite Contributors', sub: 'For friends and family to share their memories:', type: 'contributor', copied: copiedContributor },
-          { label: 'Invite Viewers', sub: 'For anyone to view this memorial:', type: 'viewer', copied: copiedViewer },
-        ].map(({ label, sub, type, copied }) => (
+          { label: 'Invite Contributors', sub: 'For friends and family to share their memories:', type: 'contributor', copied: copiedContributor, url: contributorUrl },
+          { label: 'Invite Viewers', sub: 'For anyone to view this memorial:', type: 'viewer', copied: copiedViewer, url: viewerUrl },
+        ].map(({ label, sub, type, copied, url }) => (
           <div key={type} className="flex items-start justify-between mb-6">
-            <div>
+            <div className="min-w-0 pr-4">
               <p className="text-h3 text-r-text">{label}</p>
               <p className="text-body-2 text-r-secondary mt-0.5">{sub}</p>
+              {url ? (
+                <p className="text-caption text-r-secondary mt-2 break-all">{url}</p>
+              ) : null}
             </div>
-            <button onClick={() => copyLink(type)}
-              className="shrink-0 rounded-full px-4 py-2 text-h4 transition-all ml-5 border-none"
+            <button
+              type="button"
+              onClick={() => copyLink(type)}
+              disabled={linksLoading || !url}
+              className="shrink-0 rounded-full px-4 py-2 text-h4 transition-all ml-5 border-none disabled:opacity-50"
               style={{ backgroundColor: copied ? '#7D8C6A' : 'var(--color-r-btn)', color: copied ? '#FBF9F6' : 'var(--color-r-btn-text)' }}>
-              {copied ? 'Copied!' : 'Copy Link'}
+              {copied ? 'Copied!' : linksLoading ? 'Loading…' : 'Copy Link'}
             </button>
           </div>
         ))}
@@ -597,30 +658,23 @@ export default function MemorialOutputPage() {
   // Load memorial header
   useEffect(() => {
     if (!id) return;
-    getMemorial(id).then((data) => {
-      const m = data?.memorial ?? data;
-      if (!m) return;
-      setMemorial({
-        id: m.id,
-        subject_name: m.subject_name || m.deceased_name,
-        cover_photo_url: m.cover_photo_url || m.profile_photo_url || null,
-        date_of_birth: m.date_of_birth || m.birth_date || null,
-        date_of_passing: m.date_of_passing || m.death_date || null,
-        bio: m.brief_biography || m.short_description || null,
-        status: m.status || null,
+    getMemorial(id)
+      .then((data) => {
+        const m = data?.memorial ?? data;
+        if (!m) return;
+        setMemorial({
+          id: m.id,
+          subject_name: m.subject_name || m.deceased_name,
+          cover_photo_url: m.cover_photo_url || m.profile_photo_url || null,
+          date_of_birth: m.date_of_birth || m.birth_date || null,
+          date_of_passing: m.date_of_passing || m.death_date || null,
+          bio: m.brief_biography || m.short_description || m.biography || null,
+          status: m.status || null,
+        });
+      })
+      .catch(() => {
+        setMemorial(null);
       });
-    }).catch(() => {
-      const mockData = mockMemorials.find((m) => m.id === id) ?? mockMemorials[0];
-      setMemorial({
-        id: mockData.id,
-        subject_name: mockData.subject_name || mockData.deceased_name,
-        cover_photo_url: mockData.cover_photo_url || mockData.profile_photo_url || null,
-        date_of_birth: mockData.date_of_birth || mockData.birth_date || null,
-        date_of_passing: mockData.date_of_passing || mockData.death_date || null,
-        bio: mockData.brief_biography || mockData.short_description || null,
-        status: mockData.status || null,
-      });
-    });
   }, [id]);
 
   const loadContributors = useCallback(async () => {
@@ -628,10 +682,21 @@ export default function MemorialOutputPage() {
     setContributorsLoading(true);
     setContributorsError(null);
     try {
-      const token = await getCurrentAuthToken();
+      const token = await getAuthToken();
       const contributor = await getMemorialContributors(memorialId, token);
       const memorialApi = await getMemorial(memorialId);
-      setMemorial(memorialApi.memorial);
+      const m = memorialApi?.memorial ?? memorialApi;
+      if (m) {
+        setMemorial({
+          id: m.id,
+          subject_name: m.subject_name || m.deceased_name,
+          cover_photo_url: m.cover_photo_url || m.profile_photo_url || null,
+          date_of_birth: m.date_of_birth || m.birth_date || null,
+          date_of_passing: m.date_of_passing || m.death_date || null,
+          bio: m.brief_biography || m.short_description || m.biography || null,
+          status: m.status || null,
+        });
+      }
       setContributors(contributor.contributors ?? []);
     } catch (err) {
       setContributorsError(err instanceof Error ? err.message : "Failed to fetch contributors");
@@ -646,7 +711,7 @@ export default function MemorialOutputPage() {
     setOutputLoading(true);
     setOutputError(null);
     try {
-      const token = await getCurrentAuthToken();
+      const token = await getAuthToken();
       const data = await getMemorialOutput(id, token, options);
       setOutput(data);
       return data;
@@ -664,7 +729,7 @@ export default function MemorialOutputPage() {
     setGenerating(true);
     setGenerationError(null);
     setGenerationJob(null);
-    const token = await getCurrentAuthToken();
+    const token = await getAuthToken();
     try {
       const generation = await generateMemorialOutput(memorialId, token);
       const initialJob = generation?.job ?? null;
@@ -691,11 +756,6 @@ export default function MemorialOutputPage() {
 
       await loadOutput({ fallbackToMock: process.env.NODE_ENV !== 'production' });
     } catch (err) {
-      if (isLocalDevAuthError(err)) {
-        await loadOutput({ fallbackToMock: true });
-        setGenerationError(null);
-        return;
-      }
       setGenerationError(err instanceof Error ? err.message : "Generation failed. Please try again.");
     } finally {
       setGenerating(false);
