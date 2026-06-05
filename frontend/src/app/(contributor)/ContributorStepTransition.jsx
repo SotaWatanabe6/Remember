@@ -7,7 +7,7 @@ const warmBackgroundSteps = ["/photos", "/voice", "/upload", "/story"];
 
 function getContributorBackground(pathname) {
   const isWarmStep = warmBackgroundSteps.some((step) => pathname?.endsWith(step));
-  return isWarmStep ? "#F0EAE2" : "#ffffff";
+  return isWarmStep ? "#F2ECE4" : "#F2ECE4";
 }
 
 export default function ContributorStepTransition({ children }) {

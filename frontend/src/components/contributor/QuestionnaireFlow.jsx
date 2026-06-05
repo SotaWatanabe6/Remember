@@ -40,7 +40,7 @@ const questionnaireErrorCopy = {
 
 function LoadingState() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
+    <main className="flex min-h-screen items-center justify-center bg-r-bg px-6 py-10 text-neutral-950 sm:px-[50px]">
       <section className="flex flex-col items-center gap-4 text-center" aria-live="polite">
         <div className="size-12 rounded-full border-2 border-slate-200 border-t-neutral-950" />
         <p className="text-base leading-6 text-slate-600">Opening your questions...</p>
@@ -58,7 +58,7 @@ function QuestionnaireErrorState({ status, inviteToken }) {
   const linkText = status === "relationship_missing" ? "Choose relationship" : "Return to invitation";
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
+    <main className="flex min-h-screen items-center justify-center bg-r-bg px-6 py-10 text-neutral-950 sm:px-[50px]">
       <section className="flex w-full max-w-[560px] flex-col items-center gap-5 text-center">
         <div className="flex size-16 items-center justify-center rounded-full bg-slate-100 text-2xl font-medium text-slate-600">
           R
@@ -531,7 +531,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
   }
 
   return (
-    <main className="min-h-screen bg-white px-6 py-8 text-neutral-950 sm:px-[50px] sm:py-[50px]">
+    <main className="min-h-screen bg-r-bg px-6 py-8 text-neutral-950 sm:px-[50px] sm:py-[50px]">
       <div className="mx-auto flex min-h-[calc(100vh-64px)] w-full max-w-[760px] flex-col justify-center gap-7 sm:min-h-[calc(100vh-100px)]">
         <section className="flex flex-col gap-4 text-center">
           <p className="text-sm font-medium uppercase leading-5 text-slate-500">

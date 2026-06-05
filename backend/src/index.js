@@ -29,6 +29,7 @@ app.use(cors({
 const uploadLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
+  skip: (req) => req.method !== 'POST',
   message: { error: "Too many uploads. Please wait and try again." }
 })
 
@@ -43,7 +44,9 @@ app.get('/health', (req, res) => {
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/auth', authRoutes)
 app.use('/memorials', memorialRoutes)
-app.use('/contribute', uploadLimiter, contributeRoutes)
+app.use('/contribute/:token/photos', uploadLimiter)
+app.use('/contribute/:token/voice', uploadLimiter)
+app.use('/contribute', contributeRoutes)
 app.use('/ai', aiRoutes)
 app.use('/share', shareRoutes)
 app.use('/waitlist', waitlistRoutes)

@@ -160,7 +160,7 @@ export default function ReviewPage() {
     setIsSubmitting(true);
     setSubmitError("");
     try {
-      await submitContributorDraft(inviteToken);
+      await submitContributorDraft(inviteToken, draft);
       router.push(`/contribute/${inviteToken}/submitted`);
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "We could not submit your contribution. Please try again.");
@@ -232,7 +232,7 @@ export default function ReviewPage() {
                     type="button"
                     onClick={() => handleDeletePhoto(photo.id)}
                     className="absolute right-2 top-2 rounded-full p-1.5 shadow-sm transition"
-                    style={{ backgroundColor: "rgba(240,234,226,0.9)" }}
+                    style={{ backgroundColor: "rgba(242,236,228,0.9)" }}
                     aria-label={`Remove ${photo.file_name}`}
                   >
                     <svg width="12" height="12" fill="none" stroke="var(--color-r-danger)" strokeWidth="2" viewBox="0 0 24 24">

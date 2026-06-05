@@ -720,7 +720,7 @@ export default function MemorialOutputPage() {
   useEffect(() => { queueMicrotask(loadOutput); }, [loadOutput]);
 
   return (
-    <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
+    <main className="min-h-screen bg-r-bg px-6 py-10 text-neutral-950 sm:px-[50px]">
       <div className="mx-auto flex w-full max-w-[960px] flex-col gap-8">
 
         <nav className="flex h-10 items-center justify-between">

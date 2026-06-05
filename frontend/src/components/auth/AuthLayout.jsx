@@ -3,7 +3,7 @@ import AuthNav from "./AuthNav.jsx";
 
 export default function AuthLayout({ title, subtitle, children, footer }) {
   return (
-    <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px] sm:py-[50px]">
+    <main className="min-h-screen bg-r-bg px-6 py-10 text-neutral-950 sm:px-[50px] sm:py-[50px]">
       <div className="mx-auto flex w-full max-w-[1340px] flex-col items-center gap-[72px] sm:gap-[100px]">
         <AuthNav />
 
