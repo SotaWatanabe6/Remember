@@ -4,6 +4,16 @@ import localFont from "next/font/local";
 const switzer = localFont({
   src: [
     {
+      path: "../../public/fonts/switzer/Switzer-Light.woff2",
+      weight: "300",
+      style: "normal",
+    },
+    {
+      path: "../../public/fonts/switzer/Switzer-LightItalic.woff2",
+      weight: "300",
+      style: "italic",
+    },
+    {
       path: "../../public/fonts/switzer/Switzer-Regular.woff2",
       weight: "400",
       style: "normal",

@@ -1,26 +1,21 @@
 body{
-  background-color: white;
-  /* border: 2px solid red; */
-  padding: 0;
+  background-color: #fff;
 }
-
 .header{
   font-size: 28px;
   font-family: var(--font-family-display);
-  font-weight:700;
+  font-weight: 700;
   height: 120px;
-  width: 1140px;
-
-  /* height: calc(120px - var(--page-pad-x)); */
+  width: 100%;
   display: flex;
-  align-items:center;
+  align-items: center;
   justify-content: center;
 }
 
 .logo{
   font-size: 28px;
   font-family: var(--font-family-display);
-  font-weight:700;
+  font-weight: 700;
 }
 
 
@@ -28,19 +23,21 @@ body{
   width: 100%;
   max-width: 1140px;
   margin-inline: auto;
-display: flex;
-flex-direction: column;
+  display: flex;
+  flex-direction: column;
   gap: 60px;
   font-family: var(--font-family-body);
+  padding-inline: 24px;
 }
 
+@media (min-width: 640px) {
+  .container {
+    padding-inline: 24px;
+  }
+}
 
-/* 
-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.45);
-} */
-
-dialog::backdrop {
-  background: #F2ECE4;
-  opacity: 1;
+@media (min-width: 1200px) {
+  .container {
+    padding-inline: 0;
+  }
 }
