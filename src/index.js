@@ -13,9 +13,10 @@ const shareRoutes = require('./routes/share')
 
 const app = express()
 
-const contributeLimiter = rateLimit({
+const uploadLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
+  skip: (req) => req.method !== 'POST',
   message: { error: 'Too many requests, please try again later.' }
 })
 
@@ -28,7 +29,9 @@ app.get('/health', (req, res) => {
 
 app.use('/auth', authRoutes)
 app.use('/memorials', memorialRoutes)
-app.use('/contribute', contributeLimiter, contributeRoutes)
+app.use('/contribute/:token/photos', uploadLimiter)
+app.use('/contribute/:token/voice', uploadLimiter)
+app.use('/contribute', contributeRoutes)
 app.use('/ai', aiRoutes)
 app.use('/share', shareRoutes)
 

@@ -66,7 +66,7 @@ export const TYPE = {
 
 // ─── Colors ───────────────────────────────────────────────────────────────────
 export const COLORS = {
-  bg:             '#F0EAE2',
+  bg:             '#F2ECE4',
   cardBg:         '#E8E0D8',
   modalBg:        '#FBF9F6',
   text:           '#423F39',
