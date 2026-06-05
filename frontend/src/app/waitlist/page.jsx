@@ -111,23 +111,23 @@ export default function WaitListPage() {
 
         <div className="product-output-cards flex flex-col  gap-6 md:gap-12">
           <ProductOutfitCard
-            src="/images/slide-show.png"
+            src="/images/slide-show-2.png"
             alt="Slideshow preview"
             description="Their story, told by the people who knew them best"
           />
           <ProductOutfitCard
-            src="/images/constellation.png"
+            src="/images/constellation-2.png"
             alt="Constellation preview"
             description="Every part of who they were, all connected"
           />
           <ProductOutfitCard
-            src="/images/voices.png"
+            src="/images/voices-2.png"
             alt="Voices preview"
             description="The words the people who loved them still carry"
           />
         </div>
 
-        <p className="w-full text-[11px] uppercase text-[#767676]">
+        <p className="w-full text-[11px]  uppercase text-[#767676]">
           Remember isn&apos;t perfect yet. But our core value is to create
           something that feels close to the person you&apos;re making this for.
           If what we build doesn&apos;t feel worthy of that person, tell us
