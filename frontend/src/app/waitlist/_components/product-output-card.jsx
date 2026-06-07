@@ -10,7 +10,7 @@ export default function ProductOutfitCard(props) {
         height={711}
         alt={props.alt}
       />
-      <p className="mt-4 text-base font-light  sm:text-[16px]">
+      <p className="mt-4 text-base font-light italic  sm:text-[15px]">
         {props.description}
       </p>
     </article>
