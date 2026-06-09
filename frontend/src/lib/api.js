@@ -1341,11 +1341,40 @@ export async function fetchContributorPhotos(token, contributorToken) {
 
 export async function getContributorSummary(token) {
   const session = readContributorSession(token);
-  const contributorToken = session?.contributorToken || session?.contributorId;
-  const photos = contributorToken
-    ? await fetchContributorPhotos(token, contributorToken)
-    : readStoredPhotos(token);
-  const voice = readStoredVoice(token);
+  const store = getStore();
+
+  // Check in-memory store first — used when photos/page.jsx uses addPhotos
+  // Fall back to localStorage — used when backend upload path writes via writeStoredPhotos
+  let photos;
+  if (store.photos.length > 0) {
+    photos = store.photos.map((p) => ({
+      id: p.id,
+      file_name: p.file?.name || '',
+      previewUrl: p.previewUrl,
+      caption: p.caption ?? null,
+    }));
+  } else {
+    photos = readStoredPhotos(token).map((p) => ({
+      id: p.id,
+      file_name: p.file_name || '',
+      previewUrl: p.previewUrl || p.url || null,
+      caption: p.caption ?? null,
+    }));
+  }
+
+  // Same for voice
+  let voice;
+  if (store.voice.length > 0) {
+    voice = store.voice.map((r) => ({
+      id: r.id,
+      contributor_title: r.title,
+      file_name: r.file?.name || '',
+      previewUrl: r.previewUrl,
+      duration_seconds: 0,
+    }));
+  } else {
+    voice = readStoredVoice(token);
+  }
 
   const contributorId = session?.contributorId ?? null;
   const responsesByContributor = readStoredResponses(token);

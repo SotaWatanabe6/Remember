@@ -74,7 +74,9 @@ function ConstellationsSection({ output, memorial, contributor }) {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
         <p className="text-h3 text-r-text">Constellations</p>
-        <p className="mt-2 max-w-xs text-body-2 text-r-muted">Constellation will appear here once the memorial has been generated.</p>
+        <p className="mt-2 max-w-xs text-body-2 text-r-muted">
+          Constellation will appear here once the memorial has been generated.
+        </p>
       </div>
     );
   }
@@ -127,7 +129,14 @@ function WaveformPlayer({ audioUrl, color }) {
 
     return () => {
       mounted = false;
-      if (wavesurferRef.current) { wavesurferRef.current.destroy(); wavesurferRef.current = null; }
+      if (wavesurferRef.current) {
+        try {
+          wavesurferRef.current.destroy();
+        } catch {
+          // AbortError expected when component unmounts during audio load
+        }
+        wavesurferRef.current = null;
+      }
     };
   }, [audioUrl, color]);
 
@@ -385,8 +394,22 @@ function AlbumView({ albums }) {
 // Uses real contributors from the backend. Per-contributor photo grouping is not
 // yet available in the output shape — photos column shows placeholders for now.
 
-function ContributorsView({ contributors }) {
+function ContributorsView({ contributors, output }) {
   const [expanded, setExpanded] = useState(null);
+
+  // Build a map of contributor name → their photos from the output albums
+  const photosByContributor = {};
+  const albums = Array.isArray(output?.photos)
+    ? output.photos
+    : output?.photos?.albums ?? [];
+  albums.forEach((album) => {
+    (album.photos || []).forEach((photo) => {
+      const name = photo.contributor_name;
+      if (!name) return;
+      if (!photosByContributor[name]) photosByContributor[name] = [];
+      photosByContributor[name].push(photo);
+    });
+  });
 
   if (!contributors || contributors.length === 0) {
     return (
@@ -404,48 +427,107 @@ function ContributorsView({ contributors }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {contributors.map((contributor) => (
-        <div key={contributor.id} className="rounded-2xl overflow-hidden border border-r-border">
-          <div className="flex items-stretch">
-            <div className="w-[220px] shrink-0 p-4 flex flex-col justify-between bg-r-card">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full shrink-0 bg-r-border" />
-                <div className="min-w-0">
-                  <p className="text-body-2 font-medium text-r-text">{contributor.name}</p>
-                  <p className="text-caption text-r-muted mt-0.5">
-                    {contributor.submitted_at
-                      ? `Last submitted ${new Date(contributor.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
-                      : 'In progress'}
-                  </p>
+      {contributors.map((contributor) => {
+        const contribPhotos = photosByContributor[contributor.name] || [];
+        const isExpanded = expanded === contributor.id;
+
+        return (
+          <div key={contributor.id} className="rounded-2xl overflow-hidden border border-r-border">
+            <div className="flex items-stretch">
+              {/* Contributor info card */}
+              <div className="w-[220px] shrink-0 p-4 flex flex-col justify-between bg-r-card">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full shrink-0 bg-r-border" />
+                  <div className="min-w-0">
+                    <p className="text-body-2 font-medium text-r-text">{contributor.name}</p>
+                    <p className="text-caption text-r-muted mt-0.5">
+                      {contributor.submitted_at
+                        ? `Last submitted ${new Date(contributor.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
+                        : 'In progress'}
+                    </p>
+                  </div>
                 </div>
+                <span className="mt-3 self-start inline-block rounded-full px-3 py-1 text-caption bg-r-bg"
+                  style={{ border: '1px solid var(--color-r-border)', color: relationshipColor(contributor.relationship_type) }}>
+                  {contributor.relationship_type || 'No relationship provided'}
+                </span>
               </div>
-              <span className="mt-3 self-start inline-block rounded-full px-3 py-1 text-caption bg-r-bg"
-                style={{ border: '1px solid var(--color-r-border)', color: relationshipColor(contributor.relationship_type) }}>
-                {contributor.relationship_type || 'No relationship provided'}
-              </span>
+
+              {/* Photo slots — first photo + second with gradient overlay */}
+              <div className="flex flex-1 overflow-hidden">
+                {[0, 1].map((i) => {
+                  const photo = contribPhotos[i];
+                  const isLast = i === 1;
+                  const hasMore = contribPhotos.length > 2;
+
+                  return (
+                    <div key={i} className="flex-1 relative overflow-hidden bg-r-card">
+                      {photo?.url ? (
+                        <img
+                          src={photo.url}
+                          alt={photo.caption || ''}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="h-full w-full" style={{ backgroundColor: '#D0C8C0' }} />
+                      )}
+                      {/* Green gradient overlay on second photo if more photos exist */}
+                      {isLast && hasMore && (
+                        <div
+                          className="absolute inset-0 flex items-center justify-end pr-3"
+                          style={{
+                            background: 'linear-gradient(to right, transparent 40%, rgba(125, 140, 106, 0.85) 100%)',
+                          }}
+                        >
+                          <svg width="20" height="20" fill="none" stroke="white" strokeWidth="2.5" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Expand toggle */}
+              <button
+                onClick={() => setExpanded(isExpanded ? null : contributor.id)}
+                className="w-10 flex items-center justify-center shrink-0 hover:opacity-70 transition-opacity text-r-text"
+              >
+                <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d={isExpanded ? "M18 15l-6-6-6 6" : "M6 9l6 6 6-6"} />
+                </svg>
+              </button>
             </div>
-            {/* Photo slots — placeholders until per-contributor photo grouping is available in output */}
-            <div className="flex flex-1">
-              {[0, 1].map((i) => (
-                <div key={i} className="flex-1 relative overflow-hidden bg-r-card">
-                  <div className="h-full w-full" style={{ backgroundColor: '#D0C8C0' }} />
-                </div>
-              ))}
-            </div>
-            <button onClick={() => setExpanded(expanded === contributor.id ? null : contributor.id)}
-              className="w-10 flex items-center justify-center shrink-0 hover:opacity-70 transition-opacity text-r-text">
-              <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d={expanded === contributor.id ? "M18 15l-6-6-6 6" : "M6 9l6 6 6-6"} />
-              </svg>
-            </button>
+
+            {/* Expanded full photo grid */}
+            {isExpanded && (
+              <div
+                className="p-4 bg-r-bg"
+                style={{ borderTop: '1px solid var(--color-r-border)' }}
+              >
+                {contribPhotos.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-3">
+                    {contribPhotos.map((photo) => (
+                      <div key={photo.id} className="aspect-square overflow-hidden rounded-xl bg-r-card">
+                        {photo.url ? (
+                          <img src={photo.url} alt={photo.caption || ''} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="h-full w-full bg-r-card" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-caption text-r-muted">
+                    No photos found for this contributor in the generated output.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
-          {expanded === contributor.id && (
-            <div className="p-4 bg-r-bg" style={{ borderTop: '1px solid var(--color-r-border)' }}>
-              <p className="text-caption text-r-muted">Photos will appear here once the memorial has been generated.</p>
-            </div>
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -538,7 +620,7 @@ function PhotoArchiveSection({ output, contributors }) {
         )}
       </div>
       {view === 'Album' && <AlbumView albums={albums} />}
-      {view === 'Contributors' && <ContributorsView contributors={contributors} />}
+      {view === 'Contributors' && ( <ContributorsView contributors={contributors} output={output} />)}
       {view === 'All Photos' && <MasonryView photos={allPhotos} />}
     </div>
   );
