@@ -1,4 +1,5 @@
-import Image from "next/image";
+import MemorialCoverImage from "@/components/memorial/MemorialCoverImage.jsx";
+import { isBrowserImageUrl } from "@/lib/memorialCoverImage.js";
 
 const badgeClasses = {
   collecting: "bg-[#F8E7AE] text-[#5A4300]",
@@ -37,15 +38,17 @@ function formatStatus(status) {
 }
 
 function MemorialPreview({ memorial }) {
-  if (memorial.cover_photo_url) {
+  if (isBrowserImageUrl(memorial.cover_photo_url)) {
     return (
       <div className="relative h-[210px] w-full overflow-hidden rounded-[20px] border border-r-border bg-r-bg">
-        <Image
+        <MemorialCoverImage
           src={memorial.cover_photo_url}
+          name={memorial.subject_name}
           alt={`Cover photo for ${memorial.subject_name}`}
           fill
-          unoptimized
-          className="object-cover"
+          rounded="rounded-[20px]"
+          className="h-full w-full"
+          fallbackClassName="bg-[#E8EDF3] text-[#5F6848] text-4xl"
         />
       </div>
     );

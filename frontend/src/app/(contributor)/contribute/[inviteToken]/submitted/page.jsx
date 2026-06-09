@@ -2,10 +2,10 @@
 
 // frontend/src/app/(contributor)/contribute/[inviteToken]/submitted/page.jsx
 
-import { useEffect, useMemo, useState } from "react";
-import Image from "next/image";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import MemorialCoverImage from "@/components/memorial/MemorialCoverImage.jsx";
 import { getContributorSubmittedDraft } from "@/services/contributorService.js";
 
 // ─── Error copy ────────────────────────────────────────────────────────────────
@@ -64,14 +64,15 @@ function SubmittedErrorState({ status, inviteToken }) {
 // ─── Memorial Avatar — logic unchanged ────────────────────────────────────────
 
 function MemorialAvatar({ name, photoUrl }) {
-  const initial = useMemo(() => name.trim().charAt(0).toUpperCase() || "R", [name]);
   return (
-    <div className="relative flex size-[132px] items-center justify-center overflow-hidden rounded-full text-[52px] font-medium sm:size-[156px] sm:text-[60px] bg-r-card text-r-muted">
-      {photoUrl ? (
-        <Image src={photoUrl} alt={`Photo of ${name}`} fill sizes="(min-width: 640px) 156px, 132px" className="object-cover" unoptimized />
-      ) : (
-        <span aria-hidden="true">{initial}</span>
-      )}
+    <div className="relative size-[180px] overflow-hidden">
+      <MemorialCoverImage
+        src={photoUrl}
+        name={name}
+        fill
+        className="h-full w-full text-[52px] sm:text-[60px]"
+        fallbackClassName="bg-r-shape text-white text-[52px] font-medium"
+      />
     </div>
   );
 }
@@ -125,8 +126,12 @@ export default function SubmittedPage() {
             </p>
           </div>
 
-          {/* Decorative olive circle */}
-          <div className="rounded-full bg-r-shape" style={{ width: '180px', height: '180px' }} />
+          <div className="relative" style={{ width: "180px", height: "180px" }}>
+            <MemorialAvatar
+              name={subjectName}
+              photoUrl={draft.invite.deceased.photoUrl}
+            />
+          </div>
 
           <button
             onClick={() => window.location.href = `/contribute/${inviteToken}/upload`}
