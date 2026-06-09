@@ -86,6 +86,7 @@ function ConstellationsSection({ output, memorial, contributor }) {
         ai_output={output}
         memorial={memorial}
         contributor={contributor}
+        relationships={output?.relationships ?? []}
         width={1250}
         height={800}
       />
@@ -262,15 +263,31 @@ function VoicesSection({ voices }) {
             </div>
           )}
           {current && <WaveformPlayer key={current.id} audioUrl={current.audio_url || null} color="var(--color-r-colleague)" />}
-          {current?.transcript_text && (
-            <p className="text-body-2 text-r-muted" style={{ fontStyle: 'italic', lineHeight: 1.6 }}>&quot;{current.transcript_text}&quot;</p>
+          {(current?.key_quote || current?.transcript_text) && (
+            <p className="text-body-2 text-r-muted" style={{ fontStyle: 'italic', lineHeight: 1.6 }}>
+              &quot;{current.key_quote || current.transcript_text}&quot;
+            </p>
           )}
           {current?.ai_category && (
             <span className="inline-block self-start rounded-full px-4 py-1.5 text-body-2 text-r-muted" style={{ border: '1px solid var(--color-r-border)' }}>
               {current.ai_category}
             </span>
           )}
-          {current && <p className="text-body-2 font-medium text-r-text">Submitted by {current.contributor_name || 'Contributor'}</p>}
+          {current && (
+          <div className="flex flex-col gap-0.5">
+            <p className="text-body-2 font-medium text-r-text">
+              {current.contributor_name ? `Submitted by ${current.contributor_name}` : 'Voice recording'}
+            </p>
+            {current.relationship_type && (
+              <p className="text-caption text-r-muted">{current.relationship_type}</p>
+            )}
+            {current.created_at || current.submitted_date ? (
+              <p className="text-caption text-r-muted">
+                {new Date(current.created_at || current.submitted_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+              </p>
+            ) : null}
+          </div>
+        )}
         </div>
       </div>
     </div>
@@ -848,15 +865,19 @@ export default function MemorialOutputPage() {
         getMemorialById(id).catch(() => null),
       ]);
       setOutput(data);
-      const header = memorialData || mockMemorials.find((m) => m.id === id) || mockMemorials[0];
-      setMemorial({
-        id: header.id || id,
-        subject_name: header.subject_name || header.deceased_name,
-        cover_photo_url: header.cover_photo_url || header.profile_photo_url || null,
-        date_of_birth: header.date_of_birth || header.birth_date || null,
-        date_of_passing: header.date_of_passing || header.death_date || null,
-        bio: header.brief_biography || header.short_description || header.biography || null,
-      });
+      if (memorialData) {
+        setMemorial({
+          id: memorialData.id || id,
+          subject_name: memorialData.subject_name || memorialData.deceased_name || '',
+          cover_photo_url: memorialData.cover_photo_url || memorialData.profile_photo_url || null,
+          date_of_birth: memorialData.date_of_birth || memorialData.birth_date || null,
+          date_of_passing: memorialData.date_of_passing || memorialData.death_date || null,
+          bio: memorialData.brief_biography || memorialData.short_description || memorialData.biography || null,
+        });
+      } else {
+        // Memorial header unavailable — use ID only, no mock data
+        setMemorial({ id, subject_name: '', cover_photo_url: null, date_of_birth: null, date_of_passing: null, bio: null });
+      }
     } catch (err) {
       setError(err.message || "Failed to load memorial");
     } finally {
@@ -885,7 +906,7 @@ export default function MemorialOutputPage() {
         <span className="text-h4 text-r-text">Remember</span>
         <div className="flex items-center gap-4">
           <button onClick={() => setShowShare(true)} className="text-body-2 text-r-text transition-opacity hover:opacity-70 bg-none border-none cursor-pointer">Share</button>
-          <Link href="/dashboard" className="text-body-2 text-r-text transition-opacity hover:opacity-70">← Back</Link>
+          <Link href={id ? `/memorial/${id}/manage` : '/dashboard'} className="...">← Back</Link>
         </div>
       </header>
 

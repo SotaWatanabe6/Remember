@@ -144,8 +144,23 @@ function buildRelationshipCounts(contributors = []) {
   }));
 }
 
-function buildRelationshipGraph(contributors, centerId, centerName) {
-  const contributorNodes = (contributors || []).map((c) => contributorToGraphNode(c));
+// Replace the entire buildRelationshipGraph function:
+function buildRelationshipGraph(contributors, centerId, centerName, relationships = []) {
+  const contributorNodes = (contributors || []).map((c) => {
+    const relType = (c.relationship_type || 'other').toLowerCase();
+    const relData = relationships.find((r) => r.type === relType) || {};
+    return {
+      id: c.id,
+      name: c.name || 'Contributor',
+      relationship_type: capitalizeFirstLetter(c.relationship_type) || 'Other',
+      prominence: 0.7,
+      summary: relData.summary || '',
+      photos: relData.photos || [],
+      photo_urls: relData.photos || [],
+      quotes: relData.quote ? [{ text: relData.quote, contributor_name: c.name }] : [],
+      contributions: 1,
+    };
+  });
 
   return {
     nodes: [
@@ -174,6 +189,7 @@ export default function ConstellationGraph({
   ai_output,
   memorial,
   contributor = [],
+  relationships = [],
   width,
   height,
 }) {
@@ -250,8 +266,9 @@ export default function ConstellationGraph({
       contributor,
       memorial?.id || 'memorial-center',
       memorial?.subject_name || memorial?.deceased_name || 'Memorial',
+      relationships || [],
     ),
-    [contributor, memorial?.id, memorial?.subject_name, memorial?.deceased_name],
+    [contributor, memorial?.id, memorial?.subject_name, memorial?.deceased_name, relationships],
   );
 
   const graphNodes = tab === "Relationships" ? relationshipGraph.nodes : nodes;

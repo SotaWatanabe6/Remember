@@ -104,6 +104,18 @@ async function resolveOutputMediaUrls(supabase, output) {
     )
   }
 
+  if (Array.isArray(resolved.relationships)) {
+    resolved.relationships = await Promise.all(
+      resolved.relationships.map(async (group) => {
+        const photos = await Promise.all(
+          (group.photos || []).map((path) => resolveStorageUrl(supabase, path))
+        )
+        return { ...group, photos: photos.filter(Boolean) }
+      })
+    )
+  }
+
+
   const photoAlbums = Array.isArray(resolved.photos)
     ? resolved.photos
     : resolved.photos?.albums
