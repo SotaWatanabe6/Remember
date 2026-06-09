@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { Camera, ChevronLeft, ChevronRight } from 'lucide-react';
 
 function formatRelationship(relationshipType) {
   if (!relationshipType) return '';
@@ -38,7 +39,12 @@ function buildContributorLookup(output) {
 }
 
 function buildPhotoLookup(output) {
-  const albums = Array.isArray(output?.photos) ? output.photos : [];
+  let albums = [];
+  if (Array.isArray(output?.photos)) {
+    albums = output.photos;
+  } else if (Array.isArray(output?.photos?.albums)) {
+    albums = output.photos.albums;
+  }
 
   return albums.reduce((lookup, album) => {
     (album.photos || []).forEach((photo) => {
@@ -53,8 +59,10 @@ function buildPhotoLookup(output) {
 function normalizeStorySlides(output, story) {
   const contributorLookup = buildContributorLookup(output);
   const photoLookup = buildPhotoLookup(output);
+  const seenPhotos = new Set();
+  const sourceSlides = getStorySource(output, story);
 
-  return getStorySource(output, story)
+  return sourceSlides
     .map((slide, index) => {
       const contributor = contributorLookup[slide.contributor_id] || {};
       const matchedPhoto = photoLookup[slide.photo_id] || {};
@@ -71,46 +79,39 @@ function normalizeStorySlides(output, story) {
         matchedPhoto.url ||
         matchedPhoto.photo_url ||
         null;
+      const photoKey = slide.photo_id || photoUrl;
+      const narration = slide.narration || slide.quote || slide.memory || slide.caption || '';
+      const matchedQuote = slide.matched_quote || slide.verbatim_quote || '';
 
       return {
         id: slide.id || slide.photo_id || `${index}-${contributorName}`,
         orderIndex: Number.isFinite(Number(slide.order_index)) ? Number(slide.order_index) : index,
         photoUrl,
-        quote: slide.matched_quote || slide.quote || slide.memory || slide.caption || '',
+        photoKey,
+        narration,
+        matchedQuote,
         contributorName,
         relationshipLabel: formatRelationship(
           slide.relationship_type || contributor.relationship_type || matchedPhoto.relationship_type,
         ),
         themeLabel: slide.theme_label || slide.theme || slide.ai_theme || '',
+        lifePeriod: slide.life_period || slide.lifePeriod || '',
       };
     })
-    .filter((slide) => slide.photoUrl || slide.quote)
-    .sort((a, b) => a.orderIndex - b.orderIndex);
-}
-
-function ChevronLeftIcon() {
-  return (
-    <svg width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-    </svg>
-  );
-}
-
-function ChevronRightIcon() {
-  return (
-    <svg width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-    </svg>
-  );
+    .sort((a, b) => a.orderIndex - b.orderIndex)
+    .filter((slide) => {
+      if (!slide.photoUrl || (!slide.narration && !slide.matchedQuote)) return false;
+      if (slide.photoKey && seenPhotos.has(slide.photoKey)) return false;
+      if (slide.photoKey) seenPhotos.add(slide.photoKey);
+      return true;
+    });
 }
 
 function EmptyStoryState() {
   return (
     <div className="flex min-h-[420px] flex-col items-center justify-center rounded-[18px] border border-[#e2e8f0] bg-white px-6 text-center shadow-auth">
       <div className="mb-4 grid size-14 place-items-center rounded-full bg-[#eff6ff] text-[#45556c]">
-        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h16M4 19h16M7 5v14M17 5v14" />
-        </svg>
+        <Camera size={24} strokeWidth={1.6} aria-hidden="true" />
       </div>
       <p className="text-base font-medium text-neutral-950">No story slides are available yet.</p>
     </div>
@@ -174,8 +175,8 @@ export default function StorySlideshow({ output, story, loading = false, error =
   const isFirst = currentIndex === 0;
   const isLast = currentIndex === slides.length - 1;
   const progress = ((currentIndex + 1) / slides.length) * 100;
-  const altText = slide.quote
-    ? `Memory contributed by ${slide.contributorName}: ${slide.quote}`
+  const altText = slide.narration || slide.matchedQuote
+    ? `Story photo paired with a memory from ${slide.contributorName}`
     : `Story photo contributed by ${slide.contributorName}`;
   const slideTransition = shouldReduceMotion ? { duration: 0 } : { duration: 0.35, ease: 'easeInOut' };
 
@@ -213,21 +214,35 @@ export default function StorySlideshow({ output, story, loading = false, error =
 
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-black/10" aria-hidden="true" />
 
-            {slide.themeLabel ? (
-              <div className="absolute right-4 top-5 z-20 rounded-full bg-white/85 px-3 py-1 text-xs font-medium text-[#1c398e] shadow-auth backdrop-blur-sm sm:right-7 sm:top-7 sm:text-sm">
-                {slide.themeLabel}
-              </div>
-            ) : null}
+            <div className="absolute right-4 top-5 z-20 flex items-start justify-end sm:right-7 sm:top-7">
+              {slide.themeLabel ? (
+                <div className="max-w-[70vw] rounded-full bg-white/90 px-3 py-1 text-right text-xs font-medium text-[#1c398e] shadow-auth backdrop-blur-sm sm:text-sm">
+                  {slide.themeLabel}
+                </div>
+              ) : null}
+            </div>
 
-            <div className="absolute inset-x-0 bottom-0 z-10 px-5 pb-7 pt-24 sm:px-8 sm:pb-9">
-              <blockquote className="max-w-3xl text-[26px] font-normal leading-tight text-white sm:text-[34px] sm:leading-[1.15]">
-                {slide.quote}
-              </blockquote>
+            <div className="absolute inset-x-0 bottom-0 z-10 px-16 pb-7 pt-24 sm:px-24 sm:pb-9">
+              {slide.matchedQuote ? (
+                <blockquote className="max-w-3xl text-[24px] font-normal leading-tight text-white sm:text-[32px] sm:leading-[1.16]">
+                  <span>{slide.matchedQuote}</span>
+                </blockquote>
+              ) : null}
+              {slide.narration ? (
+                <p className="mt-4 max-w-2xl text-base leading-7 text-[#f8fafc] sm:text-xl sm:leading-8">
+                  {slide.narration}
+                </p>
+              ) : null}
               <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-[#cad5e2] sm:text-base">
                 <span>{slide.contributorName}</span>
                 {slide.relationshipLabel ? (
                   <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm sm:text-sm">
                     {slide.relationshipLabel}
+                  </span>
+                ) : null}
+                {slide.lifePeriod ? (
+                  <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm sm:text-sm">
+                    {slide.lifePeriod}
                   </span>
                 ) : null}
               </div>
@@ -242,7 +257,7 @@ export default function StorySlideshow({ output, story, loading = false, error =
           aria-label="Previous story slide"
           className="absolute left-3 top-1/2 z-20 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-white/20 text-white backdrop-blur-sm transition hover:bg-white/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-35 sm:left-5 sm:size-14"
         >
-          <ChevronLeftIcon />
+          <ChevronLeft size={26} aria-hidden="true" />
         </button>
 
         <button
@@ -252,14 +267,14 @@ export default function StorySlideshow({ output, story, loading = false, error =
           aria-label="Next story slide"
           className="absolute right-3 top-1/2 z-20 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-white/20 text-white backdrop-blur-sm transition hover:bg-white/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-35 sm:right-5 sm:size-14"
         >
-          <ChevronRightIcon />
+          <ChevronRight size={26} aria-hidden="true" />
         </button>
       </div>
 
       <div className="flex min-h-[88px] items-center justify-between gap-4 border-t border-[#e2e8f0] px-5 py-5 sm:px-7">
         <div className="flex items-center gap-3 text-[#45556c]">
           <span className="grid size-10 place-items-center rounded-full bg-[#45556c] text-white" aria-hidden="true">
-            <ChevronRightIcon />
+            <ChevronRight size={22} aria-hidden="true" />
           </span>
           <span className="text-sm">
             {currentIndex + 1} / {slides.length}
