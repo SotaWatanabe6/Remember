@@ -4,6 +4,8 @@ const { randomUUID } = require('crypto')
 const { Readable } = require('stream')
 const router = express.Router()
 const supabase = require('../supabase')
+const { extractAudioDuration } = require('../services/duration')
+const { extractImageMetadata } = require('../services/exif')
 
 const PHOTO_STORAGE_BUCKET =
   process.env.CONTRIBUTOR_PHOTO_BUCKET ||
@@ -356,6 +358,7 @@ router.post('/:token/photos', async (req, res) => {
       const storagePath = `memorials/${contributor.memorial_id}/contributions/${contributor.id}/photos/${randomUUID()}-${safeFileName}`
       const mimeType = getPhotoMimeType(file)
       const fileBuffer = Buffer.from(await file.arrayBuffer())
+      const exifData = await extractImageMetadata(fileBuffer)
 
       const { error: uploadError } = await supabase.storage
         .from(PHOTO_STORAGE_BUCKET)
@@ -379,7 +382,7 @@ router.post('/:token/photos', async (req, res) => {
           file_name: file.name || safeFileName,
           file_type: mimeType,
           file_size_bytes: file.size || null,
-          taken_at: null,
+          taken_at: exifData?.takenAt ?? null,
           caption: null
         })
         .select('id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption')
@@ -521,6 +524,7 @@ router.post('/:token/voice', async (req, res) => {
     const storagePath = `memorials/${contributor.memorial_id}/contributions/${contributor.id}/voice/${randomUUID()}-${safeFileName}`
     const mimeType = getAudioMimeType(submittedFile)
     const fileBuffer = Buffer.from(await submittedFile.arrayBuffer())
+    const durationSeconds = await extractAudioDuration(fileBuffer, mimeType)
 
     const { error: uploadError } = await supabase.storage
       .from(VOICE_STORAGE_BUCKET)
@@ -541,7 +545,7 @@ router.post('/:token/voice', async (req, res) => {
         file_name: submittedFile.name || safeFileName,
         file_type: mimeType,
         file_size_bytes: submittedFile.size || null,
-        duration_seconds: null,
+        duration_seconds: durationSeconds,
         contributor_title
       })
       .select('id, contributor_title, storage_path, storage_bucket, file_name, file_type, file_size_bytes, duration_seconds')
