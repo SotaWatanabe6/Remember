@@ -494,7 +494,6 @@ function OutputsTab({memorial, contributors, canGenerate, disabledMessage, gener
             ai_output={output}
             memorial={memorial}
             contributor={contributors}
-            allowRename
             width={800}
             height={800}
           />

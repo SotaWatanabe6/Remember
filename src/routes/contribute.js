@@ -9,7 +9,6 @@ const {
   resolveMediaRecord,
   enrichMemorialForClient,
 } = require('../services/storageUrls')
-const { analyzeAndUpdateMediaAsset } = require('../services/photoIdentity')
 const { processVoiceRecording } = require('../services/voiceProcessing')
 
 const PHOTO_STORAGE_BUCKET =
@@ -352,18 +351,14 @@ router.get('/:token/photos', async (req, res) => {
 
     const { data: assets, error } = await supabase
       .from('media_assets')
-      .select('id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption, ai_labels, ai_people_count, people_labels, ai_analysis_status')
+      .select('id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption')
       .eq('contributor_id', contributor.id)
       .eq('memorial_id', contributor.memorial_id)
       .order('created_at', { ascending: true })
 
     if (error) return res.status(400).json({ error: error.message })
 
-    const analyzed = memorial?.cover_photo_url
-      ? await Promise.all((assets || []).map((asset) => analyzeAndUpdateMediaAsset(supabase, memorial, asset)))
-      : assets || []
-
-    const photos = await Promise.all(analyzed.map((asset) => resolveMediaRecord(supabase, asset)))
+    const photos = await Promise.all((assets || []).map((asset) => resolveMediaRecord(supabase, asset)))
     const memorialForClient = memorial
       ? await enrichMemorialForClient(supabase, memorial)
       : null
@@ -471,12 +466,7 @@ router.post('/:token/photos', async (req, res) => {
         continue
       }
 
-      let withUrl = await resolveMediaRecord(supabase, mediaAsset)
-      if (memorial?.cover_photo_url) {
-        const analyzed = await analyzeAndUpdateMediaAsset(supabase, memorial, mediaAsset)
-        withUrl = await resolveMediaRecord(supabase, analyzed)
-      }
-      uploadedFiles.push(withUrl)
+      uploadedFiles.push(await resolveMediaRecord(supabase, mediaAsset))
     }
 
     if (!uploadedFiles.length) {
@@ -497,92 +487,9 @@ router.post('/:token/photos', async (req, res) => {
       uploaded: uploadedFiles.length,
       files: uploadedFiles,
       errors: uploadErrors,
-      reference_portrait_set: Boolean(memorial?.cover_photo_url),
     })
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message })
-  }
-})
-
-function normalizePeopleLabels(raw) {
-  if (!Array.isArray(raw)) return null
-  const labels = raw
-    .map((entry) => ({
-      name: typeof entry?.name === 'string' ? entry.name.trim() : '',
-      relationship: typeof entry?.relationship === 'string' ? entry.relationship.trim() : '',
-    }))
-    .filter((entry) => entry.name || entry.relationship)
-    .filter((entry) => {
-      if (entry.relationship === 'memorial_subject') return true
-      return Boolean(entry.name)
-    })
-
-  return labels.length ? labels : null
-}
-
-// POST /contribute/:token/photos/:photoId/label — save who is in the photo
-router.post('/:token/photos/:photoId/label', async (req, res) => {
-  try {
-    const { contributor_token, people_labels } = req.body
-
-    if (!contributor_token) {
-      return res.status(400).json({ error: 'contributor_token is required' })
-    }
-
-    const normalizedLabels = normalizePeopleLabels(people_labels)
-    if (!normalizedLabels) {
-      return res.status(400).json({
-        error: 'Please enter their name so they appear on the relationship tree (not "Someone").',
-      })
-    }
-
-    const { data: invite, error: inviteError } = await supabase
-      .from('invite_links')
-      .select('id, memorial_id, is_active')
-      .eq('token', req.params.token)
-      .single()
-
-    if (inviteError || !invite || !invite.is_active) {
-      return res.status(410).json({ error: 'This link is no longer active.' })
-    }
-
-    const { data: contributor } = await supabase
-      .from('contributors')
-      .select('id, memorial_id')
-      .eq('id', contributor_token)
-      .single()
-
-    if (!contributor || contributor.memorial_id !== invite.memorial_id) {
-      return res.status(403).json({ error: 'Contributor does not belong to this invitation.' })
-    }
-
-    const { data: asset, error: assetError } = await supabase
-      .from('media_assets')
-      .select('id, contributor_id, memorial_id')
-      .eq('id', req.params.photoId)
-      .eq('contributor_id', contributor.id)
-      .eq('memorial_id', invite.memorial_id)
-      .single()
-
-    if (assetError || !asset) {
-      return res.status(404).json({ error: 'Photo not found' })
-    }
-
-    const { data: updated, error: updateError } = await supabase
-      .from('media_assets')
-      .update({
-        people_labels: normalizedLabels,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', asset.id)
-      .select('id, people_labels, ai_labels, ai_people_count')
-      .single()
-
-    if (updateError) return res.status(400).json({ error: updateError.message })
-
-    res.json({ photo: updated })
-  } catch (err) {
-    res.status(500).json({ error: err.message })
   }
 })
 

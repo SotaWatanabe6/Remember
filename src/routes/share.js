@@ -3,7 +3,6 @@ const express = require('express')
 const router = express.Router()
 const supabase = require('../supabase')
 const { resolveOutputMediaUrls, enrichMemorialForClient } = require('../services/storageUrls')
-const { aggregateLabeledPeople } = require('../services/labeledPeople')
 
 // GET /share/:token — get memorial output via viewer share link
 router.get('/:token', async (req, res) => {
@@ -48,13 +47,6 @@ router.get('/:token', async (req, res) => {
       .eq('memorial_id', invite.memorial_id)
       .order('created_at', { ascending: false })
 
-    const { data: labeledAssets } = await supabase
-      .from('media_assets')
-      .select('id, people_labels, storage_path, storage_bucket')
-      .eq('memorial_id', invite.memorial_id)
-
-    const labeled_people = await aggregateLabeledPeople(supabase, labeledAssets || [])
-
     let resolved = output.output_json
     try {
       resolved = await Promise.race([
@@ -73,7 +65,6 @@ router.get('/:token', async (req, res) => {
       ...resolved,
       memorial: memorialForClient || null,
       contributors: contributors || [],
-      labeled_people,
     })
   } catch (err) {
     res.status(500).json({ error: err.message })

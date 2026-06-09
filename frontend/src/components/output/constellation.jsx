@@ -1,5 +1,4 @@
 "use client";
-import { useParams } from 'next/navigation';
 import { useEffect, useRef,useState } from "react";
 import * as d3 from "d3";
 import {
@@ -7,102 +6,23 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import { getMemorialLabeledPeople, renameMemorialLabeledPerson } from '@/lib/api';
-
-function needsPersonName(person) {
-  if (!person) return false;
-  return (
-    person.needs_name === true || /^someone$/i.test(String(person?.name || '').trim())
-  );
-}
-
 function capitalizeFirstLetter(str) {
   if (!str || str === 'null') return str;
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-function personToGraphNode(person) {
+function contributorToGraphNode(contributor) {
   return {
-    id: person.id,
-    name: person.name,
-    relationship_type: capitalizeFirstLetter(person.relationship_type) || 'Other',
-    prominence: 0.5 + Math.min((person.photo_count || 1) * 0.1, 0.4),
+    id: contributor.id,
+    name: contributor.name || 'Contributor',
+    relationship_type: capitalizeFirstLetter(contributor.relationship_type) || 'Other',
+    prominence: 0.7,
     summary: '',
-    photos: person.photo_urls || [],
-    photo_urls: person.photo_urls || [],
-    photo_ids: person.photo_ids || [],
+    photos: [],
+    photo_urls: [],
     quotes: [],
-    contributions: person.photo_count || 0,
-    needs_name: needsPersonName(person),
+    contributions: 1,
   };
-}
-
-function PersonNameEditor({ memorialId, personId, relationshipType, onSaved, compact = false }) {
-  const [name, setName] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    if (!memorialId || !personId) return;
-    setSaving(true);
-    setError('');
-    try {
-      const result = await renameMemorialLabeledPerson(memorialId, personId, name);
-      onSaved?.(result.people || [], personId);
-      setName('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save name.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form
-      onSubmit={handleSubmit}
-      className={
-        compact
-          ? 'mt-3 space-y-2'
-          : 'rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3'
-      }
-    >
-      {!compact ? (
-        <p className="text-sm text-amber-900">
-          This person is labeled as &ldquo;Someone&rdquo; on the relationship tree. Add their name
-          {relationshipType ? ` (${relationshipType})` : ''} so it appears on every tagged photo.
-        </p>
-      ) : (
-        <p className="text-xs text-gray-600">Name this person for the constellation</p>
-      )}
-      <div className={compact ? 'flex flex-wrap gap-2' : 'flex flex-col gap-2 sm:flex-row'}>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Their name"
-          required
-          className={
-            compact
-              ? 'min-w-[140px] flex-1 rounded border border-gray-300 px-3 py-2 text-sm'
-              : 'flex-1 rounded-lg border border-amber-300 bg-white px-4 py-2.5 text-base'
-          }
-        />
-        <button
-          type="submit"
-          disabled={saving || !name.trim()}
-          className={
-            compact
-              ? 'rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50'
-              : 'rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50'
-          }
-        >
-          {saving ? 'Saving…' : 'Save name'}
-        </button>
-      </div>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-    </form>
-  );
 }
 
 
@@ -206,11 +126,10 @@ function PulsingPlaceholder() {
   );
 }
 
-function buildRelationshipCounts(people = []) {
-  const counts = people.reduce((acc, person) => {
-    const type = person.relationship_type || 'Other';
-    const key = type.charAt(0).toUpperCase() + type.slice(1);
-    acc[key] = (acc[key] || 0) + 1;
+function buildRelationshipCounts(contributors = []) {
+  const counts = contributors.reduce((acc, contributor) => {
+    const type = capitalizeFirstLetter(contributor.relationship_type) || 'Other';
+    acc[type] = (acc[type] || 0) + 1;
     return acc;
   }, {});
   return Object.entries(counts).map(([relationship_type, count]) => ({
@@ -223,21 +142,16 @@ export default function ConstellationGraph({
   ai_output,
   memorial,
   contributor = [],
-  labeledPeople: labeledPeopleProp,
-  allowRename = false,
   width,
   height,
 }) {
   const ref = useRef(null);
-  const { id: routeMemorialId } = useParams();
-  const memorialId = memorial?.id || routeMemorialId;
   const [constellationLoading, setConstellationLoading] = useState(false);
   const [selectedNode, setSelectedNode] = useState(null);
   const [tab, setTab] = useState("Themes");
   const [hiddenContributors, setHiddenContributors] = useState({});
   const [hiddenRelationshipType, setHiddenRelationshipType] = useState({});
   const [hiddenThemes, setHiddenThemes] = useState({});
-  const [labeledPeople, setLabeledPeople] = useState(labeledPeopleProp || []);
   const handleThemesChange = (nodeId) => {
     setHiddenThemes((prev) => ({
       ...prev,
@@ -261,58 +175,17 @@ export default function ConstellationGraph({
 
   };  
   const [relationshipCounts, setRelationshipCounts] = useState(
-    buildRelationshipCounts(labeledPeopleProp || []),
+    buildRelationshipCounts(contributor || []),
   );
 
-  const applyLabeledPeople = (people) => {
-    const list = people || [];
-    setLabeledPeople(list);
-    setRelationshipCounts(buildRelationshipCounts(list));
-    if (tab === 'Relationships') {
-      const graph = buildRelationshipGraph(list);
-      setNodes(graph.nodes);
-      setLinks(graph.links);
-    }
-  };
-
-  const handlePersonRenamed = (people, oldPersonId) => {
-    applyLabeledPeople(people);
-    if (!selectedNode) return;
-    const match = (people || []).find((person) =>
-      (person.photo_ids || []).some((id) => (selectedNode.photo_ids || []).includes(id)),
-    );
-    if (match) {
-      setSelectedNode(personToGraphNode(match));
-    } else if (selectedNode.id === oldPersonId) {
-      setSelectedNode(null);
-    }
-  };
-
   useEffect(() => {
-    if (labeledPeopleProp?.length) {
-      setLabeledPeople(labeledPeopleProp);
-      setRelationshipCounts(buildRelationshipCounts(labeledPeopleProp));
-      return;
-    }
-    if (!memorialId) return;
+    setRelationshipCounts(buildRelationshipCounts(contributor || []));
+  }, [contributor]);
 
-    let cancelled = false;
-    (async () => {
-      const { people } = await getMemorialLabeledPeople(memorialId);
-      if (cancelled) return;
-      setLabeledPeople(people || []);
-      setRelationshipCounts(buildRelationshipCounts(people || []));
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [memorialId, labeledPeopleProp]);
-
-  const buildRelationshipGraph = (people) => {
+  const buildRelationshipGraph = (contributors) => {
     const centerId = memorial?.id || 'memorial-center';
     const centerName = memorial?.subject_name || memorial?.deceased_name || 'Memorial';
-    const personNodes = (people || []).map((person) => personToGraphNode(person));
+    const contributorNodes = (contributors || []).map((c) => contributorToGraphNode(c));
 
     return {
       nodes: [
@@ -326,13 +199,13 @@ export default function ConstellationGraph({
           quotes: [],
           contributions: 0,
         },
-        ...personNodes,
+        ...contributorNodes,
       ],
-      links: personNodes.map((person) => ({
+      links: contributorNodes.map((node) => ({
         source: centerId,
-        target: person.id,
-        type: person.relationship_type,
-        weight: person.contributions || 1,
+        target: node.id,
+        type: node.relationship_type,
+        weight: 1,
       })),
     };
   };
@@ -397,18 +270,18 @@ export default function ConstellationGraph({
         })));
     }
     else {
-      const graph = buildRelationshipGraph(labeledPeople);
+      const graph = buildRelationshipGraph(contributor);
       setNodes(graph.nodes);
       setLinks(graph.links);
     }
   }
 
   useEffect(() => {
-    if (tab !== 'Relationships' || !labeledPeople.length) return;
-    const graph = buildRelationshipGraph(labeledPeople);
+    if (tab !== 'Relationships') return;
+    const graph = buildRelationshipGraph(contributor);
     setNodes(graph.nodes);
     setLinks(graph.links);
-  }, [tab, labeledPeople, memorial?.id, memorial?.subject_name]);
+  }, [tab, contributor, memorial?.id, memorial?.subject_name]);
   useEffect(() => {
     if (!nodes || nodes.length === 0) return;
     if (!links || links.length === 0) return;
@@ -714,15 +587,15 @@ export default function ConstellationGraph({
               </div>
             </div>
 
-            {/* Relationship Cards — people labeled in photos */}
+            {/* Relationship Cards — one node per contributor */}
             <div className="space-y-4">
-              {labeledPeople.length === 0 ? (
+              {!contributor?.length ? (
                 <div className="rounded border border-gray-300 bg-white px-6 py-8 text-center text-sm text-gray-600">
-                  No one has been labeled in photos yet. Contributors can tag people during the
-                  label-photos step of the invite flow.
+                  No contributors yet. Each person who completes the invite link will appear here
+                  with the relationship they selected in the questionnaire.
                 </div>
               ) : (
-                labeledPeople.map((item) => {
+                contributor.map((item) => {
                   const isHidden = hiddenContributors[item.id];
                   const relationshipLabel =
                     item.relationship_type == null || item.relationship_type === undefined
@@ -738,37 +611,18 @@ export default function ConstellationGraph({
                         <button type="button" className="cursor-pointer" onClick={() => toggleEye(item.id)}>
                           {isHidden ? <EyeOff size={20} /> : <Eye size={20} />}
                         </button>
-                        <div className="h-20 w-20 overflow-hidden rounded-full bg-[#d9d9d9]">
-                          {item.photo_urls?.[0] ? (
-                            <img
-                              src={item.photo_urls[0]}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : null}
-                        </div>
+                        <div className="h-20 w-20 rounded-full bg-[#d9d9d9]" />
 
                         <div className="min-w-0 flex-1">
-                          <h3 className="font-serif text-lg italic">{item.name}</h3>
+                          <h3 className="font-serif text-lg italic">{item.name || 'Contributor'}</h3>
 
                           <p className="text-xs text-gray-500">
-                            {item.photo_count || 0} tagged contribution
-                            {(item.photo_count || 0) === 1 ? '' : 's'}
+                            {item.status === 'submitted' ? 'Submitted' : 'In progress'}
                           </p>
 
                           <button type="button" className="mt-3 rounded bg-[#d9d9d9] px-6 py-1 text-xs">
                             {relationshipLabel}
                           </button>
-
-                          {allowRename && memorialId && needsPersonName(item) ? (
-                            <PersonNameEditor
-                              memorialId={memorialId}
-                              personId={item.id}
-                              relationshipType={relationshipLabel}
-                              compact
-                              onSaved={handlePersonRenamed}
-                            />
-                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -805,17 +659,6 @@ export default function ConstellationGraph({
               </div>
 
               <div className="max-h-[75vh] overflow-y-auto p-6">
-                {allowRename && memorialId && tab === 'Relationships' && needsPersonName(selectedNode) ? (
-                  <div className="mb-8">
-                    <PersonNameEditor
-                      memorialId={memorialId}
-                      personId={selectedNode.id}
-                      relationshipType={selectedNode.relationship_type}
-                      onSaved={handlePersonRenamed}
-                    />
-                  </div>
-                ) : null}
-
                 {(selectedNode.photo_urls?.length || selectedNode.photos?.length) ? (
                   <div className="mb-8">
                     <h3 className="mb-4 text-lg font-semibold text-gray-900">

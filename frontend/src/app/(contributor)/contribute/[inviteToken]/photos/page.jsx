@@ -304,10 +304,6 @@ export default function PhotosPage() {
   }
 
   function handleContinue() {
-    if (uploadedCount > 0) {
-      router.push(`/contribute/${inviteToken}/label-photos`);
-      return;
-    }
     router.push(`/contribute/${inviteToken}/voice`);
   }
 

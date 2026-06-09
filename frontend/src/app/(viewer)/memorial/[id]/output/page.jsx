@@ -84,7 +84,6 @@ function ConstellationsSection({ output, memorial, contributor }) {
         ai_output={output}
         memorial={memorial}
         contributor={contributor}
-        allowRename
         width={1250}
         height={800}
       />

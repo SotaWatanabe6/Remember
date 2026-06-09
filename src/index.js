@@ -10,8 +10,6 @@ const memorialRoutes = require('./routes/memorials')
 const contributeRoutes = require('./routes/contribute')
 const aiRoutes = require('./routes/ai')
 const shareRoutes = require('./routes/share')
-const ttsRoutes = require('./routes/tts')
-const { isConfigured: isElevenLabsConfigured } = require('./services/elevenLabsTts')
 
 const app = express()
 
@@ -35,12 +33,8 @@ app.use('/memorials', memorialRoutes)
 app.use('/contribute', contributeLimiter, contributeRoutes)
 app.use('/ai', aiRoutes)
 app.use('/share', shareRoutes)
-app.use('/tts', ttsRoutes)
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => {
   console.log(`Remember API running on port ${PORT}`)
-  console.log(
-    `[Remember] ElevenLabs story narration: ${isElevenLabsConfigured() ? 'enabled' : 'DISABLED — set ELEVENLABS_API_KEY in .env'}`,
-  )
 })

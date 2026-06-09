@@ -589,112 +589,6 @@ export async function updateMemorial(memorialId, fields) {
  * PHASE 4: Blessing wired to real backend — using correct port 3001
  * Falls back to mock if backend fails
  */
-/**
- * GET /memorials/:id/labeled-people
- * People tagged in contributor photos (from label-photos flow).
- */
-export async function getMemorialLabeledPeople(memorialId) {
-  const token = await getAuthToken();
-  if (!token) return { people: [] };
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15_000);
-
-  try {
-    const response = await fetch(
-      `${API_URL}/memorials/${encodeURIComponent(memorialId)}/labeled-people`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-        signal: controller.signal,
-      },
-    );
-    if (!response.ok) return { people: [] };
-    return await response.json();
-  } catch {
-    return { people: [] };
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-/**
- * PATCH /memorials/:id/labeled-people/rename — name a "Someone" relationship node.
- */
-/**
- * POST /tts/speak — ElevenLabs MP3 for story narration (server holds API key).
- */
-function getTtsSpeakUrl() {
-  if (typeof window !== 'undefined') {
-    return '/api/tts/speak';
-  }
-  return `${API_URL}/tts/speak`;
-}
-
-export async function fetchStoryNarrationAudio(text) {
-  const trimmed = String(text || '').trim();
-  if (!trimmed) {
-    throw new Error('No narration text');
-  }
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 90_000);
-
-  try {
-    const response = await fetch(getTtsSpeakUrl(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: trimmed }),
-      signal: controller.signal,
-    });
-
-    const contentType = response.headers.get('content-type') || '';
-    if (!response.ok) {
-      const err = contentType.includes('json')
-        ? await response.json().catch(() => ({}))
-        : {};
-      throw new Error(err.error || `Narration request failed (${response.status})`);
-    }
-
-    if (!contentType.includes('audio')) {
-      throw new Error('Narration server returned a non-audio response. Is the API running?');
-    }
-
-    return response.blob();
-  } catch (error) {
-    if (error?.name === 'AbortError') {
-      throw new Error('Narration timed out — try again or shorten the slide text.');
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-export async function renameMemorialLabeledPerson(memorialId, personId, newName) {
-  const token = await getAuthToken();
-  if (!token) {
-    throw new Error('You must be signed in to name people on the memorial.');
-  }
-
-  const response = await fetch(
-    `${API_URL}/memorials/${encodeURIComponent(memorialId)}/labeled-people/rename`,
-    {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ person_id: personId, new_name: newName }),
-    },
-  );
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.error || 'Could not save this name.');
-  }
-  return data;
-}
-
 export async function getMemorials() {
   const token = await getAuthToken();
   if (!token) {
@@ -1434,9 +1328,6 @@ export async function fetchContributorPhotos(token, contributorToken) {
       storage_bucket: photo.storage_bucket ?? 'memorial-assets',
       taken_at: photo.taken_at ?? null,
       caption: photo.caption ?? null,
-      ai_labels: photo.ai_labels ?? null,
-      ai_people_count: photo.ai_people_count ?? null,
-      people_labels: photo.people_labels ?? null,
       url: photo.url || photo.photo_url || null,
       previewUrl: photo.url || photo.photo_url || null,
       previewFailed: false,
@@ -1446,40 +1337,6 @@ export async function fetchContributorPhotos(token, contributorToken) {
   } catch {
     return readStoredPhotos(token);
   }
-}
-
-/**
- * POST /contribute/:token/photos/:photoId/label
- * Saves contributor-confirmed people labels for a photo.
- */
-export async function labelPhoto(token, photoId, peopleLabels, contributorToken) {
-  const sessionToken =
-    contributorToken ||
-    readContributorSession(token)?.contributorToken ||
-    readContributorSession(token)?.contributorId;
-
-  if (!sessionToken) {
-    throw new ApiRequestError("A contributor session is required before labeling photos.", {
-      code: "missing_contributor_token",
-    });
-  }
-
-  if (isLocalMockInviteToken(token)) {
-    await delay(MOCK_DELAY / 2);
-    const stored = readStoredPhotos(token).map((photo) =>
-      photo.id === photoId ? { ...photo, people_labels: peopleLabels } : photo,
-    );
-    writeStoredPhotos(token, stored);
-    return { photo: { id: photoId, people_labels: peopleLabels } };
-  }
-
-  return requestJson(`/contribute/${encodeURIComponent(token)}/photos/${encodeURIComponent(photoId)}/label`, {
-    method: "POST",
-    body: JSON.stringify({
-      contributor_token: sessionToken,
-      people_labels: peopleLabels,
-    }),
-  });
 }
 
 export async function getContributorSummary(token) {

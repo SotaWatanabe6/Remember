@@ -13,7 +13,6 @@ const {
   composeThemeQuotes,
 } = require('../services/memorialGeneration')
 const { processVoiceRecording } = require('../services/voiceProcessing')
-const { attachNarrationAudioToSlides } = require('../services/storyNarrationTts')
 
 async function updateJob(jobId, progress, current_step, status = 'processing') {
   console.log(`[Pipeline] ${progress}% — ${current_step}`)
@@ -210,9 +209,6 @@ async function runPipelines(memorialId, jobId) {
       contributors: contributors || [],
       voiceMoments,
     })
-
-    await updateJob(jobId, 72, 'Recording ElevenLabs narration...')
-    storySlides = await attachNarrationAudioToSlides(supabase, memorialId, storySlides)
 
     await updateJob(jobId, 75, 'Processing voice recordings...')
     const voices = enrichedRecordings.map((r) => {

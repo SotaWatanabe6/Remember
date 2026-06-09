@@ -398,9 +398,6 @@ export default function MemorialCreateForm() {
                 </span>
               </button>
             </div>
-            <p className="text-center text-[16px] leading-[24px] text-slate-500">
-              This portrait helps our AI recognize {remembered.firstName || 'your loved one'} in photos contributors share later.
-            </p>
             </div>
           ) : (
             <label
@@ -413,9 +410,6 @@ export default function MemorialCreateForm() {
 
               <span className="text-[20px] leading-[30px] text-slate-500">
                 Click to upload or drag and drop
-              </span>
-              <span className="max-w-[280px] text-center text-[16px] leading-[24px] text-slate-500">
-                This portrait helps our AI recognize {remembered.firstName || 'your loved one'} in photos contributors share later.
               </span>
             </label>
           )}

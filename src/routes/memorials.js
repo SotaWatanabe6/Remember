@@ -12,7 +12,6 @@ const {
   enrichMemorialForClient,
   enrichMemorialsForClient,
 } = require('../services/storageUrls')
-const { aggregateLabeledPeople, renameLabeledPerson } = require('../services/labeledPeople')
 
 const COVER_BUCKET =
   process.env.MEMORIAL_ASSETS_BUCKET ||
@@ -200,64 +199,6 @@ router.patch('/:id/invite-link', authMiddleware, async (req, res) => {
     if (error) return res.status(400).json({ error: error.message })
     res.json({ invite_link: data })
   } catch (err) { res.status(500).json({ error: err.message }) }
-})
-
-router.get('/:id/labeled-people', authMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id ?? req.user?.sub
-    const { data: memorial, error: memError } = await supabase
-      .from('memorials')
-      .select('id')
-      .eq('id', req.params.id)
-      .eq('user_id', userId)
-      .single()
-    if (memError || !memorial) {
-      return res.status(403).json({ error: 'You do not own this memorial.' })
-    }
-
-    const { data: assets, error } = await supabase
-      .from('media_assets')
-      .select('id, people_labels, storage_path, storage_bucket')
-      .eq('memorial_id', req.params.id)
-
-    if (error) return res.status(400).json({ error: error.message })
-
-    const people = await aggregateLabeledPeople(supabase, assets || [])
-    res.json({ people })
-  } catch (err) {
-    res.status(500).json({ error: err.message })
-  }
-})
-
-router.patch('/:id/labeled-people/rename', authMiddleware, async (req, res) => {
-  try {
-    const userId = req.user?.id ?? req.user?.sub
-    const { person_id: personId, new_name: newName } = req.body || {}
-
-    if (!personId) {
-      return res.status(400).json({ error: 'person_id is required' })
-    }
-
-    const { data: memorial, error: memError } = await supabase
-      .from('memorials')
-      .select('id')
-      .eq('id', req.params.id)
-      .eq('user_id', userId)
-      .single()
-
-    if (memError || !memorial) {
-      return res.status(403).json({ error: 'You do not own this memorial.' })
-    }
-
-    const result = await renameLabeledPerson(supabase, memorial.id, personId, newName)
-    if (result.error) {
-      return res.status(400).json({ error: result.error })
-    }
-
-    res.json(result)
-  } catch (err) {
-    res.status(500).json({ error: err.message })
-  }
 })
 
 router.get('/:id/contributors', authMiddleware, async (req, res) => {

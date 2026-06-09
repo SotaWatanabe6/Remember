@@ -154,7 +154,6 @@ async function assignPhotosToThemes(analyzedPhotos, themes, memories, subjectNam
     tags: p.analysis?.tags || [],
     visual_mood: p.analysis?.visual_mood || '',
     life_moment_type: p.analysis?.life_moment_type || '',
-    people_labels: (p.people_labels || []).map((l) => `${l.name || ''} (${l.relationship || ''})`).join(', '),
   }))
 
   if (!openai) {
@@ -312,7 +311,6 @@ async function composeStorySlideshow({
       theme_label: theme?.label || null,
       scene: p.analysis?.scene || '',
       visual_mood: p.analysis?.visual_mood || '',
-      people_labels: p.people_labels || [],
     }
   })
 

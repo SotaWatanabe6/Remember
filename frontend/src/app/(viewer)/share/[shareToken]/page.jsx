@@ -68,7 +68,7 @@ function MemorialHeader({ memorial }) {
 
 // ─── Constellation tab ────────────────────────────────────────────────────────
 
-function ConstellationTab({ data, memorial, contributor, labeledPeople }) {
+function ConstellationTab({ data, memorial, contributor }) {
   if (!data) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -83,7 +83,6 @@ function ConstellationTab({ data, memorial, contributor, labeledPeople }) {
         ai_output={data}
         memorial={memorial}
         contributor={contributor}
-        labeledPeople={labeledPeople}
         width={800}
         height={800}
       />
@@ -298,7 +297,6 @@ export default function SharePage() {
   const [output, setOutput] = useState(null);
   const [memorial, setMemorial] = useState(null);
   const [contributors, setContributors] = useState([]);
-  const [labeledPeople, setLabeledPeople] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -309,7 +307,6 @@ export default function SharePage() {
         console.log("Share token data:", data);
         setOutput(data);
         setContributors(data.contributors || data.contributor || []);
-        setLabeledPeople(data.labeled_people || []);
         setMemorial(data.memorial || mockMemorials[0]);
       } catch (err) { setError(err.message); }
       finally { setLoading(false); }
@@ -340,7 +337,6 @@ export default function SharePage() {
                   data={output}
                   memorial={memorial}
                   contributor={contributors}
-                  labeledPeople={labeledPeople}
                 />
               )}
               {activeTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} />}
