@@ -4,6 +4,46 @@ const router = express.Router()
 const supabase = require('../supabase')
 const authMiddleware = require('../middleware/auth')
 const crypto = require('crypto')
+const multer = require('multer')
+const upload = multer()
+
+// After the existing requires:
+const { enrichMemorialsForClient, enrichMemorialForClient } = require('../services/storageUrls')
+
+// POST /memorials/cover-photo — upload cover photo, returns storage URL
+router.post('/cover-photo', authMiddleware, async (req, res) => {
+  try {
+
+    upload.single('file')(req, res, async (err) => {
+      if (err) return res.status(400).json({ error: err.message })
+      if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+
+      const userId = req.user?.id ?? req.user?.sub
+      const ext = req.file.originalname.split('.').pop()?.toLowerCase() || 'jpg'
+      const storagePath = `covers/${userId}/${Date.now()}.${ext}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('memorial-assets')
+        .upload(storagePath, req.file.buffer, {
+          contentType: req.file.mimetype,
+          upsert: false,
+        })
+
+      if (uploadError) return res.status(400).json({ error: uploadError.message })
+
+      const { data: urlData } = await supabase.storage
+        .from('memorial-assets')
+        .createSignedUrl(storagePath, 60 * 60 * 24 * 365)
+
+      res.status(201).json({
+        cover_photo_url: urlData?.signedUrl || storagePath,
+        storage_path: storagePath,
+      })
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
 
 // POST /memorials — create a new memorial
 router.post('/', authMiddleware, async (req, res) => {
@@ -43,7 +83,8 @@ router.get('/', authMiddleware, async (req, res) => {
       .order('created_at', { ascending: false })
 
     if (error) return res.status(400).json({ error: error.message })
-    res.json({ memorials: data })
+    const enriched = await enrichMemorialsForClient(supabase, data || [])
+    res.json({ memorials: enriched })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -60,7 +101,58 @@ router.get('/:id', authMiddleware, async (req, res) => {
       .single()
 
     if (error) return res.status(404).json({ error: 'Memorial not found' })
-    res.json({ memorial: data })
+    const enriched = await enrichMemorialForClient(supabase, data)
+    res.json({ memorial: enriched })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// PATCH /memorials/:id — update memorial fields (e.g. attach cover photo)
+router.patch('/:id', authMiddleware, async (req, res) => {
+  try {
+    const { data: memorial, error: memError } = await supabase
+      .from('memorials')
+      .select('id')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.sub)
+      .single()
+
+    if (memError || !memorial) {
+      return res.status(403).json({ error: 'Not authorized' })
+    }
+
+    const allowedFields = [
+      'subject_name',
+      'nickname',
+      'date_of_birth',
+      'date_of_passing',
+      'biography',
+      'cover_photo_url',
+      'status',
+    ]
+
+    const updates = {}
+    allowedFields.forEach((field) => {
+      if (req.body[field] !== undefined) updates[field] = req.body[field]
+    })
+
+    if (!Object.keys(updates).length) {
+      return res.status(400).json({ error: 'No valid fields to update' })
+    }
+
+    updates.updated_at = new Date().toISOString()
+
+    const { data, error } = await supabase
+      .from('memorials')
+      .update(updates)
+      .eq('id', req.params.id)
+      .select()
+      .single()
+
+    if (error) return res.status(400).json({ error: error.message })
+    const enriched = await enrichMemorialForClient(supabase, data)
+    res.json({ memorial: enriched })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

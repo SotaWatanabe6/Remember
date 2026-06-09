@@ -255,13 +255,6 @@ function VoicesSection({ voices }) {
           ))}
         </div>
         <div className="flex-1 flex flex-col gap-4">
-          {current?.photo_url ? (
-            <img src={current.photo_url} alt="" className="w-full aspect-video rounded-2xl object-cover" />
-          ) : (
-            <div className="w-full aspect-video rounded-2xl flex items-center justify-center bg-r-card">
-              <span className="text-body-2 text-r-muted">No photo linked</span>
-            </div>
-          )}
           {current && <WaveformPlayer key={current.id} audioUrl={current.audio_url || null} color="var(--color-r-colleague)" />}
           {(current?.key_quote || current?.transcript_text) && (
             <p className="text-body-2 text-r-muted" style={{ fontStyle: 'italic', lineHeight: 1.6 }}>
