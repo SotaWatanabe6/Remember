@@ -2,6 +2,7 @@ require('dotenv').config()
 const express = require('express')
 const { randomUUID } = require('crypto')
 const { Readable } = require('stream')
+const exifr = require('exifr')
 const router = express.Router()
 const supabase = require('../supabase')
 
@@ -111,6 +112,36 @@ async function parseMultipartFormData(req) {
   })
 
   return request.formData()
+}
+
+function dmsToDecimal(value) {
+  if (!Array.isArray(value)) return value
+
+  const [deg, min, sec] = value
+
+  return deg + min / 60 + sec / 3600
+}
+
+async function extractExifMetadata(fileBuffer) {
+  try {
+    const exif = await exifr.parse(fileBuffer, {
+      pick: ['DateTimeOriginal', 'GPSLatitude', 'GPSLongitude', 'ImageWidth', 'ImageHeight', 'Make', 'Model']
+    })
+
+    if (!exif) return {}
+
+    return {
+      taken_at: exif.DateTimeOriginal ?? null,
+      location_lat: dmsToDecimal(exif.GPSLatitude) ?? null,
+      location_lng: dmsToDecimal(exif.GPSLongitude) ?? null,
+      width: exif.ImageWidth ?? null,
+      height: exif.ImageHeight ?? null,
+      upload_device: [exif.Make, exif.Model].filter(Boolean).join(' ') || null
+    }
+  } catch {
+    // Non-fatal: EXIF parse failure must never block the upload
+    return {}
+  }
 }
 
 // GET /contribute/:token — validate invite token
@@ -357,6 +388,9 @@ router.post('/:token/photos', async (req, res) => {
       const mimeType = getPhotoMimeType(file)
       const fileBuffer = Buffer.from(await file.arrayBuffer())
 
+      // Extract EXIF metadata — non-fatal, defaults to empty object if unavailable
+      const { taken_at, location_lat, location_lng, width, height, upload_device } = await extractExifMetadata(fileBuffer)
+
       const { error: uploadError } = await supabase.storage
         .from(PHOTO_STORAGE_BUCKET)
         .upload(storagePath, fileBuffer, {
@@ -372,17 +406,22 @@ router.post('/:token/photos', async (req, res) => {
       const { data: mediaAsset, error: mediaError } = await supabase
         .from('media_assets')
         .insert({
-          memorial_id: contributor.memorial_id,
-          contributor_id: contributor.id,
-          storage_path: storagePath,
-          storage_bucket: PHOTO_STORAGE_BUCKET,
-          file_name: file.name || safeFileName,
-          file_type: mimeType,
+          memorial_id:     contributor.memorial_id,
+          contributor_id:  contributor.id,
+          storage_path:    storagePath,
+          storage_bucket:  PHOTO_STORAGE_BUCKET,
+          file_name:       file.name || safeFileName,
+          file_type:       mimeType,
           file_size_bytes: file.size || null,
-          taken_at: null,
-          caption: null
+          width:           width         ?? null,
+          height:          height        ?? null,
+          taken_at:        taken_at      ?? null,
+          location_lat:    location_lat  ?? null,
+          location_lng:    location_lng  ?? null,
+          upload_device:   upload_device ?? null,
+          caption:         null
         })
-        .select('id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption')
+        .select('id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, width, height, taken_at, location_lat, location_lng, upload_device, caption')
         .single()
 
       if (mediaError) {
@@ -533,13 +572,13 @@ router.post('/:token/voice', async (req, res) => {
     const { data: recording, error: recordingError } = await supabase
       .from('voice_recordings')
       .insert({
-        memorial_id: contributor.memorial_id,
-        contributor_id: contributor.id,
-        storage_path: storagePath,
-        storage_bucket: VOICE_STORAGE_BUCKET,
-        file_name: submittedFile.name || safeFileName,
-        file_type: mimeType,
-        file_size_bytes: submittedFile.size || null,
+        memorial_id:      contributor.memorial_id,
+        contributor_id:   contributor.id,
+        storage_path:     storagePath,
+        storage_bucket:   VOICE_STORAGE_BUCKET,
+        file_name:        submittedFile.name || safeFileName,
+        file_type:        mimeType,
+        file_size_bytes:  submittedFile.size || null,
         duration_seconds: null,
         contributor_title
       })
