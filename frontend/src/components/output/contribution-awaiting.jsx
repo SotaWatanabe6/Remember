@@ -1,16 +1,6 @@
-import {
-    Sparkles,
-  Check,
-  Trash2,
-  ImageIcon,
-  Mic,
-  Menu,
-  Play,
-} from "lucide-react";
+import { Sparkles, Trash2, ImageIcon, Mic, Menu, Play } from "lucide-react";
 
-
-
-export default function MemorialContributionApproval({contributors,gallery}) {
+export default function MemorialContributionApproval({ contributors, gallery, onDelete }) {
     return (
       <div className="mx-auto">
         {
@@ -53,14 +43,16 @@ export default function MemorialContributionApproval({contributors,gallery}) {
                 </div>
 
                 <div className="mt-6 flex items-center justify-between">
-                  <p className="text-xs text-gray-600">Approve submission?</p>
-
+                  <p className="text-xs text-gray-600">Remove this submission?</p>
                   <div className="flex items-center gap-5">
-                    <button className="text-black transition hover:scale-110">
-                      <Check size={20} />
-                    </button>
-
-                    <button className="text-black transition hover:scale-110">
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Delete this contribution? This cannot be undone.')) {
+                          onDelete?.(contributors?.id);
+                        }
+                      }}
+                      className="text-black transition hover:scale-110"
+                    >
                       <Trash2 size={20} />
                     </button>
                   </div>
@@ -77,7 +69,7 @@ export default function MemorialContributionApproval({contributors,gallery}) {
 
                 <div>
                   <p className="text-xs font-medium">
-                    {contributors.user} added 5 photos
+                    {contributors?.name || 'Contributor'} added 5 photos
                   </p>
 
                   <p className="text-[11px] text-gray-500">
@@ -106,7 +98,7 @@ export default function MemorialContributionApproval({contributors,gallery}) {
 
                   <div>
                     <p className="text-xs font-medium">
-                      {contributors.user} added 1 audio
+                      {contributors?.name || 'Contributor'} added 1 audio
                     </p>
 
                     <p className="text-[11px] text-gray-500">
@@ -147,7 +139,7 @@ export default function MemorialContributionApproval({contributors,gallery}) {
 
                 <div className="min-w-[180px]">
                   <p className="text-xs font-medium">
-                    {contributors.user} added 1 story
+                    {contributors?.name || 'Contributor'} added 1 story
                   </p>
 
                   <p className="text-[11px] text-gray-500">

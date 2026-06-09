@@ -159,21 +159,91 @@ function TabError({ title, message, onRetry }) {
 
 // ─── Archive Tab ──────────────────────────────────────────────────────────────
 
-function ArchiveTab() {
+function ArchiveTab({ contributors, output }) {
+  const [query, setQuery] = useState('');
+
+  // Gather all content from output albums and voices
+  const allPhotos = [];
+  const albums = Array.isArray(output?.photos)
+    ? output.photos
+    : output?.photos?.albums ?? [];
+  albums.forEach((album) => {
+    (album.photos || []).forEach((p) => allPhotos.push({ type: 'photo', ...p }));
+  });
+
+  const allVoices = (output?.voices || []).map((v) => ({ type: 'voice', ...v }));
+  const allItems = [...allPhotos, ...allVoices];
+
+  const filtered = query.trim()
+    ? allItems.filter((item) => {
+        const text = [
+          item.caption,
+          item.contributor_name,
+          item.contributor_title,
+          item.key_quote,
+          item.transcript_text,
+        ].filter(Boolean).join(' ').toLowerCase();
+        return text.includes(query.toLowerCase());
+      })
+    : allItems;
+
   return (
     <div className="flex flex-col gap-6 pt-6">
       <div className="flex items-center gap-3">
         <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24" className="text-neutral-950 shrink-0">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
         </svg>
-        <input type="text" placeholder="Show me happy memories"
-          className="flex-1 rounded-xl border border-neutral-200 px-4 py-2.5 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-neutral-200" />
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Show me happy memories"
+          className="flex-1 rounded-xl border border-neutral-200 px-4 py-2.5 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-neutral-200"
+        />
         <button className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-80 transition-opacity">Filter</button>
         <button className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-80 transition-opacity">Sort</button>
       </div>
-      <div className="grid grid-cols-3 gap-4">
-        {[...Array(3)].map((_, i) => <div key={i} className="aspect-[4/3] rounded-xl bg-neutral-200" />)}
-      </div>
+
+      {filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <p className="text-neutral-950 text-base font-medium">
+            {allItems.length === 0 ? 'No contributions yet' : 'No results found'}
+          </p>
+          <p className="text-slate-500 text-sm mt-1 max-w-xs">
+            {allItems.length === 0
+              ? 'Submitted contributions will appear here once generated.'
+              : 'Try a different search term.'}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-4">
+          {filtered.map((item, i) => (
+            <div key={item.id || i} className="rounded-xl overflow-hidden border border-neutral-200 bg-white">
+              {item.type === 'photo' && (
+                item.url
+                  ? <img src={item.url} alt={item.caption || ''} className="aspect-[4/3] w-full object-cover" />
+                  : <div className="aspect-[4/3] w-full bg-neutral-200 flex items-center justify-center">
+                      <span className="text-xs text-neutral-400">{item.contributor_name || 'Photo'}</span>
+                    </div>
+              )}
+              {item.type === 'voice' && (
+                <div className="aspect-[4/3] w-full bg-neutral-100 flex flex-col items-center justify-center gap-2 p-4">
+                  <p className="text-sm font-medium text-neutral-950 text-center">{item.contributor_title}</p>
+                  <div className="flex items-center gap-[2px]">
+                    {Array.from({ length: 20 }).map((_, j) => (
+                      <div key={j} className="w-[2px] rounded-full bg-neutral-400"
+                        style={{ height: `${8 + ((j * 5) % 16)}px` }} />
+                    ))}
+                  </div>
+                  {item.contributor_name && (
+                    <p className="text-xs text-neutral-500">Submitted by {item.contributor_name}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -794,7 +864,7 @@ export default function MemorialOutputPage() {
         <TabBar active={activeTab} onChange={setActiveTab} />
 
         <div>
-          {activeTab === 'Archive' && <ArchiveTab />}
+          {activeTab === 'Archive' && <ArchiveTab contributors={contributors} output={output} />}
           {activeTab === 'Contributions' && (
             <ContributionsTab
               contributorslist={contributors}

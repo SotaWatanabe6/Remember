@@ -74,7 +74,9 @@ function ConstellationsSection({ output, memorial, contributor }) {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
         <p className="text-h3 text-r-text">Constellations</p>
-        <p className="mt-2 max-w-xs text-body-2 text-r-muted">Constellation will appear here once the memorial has been generated.</p>
+        <p className="mt-2 max-w-xs text-body-2 text-r-muted">
+          Constellation will appear here once the memorial has been generated.
+        </p>
       </div>
     );
   }
@@ -84,6 +86,7 @@ function ConstellationsSection({ output, memorial, contributor }) {
         ai_output={output}
         memorial={memorial}
         contributor={contributor}
+        relationships={output?.relationships ?? []}
         width={1250}
         height={800}
       />
@@ -127,7 +130,14 @@ function WaveformPlayer({ audioUrl, color }) {
 
     return () => {
       mounted = false;
-      if (wavesurferRef.current) { wavesurferRef.current.destroy(); wavesurferRef.current = null; }
+      if (wavesurferRef.current) {
+        try {
+          wavesurferRef.current.destroy();
+        } catch {
+          // AbortError expected when component unmounts during audio load
+        }
+        wavesurferRef.current = null;
+      }
     };
   }, [audioUrl, color]);
 
@@ -253,15 +263,31 @@ function VoicesSection({ voices }) {
             </div>
           )}
           {current && <WaveformPlayer key={current.id} audioUrl={current.audio_url || null} color="var(--color-r-colleague)" />}
-          {current?.transcript_text && (
-            <p className="text-body-2 text-r-muted" style={{ fontStyle: 'italic', lineHeight: 1.6 }}>&quot;{current.transcript_text}&quot;</p>
+          {(current?.key_quote || current?.transcript_text) && (
+            <p className="text-body-2 text-r-muted" style={{ fontStyle: 'italic', lineHeight: 1.6 }}>
+              &quot;{current.key_quote || current.transcript_text}&quot;
+            </p>
           )}
           {current?.ai_category && (
             <span className="inline-block self-start rounded-full px-4 py-1.5 text-body-2 text-r-muted" style={{ border: '1px solid var(--color-r-border)' }}>
               {current.ai_category}
             </span>
           )}
-          {current && <p className="text-body-2 font-medium text-r-text">Submitted by {current.contributor_name || 'Contributor'}</p>}
+          {current && (
+          <div className="flex flex-col gap-0.5">
+            <p className="text-body-2 font-medium text-r-text">
+              {current.contributor_name ? `Submitted by ${current.contributor_name}` : 'Voice recording'}
+            </p>
+            {current.relationship_type && (
+              <p className="text-caption text-r-muted">{current.relationship_type}</p>
+            )}
+            {current.created_at || current.submitted_date ? (
+              <p className="text-caption text-r-muted">
+                {new Date(current.created_at || current.submitted_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+              </p>
+            ) : null}
+          </div>
+        )}
         </div>
       </div>
     </div>
@@ -385,8 +411,22 @@ function AlbumView({ albums }) {
 // Uses real contributors from the backend. Per-contributor photo grouping is not
 // yet available in the output shape — photos column shows placeholders for now.
 
-function ContributorsView({ contributors }) {
+function ContributorsView({ contributors, output }) {
   const [expanded, setExpanded] = useState(null);
+
+  // Build a map of contributor name → their photos from the output albums
+  const photosByContributor = {};
+  const albums = Array.isArray(output?.photos)
+    ? output.photos
+    : output?.photos?.albums ?? [];
+  albums.forEach((album) => {
+    (album.photos || []).forEach((photo) => {
+      const name = photo.contributor_name;
+      if (!name) return;
+      if (!photosByContributor[name]) photosByContributor[name] = [];
+      photosByContributor[name].push(photo);
+    });
+  });
 
   if (!contributors || contributors.length === 0) {
     return (
@@ -404,48 +444,107 @@ function ContributorsView({ contributors }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {contributors.map((contributor) => (
-        <div key={contributor.id} className="rounded-2xl overflow-hidden border border-r-border">
-          <div className="flex items-stretch">
-            <div className="w-[220px] shrink-0 p-4 flex flex-col justify-between bg-r-card">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full shrink-0 bg-r-border" />
-                <div className="min-w-0">
-                  <p className="text-body-2 font-medium text-r-text">{contributor.name}</p>
-                  <p className="text-caption text-r-muted mt-0.5">
-                    {contributor.submitted_at
-                      ? `Last submitted ${new Date(contributor.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
-                      : 'In progress'}
-                  </p>
+      {contributors.map((contributor) => {
+        const contribPhotos = photosByContributor[contributor.name] || [];
+        const isExpanded = expanded === contributor.id;
+
+        return (
+          <div key={contributor.id} className="rounded-2xl overflow-hidden border border-r-border">
+            <div className="flex items-stretch">
+              {/* Contributor info card */}
+              <div className="w-[220px] shrink-0 p-4 flex flex-col justify-between bg-r-card">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full shrink-0 bg-r-border" />
+                  <div className="min-w-0">
+                    <p className="text-body-2 font-medium text-r-text">{contributor.name}</p>
+                    <p className="text-caption text-r-muted mt-0.5">
+                      {contributor.submitted_at
+                        ? `Last submitted ${new Date(contributor.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`
+                        : 'In progress'}
+                    </p>
+                  </div>
                 </div>
+                <span className="mt-3 self-start inline-block rounded-full px-3 py-1 text-caption bg-r-bg"
+                  style={{ border: '1px solid var(--color-r-border)', color: relationshipColor(contributor.relationship_type) }}>
+                  {contributor.relationship_type || 'No relationship provided'}
+                </span>
               </div>
-              <span className="mt-3 self-start inline-block rounded-full px-3 py-1 text-caption bg-r-bg"
-                style={{ border: '1px solid var(--color-r-border)', color: relationshipColor(contributor.relationship_type) }}>
-                {contributor.relationship_type || 'No relationship provided'}
-              </span>
+
+              {/* Photo slots — first photo + second with gradient overlay */}
+              <div className="flex flex-1 overflow-hidden">
+                {[0, 1].map((i) => {
+                  const photo = contribPhotos[i];
+                  const isLast = i === 1;
+                  const hasMore = contribPhotos.length > 2;
+
+                  return (
+                    <div key={i} className="flex-1 relative overflow-hidden bg-r-card">
+                      {photo?.url ? (
+                        <img
+                          src={photo.url}
+                          alt={photo.caption || ''}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="h-full w-full" style={{ backgroundColor: '#D0C8C0' }} />
+                      )}
+                      {/* Green gradient overlay on second photo if more photos exist */}
+                      {isLast && hasMore && (
+                        <div
+                          className="absolute inset-0 flex items-center justify-end pr-3"
+                          style={{
+                            background: 'linear-gradient(to right, transparent 40%, rgba(125, 140, 106, 0.85) 100%)',
+                          }}
+                        >
+                          <svg width="20" height="20" fill="none" stroke="white" strokeWidth="2.5" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Expand toggle */}
+              <button
+                onClick={() => setExpanded(isExpanded ? null : contributor.id)}
+                className="w-10 flex items-center justify-center shrink-0 hover:opacity-70 transition-opacity text-r-text"
+              >
+                <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d={isExpanded ? "M18 15l-6-6-6 6" : "M6 9l6 6 6-6"} />
+                </svg>
+              </button>
             </div>
-            {/* Photo slots — placeholders until per-contributor photo grouping is available in output */}
-            <div className="flex flex-1">
-              {[0, 1].map((i) => (
-                <div key={i} className="flex-1 relative overflow-hidden bg-r-card">
-                  <div className="h-full w-full" style={{ backgroundColor: '#D0C8C0' }} />
-                </div>
-              ))}
-            </div>
-            <button onClick={() => setExpanded(expanded === contributor.id ? null : contributor.id)}
-              className="w-10 flex items-center justify-center shrink-0 hover:opacity-70 transition-opacity text-r-text">
-              <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d={expanded === contributor.id ? "M18 15l-6-6-6 6" : "M6 9l6 6 6-6"} />
-              </svg>
-            </button>
+
+            {/* Expanded full photo grid */}
+            {isExpanded && (
+              <div
+                className="p-4 bg-r-bg"
+                style={{ borderTop: '1px solid var(--color-r-border)' }}
+              >
+                {contribPhotos.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-3">
+                    {contribPhotos.map((photo) => (
+                      <div key={photo.id} className="aspect-square overflow-hidden rounded-xl bg-r-card">
+                        {photo.url ? (
+                          <img src={photo.url} alt={photo.caption || ''} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="h-full w-full bg-r-card" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-caption text-r-muted">
+                    No photos found for this contributor in the generated output.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
-          {expanded === contributor.id && (
-            <div className="p-4 bg-r-bg" style={{ borderTop: '1px solid var(--color-r-border)' }}>
-              <p className="text-caption text-r-muted">Photos will appear here once the memorial has been generated.</p>
-            </div>
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -538,7 +637,7 @@ function PhotoArchiveSection({ output, contributors }) {
         )}
       </div>
       {view === 'Album' && <AlbumView albums={albums} />}
-      {view === 'Contributors' && <ContributorsView contributors={contributors} />}
+      {view === 'Contributors' && ( <ContributorsView contributors={contributors} output={output} />)}
       {view === 'All Photos' && <MasonryView photos={allPhotos} />}
     </div>
   );
@@ -766,15 +865,19 @@ export default function MemorialOutputPage() {
         getMemorialById(id).catch(() => null),
       ]);
       setOutput(data);
-      const header = memorialData || mockMemorials.find((m) => m.id === id) || mockMemorials[0];
-      setMemorial({
-        id: header.id || id,
-        subject_name: header.subject_name || header.deceased_name,
-        cover_photo_url: header.cover_photo_url || header.profile_photo_url || null,
-        date_of_birth: header.date_of_birth || header.birth_date || null,
-        date_of_passing: header.date_of_passing || header.death_date || null,
-        bio: header.brief_biography || header.short_description || header.biography || null,
-      });
+      if (memorialData) {
+        setMemorial({
+          id: memorialData.id || id,
+          subject_name: memorialData.subject_name || memorialData.deceased_name || '',
+          cover_photo_url: memorialData.cover_photo_url || memorialData.profile_photo_url || null,
+          date_of_birth: memorialData.date_of_birth || memorialData.birth_date || null,
+          date_of_passing: memorialData.date_of_passing || memorialData.death_date || null,
+          bio: memorialData.brief_biography || memorialData.short_description || memorialData.biography || null,
+        });
+      } else {
+        // Memorial header unavailable — use ID only, no mock data
+        setMemorial({ id, subject_name: '', cover_photo_url: null, date_of_birth: null, date_of_passing: null, bio: null });
+      }
     } catch (err) {
       setError(err.message || "Failed to load memorial");
     } finally {
@@ -803,7 +906,7 @@ export default function MemorialOutputPage() {
         <span className="text-h4 text-r-text">Remember</span>
         <div className="flex items-center gap-4">
           <button onClick={() => setShowShare(true)} className="text-body-2 text-r-text transition-opacity hover:opacity-70 bg-none border-none cursor-pointer">Share</button>
-          <Link href="/dashboard" className="text-body-2 text-r-text transition-opacity hover:opacity-70">← Back</Link>
+          <Link href={id ? `/memorial/${id}/manage` : '/dashboard'} className="...">← Back</Link>
         </div>
       </header>
 

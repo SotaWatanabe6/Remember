@@ -12,6 +12,7 @@
 import { mockMemorials } from "@/data/mockMemorials.js";
 import { getSupabaseClient } from "@/lib/supabaseClient.js";
 import { normalizeShareUrl } from "@/lib/copyToClipboard.js";
+import { getStore } from "@/lib/contributionStore";
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 const MOCK_DELAY = 500;
@@ -355,21 +356,13 @@ function writeStoredResponses(token, data) {
 function readStoredPhotos(token) {
   if (!isBrowser()) return [];
   try {
-    const photos = JSON.parse(window.localStorage.getItem(`remember_photos:${token}`) || '[]');
-    return photos.map((photo) => ({
-      ...photo,
-      previewUrl: photo.previewUrl?.startsWith?.('blob:') ? null : photo.previewUrl ?? null,
-    }));
+    return JSON.parse(window.localStorage.getItem(`remember_photos:${token}`) || '[]');
   } catch { return []; }
 }
 
 function writeStoredPhotos(token, photos) {
   if (!isBrowser()) return;
-  const persistedPhotos = photos.map((photo) => ({
-    ...photo,
-    previewUrl: photo.previewUrl?.startsWith?.('blob:') ? null : photo.previewUrl ?? null,
-  }));
-  window.localStorage.setItem(`remember_photos:${token}`, JSON.stringify(persistedPhotos));
+  window.localStorage.setItem(`remember_photos:${token}`, JSON.stringify(photos));
 }
 
 function readStoredVoice(token) {
@@ -1137,18 +1130,26 @@ export async function uploadPhotos(token, files) {
     );
   }
 
-  const finalAssets = backendAssets.map((file, index) => ({
-    id: file.id,
-    file_name: file.file_name,
-    file_type: file.file_type ?? files[index]?.type ?? '',
-    file_size_bytes: file.file_size_bytes ?? files[index]?.size ?? 0,
-    storage_path: file.storage_path,
-    storage_bucket: file.storage_bucket ?? 'memorial-assets',
-    taken_at: file.taken_at ?? null,
-    caption: file.caption ?? null,
-    url: file.url || file.photo_url || null,
-    previewUrl: file.url || file.photo_url || null,
-  }));
+  const finalAssets = backendAssets.map((file, index) => {
+    const originalFile = files[index];
+    const remoteUrl = file.url || file.photo_url || null;
+    let previewUrl = remoteUrl;
+    if (!previewUrl && originalFile) {
+      try { previewUrl = URL.createObjectURL(originalFile); } catch {}
+    }
+    return {
+      id: file.id,
+      file_name: file.file_name,
+      file_type: file.file_type ?? originalFile?.type ?? '',
+      file_size_bytes: file.file_size_bytes ?? originalFile?.size ?? 0,
+      storage_path: file.storage_path,
+      storage_bucket: file.storage_bucket ?? 'memorial-assets',
+      taken_at: file.taken_at ?? null,
+      caption: file.caption ?? null,
+      url: remoteUrl,
+      previewUrl,
+    };
+  });
 
   const existing = readStoredPhotos(token);
   writeStoredPhotos(token, [...existing, ...finalAssets]);
@@ -1341,11 +1342,40 @@ export async function fetchContributorPhotos(token, contributorToken) {
 
 export async function getContributorSummary(token) {
   const session = readContributorSession(token);
-  const contributorToken = session?.contributorToken || session?.contributorId;
-  const photos = contributorToken
-    ? await fetchContributorPhotos(token, contributorToken)
-    : readStoredPhotos(token);
-  const voice = readStoredVoice(token);
+  const store = getStore();
+
+  // Check in-memory store first — used when photos/page.jsx uses addPhotos
+  // Fall back to localStorage — used when backend upload path writes via writeStoredPhotos
+  let photos;
+  if (store.photos.length > 0) {
+    photos = store.photos.map((p) => ({
+      id: p.id,
+      file_name: p.file?.name || '',
+      previewUrl: p.previewUrl,
+      caption: p.caption ?? null,
+    }));
+  } else {
+    photos = readStoredPhotos(token).map((p) => ({
+      id: p.id,
+      file_name: p.file_name || '',
+      previewUrl: p.previewUrl || p.url || null,
+      caption: p.caption ?? null,
+    }));
+  }
+
+  // Same for voice
+  let voice;
+  if (store.voice.length > 0) {
+    voice = store.voice.map((r) => ({
+      id: r.id,
+      contributor_title: r.title,
+      file_name: r.file?.name || '',
+      previewUrl: r.previewUrl,
+      duration_seconds: 0,
+    }));
+  } else {
+    voice = readStoredVoice(token);
+  }
 
   const contributorId = session?.contributorId ?? null;
   const responsesByContributor = readStoredResponses(token);
@@ -1637,8 +1667,8 @@ export async function getMemorialById(memorialId) {
 
     const data = await response.json();
     return data.memorial;
-  } catch {
-    return mockMemorials.find((m) => m.id === memorialId) ?? mockMemorials[0];
+   } catch {
+    return null;
   } finally {
     clearTimeout(timeoutId);
   }

@@ -144,8 +144,23 @@ function buildRelationshipCounts(contributors = []) {
   }));
 }
 
-function buildRelationshipGraph(contributors, centerId, centerName) {
-  const contributorNodes = (contributors || []).map((c) => contributorToGraphNode(c));
+// Replace the entire buildRelationshipGraph function:
+function buildRelationshipGraph(contributors, centerId, centerName, relationships = []) {
+  const contributorNodes = (contributors || []).map((c) => {
+    const relType = (c.relationship_type || 'other').toLowerCase();
+    const relData = relationships.find((r) => r.type === relType) || {};
+    return {
+      id: c.id,
+      name: c.name || 'Contributor',
+      relationship_type: capitalizeFirstLetter(c.relationship_type) || 'Other',
+      prominence: 0.7,
+      summary: relData.summary || '',
+      photos: relData.photos || [],
+      photo_urls: relData.photos || [],
+      quotes: relData.quote ? [{ text: relData.quote, contributor_name: c.name }] : [],
+      contributions: 1,
+    };
+  });
 
   return {
     nodes: [
@@ -174,6 +189,7 @@ export default function ConstellationGraph({
   ai_output,
   memorial,
   contributor = [],
+  relationships = [],
   width,
   height,
 }) {
@@ -219,15 +235,16 @@ export default function ConstellationGraph({
         photos: t.photo_urls || t.photo_ids || [],
         quotes: t.quotes || [],
         contributions: (t.photo_urls || []).length,
-      }))
-  );
+      })) || []
+);
+
   const [links, setLinks] = useState(
     ai_output?.constellation?.edges?.map(d => ({
       source: d.source,
       target: d.target,
       type: capitalizeFirstLetter(d.relationship_type),
       weight: d.weight
-    }))
+    })) || []
   );
   
   
@@ -249,8 +266,9 @@ export default function ConstellationGraph({
       contributor,
       memorial?.id || 'memorial-center',
       memorial?.subject_name || memorial?.deceased_name || 'Memorial',
+      relationships || [],
     ),
-    [contributor, memorial?.id, memorial?.subject_name, memorial?.deceased_name],
+    [contributor, memorial?.id, memorial?.subject_name, memorial?.deceased_name, relationships],
   );
 
   const graphNodes = tab === "Relationships" ? relationshipGraph.nodes : nodes;
@@ -261,7 +279,7 @@ export default function ConstellationGraph({
       setTab(e.target.value);
       if (e.target.value === "Themes") {
 
-        setNodes(ai_output?.constellation?.nodes.map(t => ({
+        setNodes(ai_output?.constellation?.nodes?.map(t => ({
           id: t.id,
           name: t.label,
           group: t.category,
@@ -271,19 +289,19 @@ export default function ConstellationGraph({
           photos: t.photo_urls || t.photo_ids || [],
           quotes: t.quotes || [],
           contributions: (t.photo_urls || []).length,
-        })));    
-        setLinks(ai_output?.constellation?.edges.map(d => ({
+        })) || []);
+        setLinks(ai_output?.constellation?.edges?.map(d => ({
           source: d.source,
           target: d.target,
-          type: (d.relationship_type),
+          type: capitalizeFirstLetter(d.relationship_type),
           weight: d.weight
-        })));
+        })) || []);
     }
   }
 
   useEffect(() => {
     if (!graphNodes || graphNodes.length === 0) return;
-    if (!graphLinks || graphLinks.length === 0) return;
+    if (!graphLinks) return;
     if (!tab) return;
     if (!hiddenRelationshipType) return;
     if (!hiddenContributors) return;

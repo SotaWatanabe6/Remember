@@ -232,11 +232,14 @@ async function runPipelines(memorialId, jobId) {
     await updateJob(jobId, 75, 'Processing voice recordings...')
     const voices = enrichedRecordings.map((r) => {
       const tags = typeof r.ai_tags === 'object' && r.ai_tags ? r.ai_tags : {}
+      const contributor = contributors?.find((c) => c.id === r.contributor_id)
       return {
         id: r.id,
         contributor_title: r.contributor_title,
-        key_quote: r.key_quote || r.transcript_text?.slice(0, 150) || 'No transcript yet',
-        transcript_text: r.transcript_text || 'Transcription pending',
+        contributor_name: contributor?.name || null,
+        relationship_type: contributor?.relationship_type || null,
+        key_quote: r.key_quote || null,
+        transcript_text: r.transcript_text || null,
         ai_category: r.ai_category || 'memory',
         audio_url: r.storage_path,
         intro_line: tags.intro_line || null,
@@ -272,6 +275,49 @@ async function runPipelines(memorialId, jobId) {
           }))
         : []
 
+    // Build relationships grouped by type for the Relationships tab
+    const relationshipMap = {}
+    for (const contributor of (contributors || [])) {
+      const type = (contributor.relationship_type || 'other').toLowerCase()
+      if (!relationshipMap[type]) {
+        relationshipMap[type] = { type, contributorNames: [], quotes: [], photos: [] }
+      }
+      relationshipMap[type].contributorNames.push(contributor.name || 'A contributor')
+    }
+
+    for (const response of (responses || [])) {
+      const contributor = contributors?.find((c) => c.id === response.contributor_id)
+      if (!contributor || !response.response_text?.trim()) continue
+      const type = (contributor.relationship_type || 'other').toLowerCase()
+      if (relationshipMap[type]) {
+        relationshipMap[type].quotes.push({
+          text: response.response_text.slice(0, 200),
+          contributor_name: contributor.name,
+        })
+      }
+    }
+
+    for (const photo of analyzedPhotos) {
+      if (!photo.storage_path) continue
+      const contributor = contributors?.find((c) => c.id === photo.contributor_id)
+      if (!contributor) continue
+      const type = (contributor.relationship_type || 'other').toLowerCase()
+      if (relationshipMap[type]) {
+        relationshipMap[type].photos.push(photo.storage_path)
+      }
+    }
+
+    const relationships = Object.values(relationshipMap).map((group) => ({
+      type: group.type,
+      count: group.contributorNames.length,
+      summary: group.quotes[0]?.text
+        ? group.quotes[0].text
+        : `${group.contributorNames.length} ${group.type} contributor${group.contributorNames.length !== 1 ? 's' : ''} shared memories.`,
+      quote: group.quotes[0]?.text || null,
+      photos: group.photos.slice(0, 5),
+      contributor_names: group.contributorNames,
+    }))
+
     const albums = themes.map((theme) => {
       const themePhotos = analyzedPhotos.filter((p) =>
         p.matched_theme_ids?.includes(theme.id),
@@ -300,6 +346,7 @@ async function runPipelines(memorialId, jobId) {
       constellation: { nodes: constellationNodes, edges },
       voices,
       photos: { albums },
+      relationships,
     })
     await saveOutput(memorialId, jobId, 'full', outputPayload)
 
