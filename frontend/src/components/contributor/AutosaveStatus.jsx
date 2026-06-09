@@ -3,6 +3,7 @@ export default function AutosaveStatus({ status }) {
     idle: "",
     saving: "Saving...",
     saved: "Saved",
+    rate_limited: "Saving paused briefly. Wait a moment, then continue to the next question.",
     error: "Could not save. We'll try again when you continue.",
   };
 

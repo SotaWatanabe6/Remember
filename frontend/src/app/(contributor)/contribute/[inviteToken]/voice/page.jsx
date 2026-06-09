@@ -375,7 +375,7 @@ export default function VoicePage() {
     <main className="min-h-screen px-6 py-10 sm:px-[50px] bg-r-bg text-r-text">
       <div className="page-shell">
 
-        <ContributorNav backHref={`/contribute/${inviteToken}/upload`} />
+        <ContributorNav backHref={`/contribute/${inviteToken}/photos`} />
 
         <div className="text-center">
           <h1 className="text-h1 text-r-text">Upload your memories</h1>

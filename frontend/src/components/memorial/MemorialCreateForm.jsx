@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createMemorial } from "@/services/memorialService.js";
-import { uploadPhotoToSupabase } from "@/lib/supabaseStorage.js";
+import { uploadMemorialCoverPhoto, updateMemorial } from "@/lib/api.js";
 
 const currentYear = new Date().getFullYear();
 
@@ -251,20 +251,29 @@ export default function MemorialCreateForm() {
     setError("");
     setIsSubmitting(true);
 
-    try {
-      let photoUrl = null;
+    const safetyTimer = setTimeout(() => {
+      setIsSubmitting(false);
+      setError((current) =>
+        current ||
+          "This is taking too long. Make sure you are logged in and the API is running on port 3001.",
+      );
+    }, 90_000);
 
-      // Upload photo to Supabase Storage if one was selected
-      if (remembered.photo) {
-        try {
-          photoUrl = await uploadPhotoToSupabase(remembered.photo);
-        } catch (uploadErr) {
-          throw new Error(`Photo upload failed: ${uploadErr.message}`);
-        }
+    try {
+      const subjectName = `${remembered.firstName} ${remembered.lastName}`.trim();
+      if (!subjectName) {
+        throw new Error("Please enter a first or last name.");
       }
 
+      const relatedPeople = remembered.relatedPeople
+        .filter((person) => person.name?.trim())
+        .map((person) => ({
+          name: person.name.trim(),
+          relationship: person.relationship || "Other",
+        }));
+
       const memorial = await createMemorial({
-        subject_name: `${remembered.firstName} ${remembered.lastName}`.trim(),
+        subject_name: subjectName,
         nickname: remembered.nickName,
         date_of_birth: remembered.yearOfBirth
           ? `${remembered.yearOfBirth}-01-01`
@@ -273,16 +282,42 @@ export default function MemorialCreateForm() {
           ? `${remembered.yearOfPassing}-01-01`
           : null,
         biography: remembered.briefBiography,
-        related_people: remembered.relatedPeople,
-        cover_photo_url: photoUrl,
+        related_people: relatedPeople,
+        cover_photo_url: null,
       });
 
-      if (memorial?.id) {
-        router.push(`/memorial/${memorial.id}/manage`);
+      if (!memorial?.id) {
+        throw new Error(
+          "Memorial may have been created, but we could not open it. Check your dashboard.",
+        );
       }
+
+      if (remembered.photo) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 20_000);
+        try {
+          const upload = await uploadMemorialCoverPhoto(remembered.photo, {
+            signal: controller.signal,
+          });
+          const photoUrl =
+            upload.cover_photo_url || upload.storage_path || upload.url;
+          if (photoUrl) {
+            await updateMemorial(memorial.id, { cover_photo_url: photoUrl });
+          }
+        } catch (uploadErr) {
+          setError(
+            `Profile created, but the photo could not be uploaded: ${uploadErr.message || "upload failed"}. You can add it later from manage.`,
+          );
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      }
+
+      router.push(`/memorial/${memorial.id}/manage`);
     } catch (err) {
       setError(err.message || "Failed to create memorial. Please try again.");
     } finally {
+      clearTimeout(safetyTimer);
       setIsSubmitting(false);
     }
   };
@@ -345,6 +380,7 @@ export default function MemorialCreateForm() {
           />
 
           {remembered.photoPreview ? (
+            <div className="flex w-full flex-col gap-2">
             <div className="relative h-[343px] w-full overflow-hidden rounded-[20px] border border-[#CAD5E2]">
               <img
                 src={remembered.photoPreview}
@@ -361,6 +397,7 @@ export default function MemorialCreateForm() {
                   <ReuploadIcon />
                 </span>
               </button>
+            </div>
             </div>
           ) : (
             <label
@@ -481,11 +518,15 @@ export default function MemorialCreateForm() {
         </div>
       </section>
 
-      {error && (
-        <div className="rounded-[10px] bg-red-50 p-4 text-red-700">{error}</div>
-      )}
-
-      <div className="flex justify-center pt-[20px]">
+      <div className="flex flex-col items-center gap-4 pt-[20px]">
+        {error && (
+          <div
+            role="alert"
+            className="w-full max-w-[434px] rounded-[10px] bg-red-50 p-4 text-center text-red-700"
+          >
+            {error}
+          </div>
+        )}
         <button
           type="submit"
           disabled={isSubmitting}

@@ -2,6 +2,7 @@ require('dotenv').config()
 const express = require('express')
 const router = express.Router()
 const supabase = require('../supabase')
+const { resolveOutputMediaUrls, enrichMemorialForClient } = require('../services/storageUrls')
 
 // GET /share/:token — get memorial output via viewer share link
 router.get('/:token', async (req, res) => {
@@ -34,7 +35,37 @@ router.get('/:token', async (req, res) => {
       return res.status(404).json({ error: 'Memorial output not found.' })
     }
 
-    res.json(output.output_json)
+    const { data: memorial } = await supabase
+      .from('memorials')
+      .select('id, subject_name, cover_photo_url, date_of_birth, date_of_passing, nickname, biography')
+      .eq('id', invite.memorial_id)
+      .single()
+
+    const { data: contributors } = await supabase
+      .from('contributors')
+      .select('id, name, relationship_type, status, submitted_at, created_at')
+      .eq('memorial_id', invite.memorial_id)
+      .order('created_at', { ascending: false })
+
+    let resolved = output.output_json
+    try {
+      resolved = await Promise.race([
+        resolveOutputMediaUrls(supabase, output.output_json),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Media URL signing timed out')), 25_000),
+        ),
+      ])
+    } catch (signErr) {
+      console.warn('[share] using unsigned output:', signErr.message)
+    }
+
+    const memorialForClient = await enrichMemorialForClient(supabase, memorial)
+
+    res.json({
+      ...resolved,
+      memorial: memorialForClient || null,
+      contributors: contributors || [],
+    })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
