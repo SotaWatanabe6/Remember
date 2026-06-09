@@ -332,7 +332,7 @@ export default function PhotosPage() {
   useEffect(() => {
     return () => {
       revokePreviewUrls(selectedPhotosRef.current);
-      revokePreviewUrls(uploadedAssetsRef.current);
+      // uploaded asset blob URLs must stay valid for the review page
     };
   }, [revokePreviewUrls]);
 
