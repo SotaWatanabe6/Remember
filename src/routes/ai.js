@@ -14,6 +14,9 @@ const {
 } = require('../services/memorialGeneration')
 const { processVoiceRecording } = require('../services/voiceProcessing')
 
+const MAX_GENERATION_PHOTOS = Number(process.env.AI_PIPELINE_MAX_PHOTOS) || 60
+const CAN_USE_OPENAI = Boolean(process.env.OPENAI_API_KEY)
+
 async function updateJob(jobId, progress, current_step, status = 'processing') {
   console.log(`[Pipeline] ${progress}% — ${current_step}`)
   await supabase.from('ai_jobs').update({ progress, current_step, status }).eq('id', jobId)
@@ -27,6 +30,15 @@ async function saveOutput(memorialId, jobId, outputType, outputJson) {
     output_type: outputType,
     output_json: outputJson,
   })
+}
+
+function serializeJob(job) {
+  return {
+    id: job.id,
+    status: job.status,
+    progress: job.progress,
+    current_step: job.current_step,
+  }
 }
 
 async function runPipelinesWithTimeout(memorialId, jobId) {
@@ -49,6 +61,8 @@ async function runPipelines(memorialId, jobId) {
       .from('media_assets')
       .select('*')
       .eq('memorial_id', memorialId)
+      .order('created_at', { ascending: true })
+      .limit(MAX_GENERATION_PHOTOS)
     const { data: recordings } = await supabase
       .from('voice_recordings')
       .select('*')
@@ -86,21 +100,26 @@ async function runPipelines(memorialId, jobId) {
     if (photos && photos.length > 0) {
       for (const photo of photos) {
         try {
-          const { data: urlData } = await supabase.storage
-            .from(photo.storage_bucket || 'memorial-assets')
-            .createSignedUrl(photo.storage_path, 300)
-          if (urlData?.signedUrl) {
-            const analysis = await analyzePhotoWithVision(
-              urlData.signedUrl,
-              memorial.subject_name,
-            )
-            analyzedPhotos.push({
-              ...photo,
-              analysis,
-              matched_theme_ids: [],
-            })
+          if (CAN_USE_OPENAI) {
+            const { data: urlData } = await supabase.storage
+              .from(photo.storage_bucket || 'memorial-assets')
+              .createSignedUrl(photo.storage_path, 300)
+            if (urlData?.signedUrl) {
+              const analysis = await analyzePhotoWithVision(
+                urlData.signedUrl,
+                memorial.subject_name,
+              )
+              analyzedPhotos.push({
+                ...photo,
+                analysis,
+                matched_theme_ids: [],
+              })
+            } else {
+              analyzedPhotos.push({ ...photo, analysis: null, matched_theme_ids: [] })
+            }
           } else {
-            analyzedPhotos.push({ ...photo, analysis: null, matched_theme_ids: [] })
+            const analysis = await analyzePhotoWithVision(null, memorial.subject_name)
+            analyzedPhotos.push({ ...photo, analysis, matched_theme_ids: [] })
           }
         } catch (err) {
           console.error('[Vision] failed for photo:', photo.id, err.message)
@@ -139,7 +158,7 @@ async function runPipelines(memorialId, jobId) {
     const enrichedRecordings = []
     for (const recording of recordings || []) {
       let row = recording
-      if (!recording.transcript_text && recording.storage_path) {
+      if (CAN_USE_OPENAI && !recording.transcript_text && recording.storage_path) {
         try {
           const { data: blob } = await supabase.storage
             .from(recording.storage_bucket || 'memorial-assets')
@@ -320,7 +339,32 @@ router.post('/memorials/:id/generate', authMiddleware, async (req, res) => {
       .single()
     if (memError || !memorial) return res.status(403).json({ error: 'Not authorized' })
     if (memorial.status === 'generating') {
-      return res.status(400).json({ error: 'Generation already in progress' })
+      const { data: existingJob } = await supabase
+        .from('ai_jobs')
+        .select('id, status, progress, current_step')
+        .eq('memorial_id', req.params.id)
+        .in('status', ['queued', 'processing'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (existingJob) {
+        console.log('[Generate] resuming pipeline for job:', existingJob.id)
+        runPipelinesWithTimeout(req.params.id, existingJob.id).catch(async (err) => {
+          console.error('[Generate] pipeline error:', err.message)
+          await supabase
+            .from('ai_jobs')
+            .update({
+              status: 'failed',
+              current_step: 'Failed',
+              error_message: err.message,
+            })
+            .eq('id', existingJob.id)
+          await supabase.from('memorials').update({ status: 'collecting' }).eq('id', req.params.id)
+        })
+
+        return res.status(202).json({ job: serializeJob(existingJob) })
+      }
     }
 
     const { data: contributors } = await supabase
@@ -360,12 +404,7 @@ router.post('/memorials/:id/generate', authMiddleware, async (req, res) => {
     })
 
     res.status(201).json({
-      job: {
-        id: job.id,
-        status: job.status,
-        progress: job.progress,
-        current_step: job.current_step,
-      },
+      job: serializeJob(job),
     })
   } catch (err) {
     res.status(500).json({ error: err.message })
