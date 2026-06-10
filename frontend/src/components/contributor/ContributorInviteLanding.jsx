@@ -137,8 +137,19 @@ export default function ContributorInviteLanding({ inviteToken }) {
     setSubmitError("");
 
     try {
-      await beginContributorDraft(inviteToken, trimmedContributorName);
-      router.push(`/contribute/${inviteToken}/privacy`);
+    await beginContributorDraft(inviteToken, trimmedContributorName);
+
+    // Save memorial subject name to session so all downstream pages can read it
+    try {
+      const sessionKey = `remember_contributor_session:${inviteToken}`;
+      const existing = JSON.parse(localStorage.getItem(sessionKey) || '{}');
+      localStorage.setItem(sessionKey, JSON.stringify({
+        ...existing,
+        memorialSubjectName: invite.deceased.name || '',
+      }));
+    } catch {}
+
+    router.push(`/contribute/${inviteToken}/privacy`);
     } catch (error) {
       setSubmitError(
         error instanceof Error

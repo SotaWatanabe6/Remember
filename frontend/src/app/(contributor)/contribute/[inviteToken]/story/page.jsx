@@ -113,7 +113,7 @@ export default function StoryPage() {
   const [error, setError] = useState('');
 
   // Read memorial name from contributor session
-  const [deceasedName, setDeceasedName] = useState('John');
+  const [deceasedName, setDeceasedName] = useState('');
   useEffect(() => {
     try {
       const session = JSON.parse(localStorage.getItem(`remember_contributor_session:${inviteToken}`) || '{}');

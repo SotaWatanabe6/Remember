@@ -3,6 +3,7 @@
 // src/app/(contributor)/contribute/[inviteToken]/upload/page.jsx
 
 import { useRouter, useParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
@@ -44,8 +45,15 @@ export default function UploadSelectorPage() {
     if (type === 'story') router.push(`/contribute/${inviteToken}/story`);
   }
 
-  // Day 9: replace with real memorial name from session
-  const deceasedName = 'John';
+  const [deceasedName, setDeceasedName] = useState('');
+  useEffect(() => {
+    try {
+      const session = JSON.parse(
+        localStorage.getItem(`remember_contributor_session:${inviteToken}`) || '{}'
+      );
+      if (session?.memorialSubjectName) setDeceasedName(session.memorialSubjectName);
+    } catch {}
+  }, [inviteToken]);
 
   return (
     <main className="min-h-screen px-6 py-10 sm:px-[50px] bg-r-bg text-r-text">
