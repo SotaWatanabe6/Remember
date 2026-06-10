@@ -3,7 +3,7 @@
 // frontend/src/app/(contributor)/contribute/[inviteToken]/submitted/page.jsx
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import MemorialCoverImage from "@/components/memorial/MemorialCoverImage.jsx";
 import { getContributorSubmittedDraft } from "@/services/contributorService.js";
@@ -84,6 +84,8 @@ export default function SubmittedPage() {
   const [draft, setDraft] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const router = useRouter();
+
   useEffect(() => {
     let isMounted = true;
     async function loadSubmitted() {
@@ -114,6 +116,9 @@ export default function SubmittedPage() {
 
         <nav className="flex h-10 items-center justify-between">
           <span className="text-2xl leading-8 text-r-text">Remember</span>
+          <Link href="/login" className="text-body-2 text-r-secondary transition-opacity hover:opacity-70">
+            Log In / Sign Up
+          </Link>
         </nav>
 
         <section className="flex flex-1 flex-col items-center justify-center gap-8 pb-16 text-center">
@@ -134,12 +139,12 @@ export default function SubmittedPage() {
           </div>
 
           <button
-            onClick={() => window.location.href = `/contribute/${inviteToken}/upload`}
-            className="rounded-full text-body-2 font-medium tracking-wide transition-opacity hover:opacity-80 bg-r-btn text-r-btn-text border-none"
-            style={{ width: '320px', padding: '16px 0', cursor: 'pointer' }}
-          >
-            Continue
-          </button>
+          onClick={() => router.push(`/contribute/${inviteToken}`)}
+          className="rounded-full text-body-2 font-medium tracking-wide transition-opacity hover:opacity-80 bg-r-btn text-r-btn-text border-none"
+          style={{ width: '320px', padding: '16px 0' }}
+        >
+          Start from beginning
+        </button>
 
         </section>
       </div>

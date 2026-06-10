@@ -219,7 +219,11 @@ router.post('/:token/relationship', async (req, res) => {
 
     const { data, error } = await supabase
       .from('contributors')
-      .update({ relationship_type, relationship_label: relationship_label || null })
+      .update({
+        relationship_type,
+        relationship_label: relationship_label || null,
+        is_anonymous: typeof req.body.is_anonymous === 'boolean' ? req.body.is_anonymous : false,
+      })
       .eq('id', contributor_token)
       .select()
       .single()
@@ -418,6 +422,35 @@ router.post('/:token/photos', async (req, res) => {
     })
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message })
+  }
+})
+
+// PATCH /contribute/:token/photos/:assetId — update caption
+router.patch('/:token/photos/:assetId', async (req, res) => {
+  try {
+    const { contributor_token, caption } = req.body
+    if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
+
+    const { data: asset, error: assetError } = await supabase
+      .from('media_assets')
+      .select('id, contributor_id')
+      .eq('id', req.params.assetId)
+      .eq('contributor_id', contributor_token)
+      .single()
+
+    if (assetError || !asset) return res.status(404).json({ error: 'Photo not found' })
+
+    const { data, error } = await supabase
+      .from('media_assets')
+      .update({ caption: caption ?? null })
+      .eq('id', req.params.assetId)
+      .select('id, caption')
+      .single()
+
+    if (error) return res.status(400).json({ error: error.message })
+    res.json({ asset: data })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
   }
 })
 

@@ -217,7 +217,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
 
         const resumeIndex = getResumeQuestionIndex(restoredAnswers);
         if (resumeIndex >= CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.length) {
-          router.replace(`/contribute/${inviteToken}/photos`);
+          router.replace(`/contribute/${inviteToken}/questions-review`);
           return;
         }
 
@@ -501,7 +501,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
     setIsNavigating(false);
     return;
   }
-  router.push(`/contribute/${inviteToken}/upload`);
+  router.push(`/contribute/${inviteToken}/questions-review`);
  };
 
   useEffect(() => {

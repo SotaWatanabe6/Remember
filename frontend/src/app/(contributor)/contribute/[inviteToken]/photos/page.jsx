@@ -8,13 +8,9 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { deletePhoto, getContributorSummary, uploadPhotos } from '@/lib/api';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const PHOTO_ACCEPT = 'image/*,.heic,.heif,.jpg,.jpeg,.png,.webp';
 const MAX_PHOTO_BYTES = 50 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = new Set(['heic', 'heif', 'jpg', 'jpeg', 'png', 'webp']);
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getFileExtension(fileName) {
   return fileName.split('.').pop()?.toLowerCase() ?? '';
@@ -43,16 +39,11 @@ function createSelectedPhoto(file, index) {
   };
 }
 
-// ─── Nav ──────────────────────────────────────────────────────────────────────
-
 function ContributorNav({ backHref }) {
   return (
     <nav className="flex h-10 items-center justify-between pt-2 sm:pt-4">
       <span className="text-r-text text-2xl leading-8">Remember</span>
-      <Link
-        href={backHref}
-        className="flex items-center gap-1.5 text-body-2 text-r-secondary transition-colors"
-      >
+      <Link href={backHref} className="flex items-center gap-1.5 text-body-2 text-r-secondary transition-colors">
         <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
         </svg>
@@ -62,9 +53,41 @@ function ContributorNav({ backHref }) {
   );
 }
 
-// ─── Drop Zone ────────────────────────────────────────────────────────────────
-// disabled prop — Sungjun's logic
-// border + backgroundColor dynamic — CSS vars inline
+function CaptionModal({ asset, onSave, onCancel }) {
+  const [caption, setCaption] = useState(asset.caption || '');
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ backgroundColor: 'rgba(66,63,57,0.3)' }}>
+      <div className="w-full max-w-sm rounded-2xl p-8 shadow-xl bg-r-modal">
+        <h2 className="text-h3 text-r-text">Add a caption</h2>
+        <p className="mt-1 text-caption text-r-muted truncate">{asset.file_name}</p>
+        <input
+          autoFocus
+          value={caption}
+          onChange={(e) => setCaption(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && onSave(asset.id, caption.trim())}
+          placeholder="e.g. Summer 2019"
+          className="mt-5 w-full rounded-xl px-4 py-3 text-sm focus:outline-none text-r-text bg-transparent"
+          style={{ border: '1px solid var(--color-r-border)' }}
+          onFocus={(e) => { e.target.style.borderColor = 'var(--color-r-border-focus)'; }}
+          onBlur={(e) => { e.target.style.borderColor = 'var(--color-r-border)'; }}
+        />
+        <div className="mt-5 flex gap-3">
+          <button onClick={onCancel}
+            className="flex-1 rounded-full py-3 text-body-2 text-r-secondary bg-transparent transition-colors"
+            style={{ border: '1px solid var(--color-r-border)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-r-card)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}>
+            Cancel
+          </button>
+          <button onClick={() => onSave(asset.id, caption.trim())}
+            className="flex-1 rounded-full py-3 text-body-2 transition-opacity hover:opacity-80 bg-r-btn text-r-btn-text border-none">
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function DropZone({ onFiles, disabled }) {
   const inputRef = useRef(null);
@@ -98,75 +121,61 @@ function DropZone({ onFiles, disabled }) {
       <svg width="32" height="32" fill="none" stroke="var(--color-r-secondary)" strokeWidth="1.6" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 10l-4-4m0 0L8 10m4-4v12" />
       </svg>
-      <span className="text-body-2 text-r-secondary">Select photos from your camera roll</span>
-      <span className="text-caption text-r-muted">Single photos, bulk selections, JPG, PNG, WebP, HEIC, or HEIF</span>
-      <input
-        id={inputId}
-        ref={inputRef}
-        type="file"
-        accept={PHOTO_ACCEPT}
-        multiple
-        className="sr-only"
-        disabled={disabled}
-        onChange={(event) => handleFiles(event.target.files)}
-      />
+      <span className="text-body-2 text-r-secondary">Click to upload or drag and drop photos</span>
+      <input id={inputId} ref={inputRef} type="file" accept={PHOTO_ACCEPT} multiple className="sr-only" disabled={disabled} onChange={(event) => handleFiles(event.target.files)} />
     </label>
   );
 }
 
-// ─── Photo Thumb ──────────────────────────────────────────────────────────────
-// Sungjun's full logic — uploading state, preview error, conditional delete
-// Styling uses CSS tokens
-
-function PhotoThumb({ asset, onDelete, uploading, onPreviewError }) {
+// onEdit only passed for uploaded assets — shows pencil for caption editing
+// onDelete for both selected and uploaded
+function PhotoThumb({ asset, onDelete, onEdit, uploading, onPreviewError }) {
   const previewSrc = asset.previewUrl || asset.url;
   const canRenderPreview = previewSrc && !asset.previewFailed;
 
   return (
     <div className="relative aspect-square overflow-hidden rounded-xl bg-r-card">
       {canRenderPreview ? (
-        <Image
-          src={previewSrc}
-          alt={asset.file_name}
-          fill
-          sizes="(min-width: 640px) 200px, 30vw"
-          className="object-cover"
-          unoptimized
-          onError={() => onPreviewError?.(asset.id)}
-        />
+        <Image src={previewSrc} alt={asset.file_name} fill sizes="(min-width: 640px) 200px, 30vw" className="object-cover" unoptimized onError={() => onPreviewError?.(asset.id)} />
       ) : (
-        <div className="flex h-full w-full items-center justify-center px-2 text-center bg-r-border text-caption text-r-muted">
-          {asset.file_name}
+        <div className="flex h-full w-full items-center justify-center px-2 text-center bg-r-border text-caption text-r-muted">{asset.file_name}</div>
+      )}
+
+      {asset.caption && !uploading && (
+        <div className="absolute bottom-0 inset-x-0 px-2 py-1 text-center" style={{ backgroundColor: 'rgba(66,63,57,0.55)' }}>
+          <p className="text-caption text-white truncate">{asset.caption}</p>
         </div>
       )}
 
       {uploading ? (
         <div className="absolute inset-x-0 bottom-0 h-1 bg-r-border">
-          <div
-            className="h-full w-1/2 animate-pulse rounded-full"
-            style={{ backgroundColor: 'var(--color-r-accent)' }}
-          />
+          <div className="h-full w-1/2 animate-pulse rounded-full" style={{ backgroundColor: 'var(--color-r-accent)' }} />
         </div>
       ) : null}
 
       {!uploading && onDelete ? (
-        <button
-          type="button"
-          onClick={() => onDelete(asset.id)}
-          className="absolute right-2 top-2 rounded-full p-1.5 shadow-sm transition-colors"
-          style={{ backgroundColor: 'rgba(242,236,228,0.92)' }}
-          aria-label={`Remove ${asset.file_name}`}
-        >
-          <svg width="12" height="12" fill="none" stroke="var(--color-r-danger)" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6m2 0a1 1 0 00-1-1h-4a1 1 0 00-1 1H5" />
-          </svg>
-        </button>
+        <div className="absolute right-2 top-2 flex gap-1">
+          {onEdit ? (
+            <button type="button" onClick={() => onEdit(asset)}
+              className="rounded-full p-1.5 shadow-sm transition-colors" style={{ backgroundColor: 'rgba(242,236,228,0.92)' }}
+              aria-label={`Edit caption for ${asset.file_name}`}>
+              <svg width="12" height="12" fill="none" stroke="var(--color-r-text)" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a4 4 0 01-1.414.828l-3 1 1-3a4 4 0 01.828-1.414z" />
+              </svg>
+            </button>
+          ) : null}
+          <button type="button" onClick={() => onDelete(asset.id)}
+            className="rounded-full p-1.5 shadow-sm transition-colors" style={{ backgroundColor: 'rgba(242,236,228,0.92)' }}
+            aria-label={`Remove ${asset.file_name}`}>
+            <svg width="12" height="12" fill="none" stroke="var(--color-r-danger)" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7h6m2 0a1 1 0 00-1-1h-4a1 1 0 00-1 1H5" />
+            </svg>
+          </button>
+        </div>
       ) : null}
     </div>
   );
 }
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PhotosPage() {
   const router = useRouter();
@@ -174,6 +183,7 @@ export default function PhotosPage() {
 
   const [selectedPhotos, setSelectedPhotos] = useState([]);
   const [uploadedAssets, setUploadedAssets] = useState([]);
+  const [editingPhoto, setEditingPhoto] = useState(null);
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -183,50 +193,31 @@ export default function PhotosPage() {
   const handleFiles = useCallback((files) => {
     setErrorMessage('');
     setMessage('');
-
-    if (!files.length) {
-      setErrorMessage('No photos were selected.');
-      return;
-    }
-
+    if (!files.length) { setErrorMessage('No photos were selected.'); return; }
     const validPhotos = [];
     const rejectedPhotos = [];
-
     files.forEach((file) => {
       if (!isAcceptedPhotoFile(file)) { rejectedPhotos.push(file.name || 'A selected file'); return; }
       if (file.size > MAX_PHOTO_BYTES) { rejectedPhotos.push(file.name || 'A selected file'); return; }
       validPhotos.push(file);
     });
-
-    if (rejectedPhotos.length) {
-      setErrorMessage(`${formatCount(rejectedPhotos.length, 'file')} could not be added. Please choose image files under 50 MB.`);
-    }
-
+    if (rejectedPhotos.length) setErrorMessage(`${formatCount(rejectedPhotos.length, 'file')} could not be added. Please choose image files under 50 MB.`);
     if (!validPhotos.length) return;
-
-    const nextSelectedPhotos = validPhotos.map(createSelectedPhoto);
-    setSelectedPhotos((current) => [...current, ...nextSelectedPhotos]);
+    setSelectedPhotos((current) => [...current, ...validPhotos.map(createSelectedPhoto)]);
     setStatus('selected');
   }, []);
 
   const revokePreviewUrls = useCallback((photos) => {
     if (typeof URL === 'undefined') return;
-    photos.forEach((photo) => {
-      if (photo.previewUrl?.startsWith?.('blob:')) URL.revokeObjectURL(photo.previewUrl);
-    });
+    photos.forEach((photo) => { if (photo.previewUrl?.startsWith?.('blob:')) URL.revokeObjectURL(photo.previewUrl); });
   }, []);
 
   async function handleUpload() {
     if (status === 'uploading') return;
-    if (!selectedPhotos.length) {
-      setErrorMessage('Please select at least one photo before uploading.');
-      return;
-    }
-
+    if (!selectedPhotos.length) { setErrorMessage('Please select at least one photo before uploading.'); return; }
     setStatus('uploading');
     setErrorMessage('');
     setMessage('');
-
     try {
       const selectedAtUpload = selectedPhotos;
       const result = await uploadPhotos(inviteToken, selectedAtUpload.map((photo) => photo.file));
@@ -239,39 +230,22 @@ export default function PhotosPage() {
       const uploadedPreviewIds = new Set();
       const uploadedWithPreviews = result.assets.map((asset, index) => ({
         ...asset,
-        previewUrl:
-          asset.previewUrl ||
-          asset.url ||
-          (previewQueues.get(asset.file_name)?.shift() ?? selectedAtUpload[index])?.previewUrl ||
-          null,
+        previewUrl: asset.previewUrl || asset.url || (previewQueues.get(asset.file_name)?.shift() ?? selectedAtUpload[index])?.previewUrl || null,
         previewFailed: false,
       })).map((asset) => {
-        const matchingPhoto = selectedAtUpload.find(
-          (photo) => photo.previewUrl === asset.previewUrl && !uploadedPreviewIds.has(photo.id),
-        );
+        const matchingPhoto = selectedAtUpload.find((photo) => photo.previewUrl === asset.previewUrl && !uploadedPreviewIds.has(photo.id));
         if (matchingPhoto) uploadedPreviewIds.add(matchingPhoto.id);
         return asset;
       });
-      const failedSelections = result.partialFailure
-        ? selectedAtUpload.filter((photo) => !uploadedPreviewIds.has(photo.id))
-        : [];
-
+      const failedSelections = result.partialFailure ? selectedAtUpload.filter((photo) => !uploadedPreviewIds.has(photo.id)) : [];
       setUploadedAssets((current) => [...current, ...uploadedWithPreviews]);
       setSelectedPhotos(failedSelections);
       setStatus(failedSelections.length ? 'selected' : 'success');
-      setMessage(
-        result.partialFailure
-          ? `${formatCount(uploadedWithPreviews.length, 'photo')} uploaded. Some photos could not be saved.`
-          : `${formatCount(uploadedWithPreviews.length, 'photo')} uploaded successfully.`,
-      );
-      if (result.partialFailure) {
-        setErrorMessage('Please review the selected photos and try again for anything that did not upload.');
-      }
+      setMessage(result.partialFailure ? `${formatCount(uploadedWithPreviews.length, 'photo')} uploaded. Some photos could not be saved.` : `${formatCount(uploadedWithPreviews.length, 'photo')} uploaded successfully.`);
+      if (result.partialFailure) setErrorMessage('Please review the selected photos and try again for anything that did not upload.');
     } catch (error) {
       setStatus('error');
-      setErrorMessage(
-        error instanceof Error ? error.message : 'We could not upload those photos. Please try again.',
-      );
+      setErrorMessage(error instanceof Error ? error.message : 'We could not upload those photos. Please try again.');
     }
   }
 
@@ -282,6 +256,34 @@ export default function PhotosPage() {
     } catch {
       setErrorMessage('We could not remove that photo. Please try again.');
     }
+  }
+
+  async function handleSaveCaption(assetId, caption) {
+    // Update UI immediately
+    setUploadedAssets((current) => current.map((a) => a.id === assetId ? { ...a, caption } : a));
+    setEditingPhoto(null);
+
+    // Persist to backend — non-blocking
+    try {
+      const session = JSON.parse(localStorage.getItem(`remember_contributor_session:${inviteToken}`) || '{}');
+      const contributorToken = session?.contributorToken || session?.contributorId;
+      if (contributorToken && !String(assetId).startsWith('selected-')) {
+        await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/contribute/${encodeURIComponent(inviteToken)}/photos/${encodeURIComponent(assetId)}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contributor_token: contributorToken, caption }),
+          }
+        );
+      }
+    } catch {}
+
+    // Mirror to localStorage so review page sees the caption
+    try {
+      const stored = JSON.parse(localStorage.getItem(`remember_photos:${inviteToken}`) || '[]');
+      localStorage.setItem(`remember_photos:${inviteToken}`, JSON.stringify(stored.map((p) => p.id === assetId ? { ...p, caption } : p)));
+    } catch {}
   }
 
   function handleRemoveSelected(assetId) {
@@ -295,19 +297,12 @@ export default function PhotosPage() {
   }
 
   function handlePreviewError(assetId) {
-    setSelectedPhotos((current) =>
-      current.map((photo) => (photo.id === assetId ? { ...photo, previewFailed: true } : photo)),
-    );
-    setUploadedAssets((current) =>
-      current.map((asset) => (asset.id === assetId ? { ...asset, previewFailed: true } : asset)),
-    );
+    setSelectedPhotos((current) => current.map((photo) => photo.id === assetId ? { ...photo, previewFailed: true } : photo));
+    setUploadedAssets((current) => current.map((asset) => asset.id === assetId ? { ...asset, previewFailed: true } : asset));
   }
 
-  function handleContinue() {
-    router.push(`/contribute/${inviteToken}/voice`);
-  }
+  function handleContinue() { router.push(`/contribute/${inviteToken}/voice`); }
 
-  // Load existing photos on mount
   useEffect(() => {
     let isMounted = true;
     async function loadExistingPhotos() {
@@ -326,14 +321,10 @@ export default function PhotosPage() {
     return () => { isMounted = false; };
   }, [inviteToken]);
 
-  // Ref sync + blob URL cleanup
   useEffect(() => { selectedPhotosRef.current = selectedPhotos; }, [selectedPhotos]);
   useEffect(() => { uploadedAssetsRef.current = uploadedAssets; }, [uploadedAssets]);
   useEffect(() => {
-    return () => {
-      revokePreviewUrls(selectedPhotosRef.current);
-      // uploaded asset blob URLs must stay valid for the review page
-    };
+    return () => { revokePreviewUrls(selectedPhotosRef.current); };
   }, [revokePreviewUrls]);
 
   const selectedCount = selectedPhotos.length;
@@ -351,9 +342,7 @@ export default function PhotosPage() {
 
         <div className="text-center">
           <h1 className="text-h1 text-r-text">Upload your memories</h1>
-          <p className="mt-2 text-body-2 text-r-secondary">
-            Add photos from your camera roll. You can select one photo or several at once.
-          </p>
+          <p className="mt-2 text-body-2 text-r-secondary">Upload photos below.</p>
         </div>
 
         <DropZone onFiles={handleFiles} disabled={isUploading} />
@@ -365,25 +354,15 @@ export default function PhotosPage() {
                 <p className="text-h3 text-r-text">Ready to upload</p>
                 <p className="text-caption text-r-muted">{formatCount(selectedCount, 'photo')} selected</p>
               </div>
-              <button
-                type="button"
-                onClick={handleUpload}
-                disabled={isUploading}
+              <button type="button" onClick={handleUpload} disabled={isUploading}
                 className="rounded-full px-5 py-2.5 text-body-2 font-medium transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60 border-none"
-                style={{ backgroundColor: 'var(--color-r-text)', color: '#FBF9F6' }}
-              >
+                style={{ backgroundColor: 'var(--color-r-text)', color: '#FBF9F6' }}>
                 {isUploading ? 'Uploading...' : `Upload ${selectedCount === 1 ? 'photo' : 'photos'}`}
               </button>
             </div>
             <div className="grid grid-cols-3 gap-3">
               {selectedPhotos.map((asset) => (
-                <PhotoThumb
-                  key={asset.id}
-                  asset={asset}
-                  onDelete={isUploading ? null : handleRemoveSelected}
-                  uploading={isUploading}
-                  onPreviewError={handlePreviewError}
-                />
+                <PhotoThumb key={asset.id} asset={asset} onDelete={isUploading ? null : handleRemoveSelected} uploading={isUploading} onPreviewError={handlePreviewError} />
               ))}
             </div>
           </section>
@@ -393,54 +372,34 @@ export default function PhotosPage() {
           <section className="rounded-2xl p-5 sm:p-6 border border-r-border">
             <div className="mb-4 flex flex-col gap-1">
               <p className="text-h3 text-r-text">Uploaded photos</p>
-              <p className="text-caption text-r-muted">
-                {formatCount(uploadedCount, 'photo')} saved to this contribution
-              </p>
+              <p className="text-caption text-r-muted">{formatCount(uploadedCount, 'photo')} saved to this contribution</p>
             </div>
             <div className="grid grid-cols-3 gap-3">
               {uploadedAssets.map((asset) => (
-                <PhotoThumb
-                  key={asset.id}
-                  asset={asset}
-                  onDelete={handleDelete}
-                  uploading={false}
-                  onPreviewError={handlePreviewError}
-                />
+                <PhotoThumb key={asset.id} asset={asset} onDelete={handleDelete} onEdit={setEditingPhoto} uploading={false} onPreviewError={handlePreviewError} />
               ))}
             </div>
           </section>
         ) : null}
 
         {message ? (
-          <p
-            className="rounded-2xl px-4 py-3 text-center text-caption"
-            style={{ backgroundColor: '#E4E8D8', color: 'var(--color-r-colleague)' }}
-            role="status"
-          >
-            {message}
-          </p>
+          <p className="rounded-2xl px-4 py-3 text-center text-caption" style={{ backgroundColor: '#E4E8D8', color: 'var(--color-r-colleague)' }} role="status">{message}</p>
         ) : null}
 
         {errorMessage ? (
-          <p
-            className="rounded-2xl px-4 py-3 text-center text-caption"
-            style={{ backgroundColor: '#F5DDD6', color: 'var(--color-r-danger)' }}
-            role="alert"
-          >
-            {errorMessage}
-          </p>
+          <p className="rounded-2xl px-4 py-3 text-center text-caption" style={{ backgroundColor: '#F5DDD6', color: 'var(--color-r-danger)' }} role="alert">{errorMessage}</p>
         ) : null}
 
-        <button
-          type="button"
-          onClick={handleContinue}
-          disabled={!canContinue}
-          className="w-full rounded-full py-4 text-body-2 font-medium tracking-wide transition-opacity hover:opacity-80 active:opacity-70 disabled:cursor-not-allowed disabled:opacity-55 bg-r-btn text-r-btn-text border-none"
-        >
+        <button type="button" onClick={handleContinue} disabled={!canContinue}
+          className="w-full rounded-full py-4 text-body-2 font-medium tracking-wide transition-opacity hover:opacity-80 active:opacity-70 disabled:cursor-not-allowed disabled:opacity-55 bg-r-btn text-r-btn-text border-none">
           {isUploading ? 'Uploading photos...' : hasUnuploadedSelection ? 'Upload selected photos to continue' : continueLabel}
         </button>
 
       </div>
+
+      {editingPhoto && (
+        <CaptionModal asset={editingPhoto} onSave={handleSaveCaption} onCancel={() => setEditingPhoto(null)} />
+      )}
     </main>
   );
 }
