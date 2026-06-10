@@ -16,11 +16,28 @@ const waitlistRoutes = require('./routes/waitlist')
 
 const app = express()
 
+const DEFAULT_ALLOWED_ORIGINS = ["http://localhost:3000", "http://localhost:5173"]
+const configuredAllowedOrigins = [
+  process.env.FRONTEND_URL,
+  ...(process.env.CORS_ORIGINS || "").split(","),
+]
+  .map((origin) => origin && origin.trim())
+  .map((origin) => origin && origin.replace(/\/$/, ""))
+  .filter(Boolean)
+const allowedOrigins = [...new Set([...DEFAULT_ALLOWED_ORIGINS, ...configuredAllowedOrigins])]
+
 // ── Security ──────────────────────────────────────────────────────────────────
 app.use(helmet())
 
 app.use(cors({
-  origin: ["http://localhost:3000", "http://localhost:5173"],
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true)
+      return
+    }
+
+    callback(new Error(`CORS blocked for origin: ${origin}`))
+  },
   methods: ["GET", "POST", "PATCH", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }))

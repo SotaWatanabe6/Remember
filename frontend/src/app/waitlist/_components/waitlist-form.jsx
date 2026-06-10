@@ -2,6 +2,8 @@
 import { useRef, useEffect, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
 export default function WaitlistForm(props) {
   const defaultFormFields = {
     firstName: "",
@@ -103,7 +105,7 @@ export default function WaitlistForm(props) {
     e.preventDefault();
 
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/waitlist`,
+      `${API_BASE_URL}/waitlist`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
