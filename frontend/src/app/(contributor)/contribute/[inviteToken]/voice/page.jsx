@@ -416,7 +416,7 @@ export default function VoicePage() {
               </svg>
             )}
             <span className="text-body-2 text-r-muted">
-              {uploading ? 'Uploading...' : 'Choose an audio file'}
+              {uploading ? 'Uploading...' : 'Click to upload or drag and drop'}
             </span>
             <span id="voice-upload-guidance" className="text-caption text-r-muted">
               M4A, MP3, WAV, or WebM up to 50 MB
