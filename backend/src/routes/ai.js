@@ -7,30 +7,16 @@ const { resolveOutputMediaUrls } = require('../services/storageUrls')
 const {
   buildMemoryCorpus,
   extractThemes,
+  extractPhotoAlbumThemes,
   analyzePhotoWithVision,
   assignPhotosToThemes,
+  buildConstellationFromPhotos,
   composeStorySlideshow,
-  composeThemeQuotes,
 } = require('../services/memorialGeneration')
 const { processVoiceRecording } = require('../services/voiceProcessing')
 
 const MAX_GENERATION_PHOTOS = Number(process.env.AI_PIPELINE_MAX_PHOTOS) || 60
 const CAN_USE_OPENAI = Boolean(process.env.OPENAI_API_KEY)
-
-async function updateJob(jobId, progress, current_step, status = 'processing') {
-  console.log(`[Pipeline] ${progress}% — ${current_step}`)
-  await supabase.from('ai_jobs').update({ progress, current_step, status }).eq('id', jobId)
-}
-
-async function saveOutput(memorialId, jobId, outputType, outputJson) {
-  console.log('[Pipeline] saving output...')
-  await supabase.from('ai_outputs').insert({
-    memorial_id: memorialId,
-    ai_job_id: jobId,
-    output_type: outputType,
-    output_json: outputJson,
-  })
-}
 
 function serializeJob(job) {
   return {
@@ -38,7 +24,27 @@ function serializeJob(job) {
     status: job.status,
     progress: job.progress,
     current_step: job.current_step,
+    error_message: job.error_message ?? null,
   }
+}
+
+async function updateJob(jobId, progress, current_step, status = 'processing') {
+  console.log(`[Pipeline] ${progress}% — ${current_step}`)
+  await supabase
+    .from('ai_jobs')
+    .update({ progress, current_step, status })
+    .eq('id', jobId)
+}
+
+async function saveOutput(memorialId, jobId, outputJson) {
+  console.log('[Pipeline] saving output...')
+  const { error } = await supabase.from('ai_outputs').insert({
+    memorial_id: memorialId,
+    ai_job_id: jobId,
+    output_type: 'full',
+    output_json: outputJson,
+  })
+  if (error) throw error
 }
 
 async function runPipelinesWithTimeout(memorialId, jobId) {
@@ -49,10 +55,27 @@ async function runPipelinesWithTimeout(memorialId, jobId) {
   return Promise.race([runPipelines(memorialId, jobId), timeoutPromise])
 }
 
+function startPipeline(memorialId, jobId) {
+  runPipelinesWithTimeout(memorialId, jobId).catch(async (err) => {
+    console.error('[Generate] pipeline error:', err.message)
+    await supabase
+      .from('ai_jobs')
+      .update({
+        status: 'failed',
+        current_step: 'Failed',
+        error_message: err.message,
+      })
+      .eq('id', jobId)
+    await supabase.from('memorials').update({ status: 'collecting' }).eq('id', memorialId)
+  })
+}
+
 async function runPipelines(memorialId, jobId) {
   console.log('[Pipeline] started — memorial:', memorialId, 'job:', jobId)
+
   try {
     await updateJob(jobId, 10, 'Gathering contributions...')
+
     const { data: responses } = await supabase
       .from('questionnaire_responses')
       .select('*')
@@ -72,11 +95,13 @@ async function runPipelines(memorialId, jobId) {
       .select('*')
       .eq('memorial_id', memorialId)
       .eq('status', 'submitted')
-    const { data: memorial } = await supabase
+    const { data: memorial, error: memorialError } = await supabase
       .from('memorials')
       .select('*')
       .eq('id', memorialId)
       .single()
+
+    if (memorialError || !memorial) throw new Error('Memorial not found')
 
     const memoryCorpus = buildMemoryCorpus(
       responses || [],
@@ -84,77 +109,68 @@ async function runPipelines(memorialId, jobId) {
       memorial.subject_name,
       memorial,
     )
-    console.log('[Pipeline] data — responses:', responses?.length, 'photos:', photos?.length)
+    console.log('[Pipeline] data — responses:', responses?.length || 0, 'photos:', photos?.length || 0)
 
     await updateJob(jobId, 20, 'Finding themes from questionnaire memories...')
-    const themes = await extractThemes(
+    const discoveryThemes = await extractThemes(
       responses || [],
       contributors || [],
       memorial.subject_name,
       memorial,
     )
-    console.log('[Pipeline] themes found:', themes.length)
 
     await updateJob(jobId, 40, 'Understanding photos...')
     let analyzedPhotos = []
-    if (photos && photos.length > 0) {
-      for (const photo of photos) {
-        try {
-          if (CAN_USE_OPENAI) {
-            const { data: urlData } = await supabase.storage
-              .from(photo.storage_bucket || 'memorial-assets')
-              .createSignedUrl(photo.storage_path, 300)
-            if (urlData?.signedUrl) {
-              const analysis = await analyzePhotoWithVision(
-                urlData.signedUrl,
-                memorial.subject_name,
-              )
-              analyzedPhotos.push({
-                ...photo,
-                analysis,
-                matched_theme_ids: [],
-              })
-            } else {
-              analyzedPhotos.push({ ...photo, analysis: null, matched_theme_ids: [] })
-            }
-          } else {
-            const analysis = await analyzePhotoWithVision(null, memorial.subject_name)
-            analyzedPhotos.push({ ...photo, analysis, matched_theme_ids: [] })
-          }
-        } catch (err) {
-          console.error('[Vision] failed for photo:', photo.id, err.message)
-          analyzedPhotos.push({ ...photo, analysis: null, matched_theme_ids: [] })
+    for (const photo of photos || []) {
+      try {
+        let signedUrl = null
+        if (CAN_USE_OPENAI && photo.storage_path) {
+          const { data: urlData } = await supabase.storage
+            .from(photo.storage_bucket || 'memorial-assets')
+            .createSignedUrl(photo.storage_path, 300)
+          signedUrl = urlData?.signedUrl || null
         }
-      }
 
-      await updateJob(jobId, 50, 'Matching photos to themes from your memories...')
-      analyzedPhotos = await assignPhotosToThemes(
-        analyzedPhotos,
-        themes,
-        memoryCorpus,
-        memorial.subject_name,
-      )
+        const analysis = await analyzePhotoWithVision(signedUrl, memorial.subject_name, {
+          dateOfBirth: memorial.date_of_birth,
+          dateOfPassing: memorial.date_of_passing,
+          deceasedPresent: null,
+        })
 
-      for (const photo of analyzedPhotos) {
-        await supabase
-          .from('media_assets')
-          .update({
-            ai_analysis_status: 'complete',
-            ai_emotion: photo.analysis?.emotion || null,
-            ai_scene: photo.analysis?.scene || null,
-            ai_people_count: photo.analysis?.people_count || null,
-            ai_labels: {
-              ...(typeof photo.ai_labels === 'object' && photo.ai_labels ? photo.ai_labels : {}),
-              vision: photo.analysis,
-            },
-            theme_ids: photo.matched_theme_ids,
-          })
-          .eq('id', photo.id)
+        analyzedPhotos.push({ ...photo, analysis, matched_theme_ids: [] })
+      } catch (err) {
+        console.error('[Vision] failed for photo:', photo.id, err.message)
+        analyzedPhotos.push({ ...photo, analysis: null, matched_theme_ids: [] })
       }
     }
-    console.log('[Pipeline] photos analyzed:', analyzedPhotos.length)
 
-    await updateJob(jobId, 65, 'Transcribing voice memos...')
+    await updateJob(jobId, 50, 'Matching photos to albums...')
+    const albumThemes = await extractPhotoAlbumThemes(analyzedPhotos, memorial.subject_name)
+    analyzedPhotos = await assignPhotosToThemes(
+      analyzedPhotos,
+      albumThemes,
+      memoryCorpus,
+      memorial.subject_name,
+    )
+
+    for (const photo of analyzedPhotos) {
+      await supabase
+        .from('media_assets')
+        .update({
+          ai_analysis_status: 'complete',
+          ai_emotion: photo.analysis?.emotion || null,
+          ai_scene: photo.analysis?.scene || null,
+          ai_people_count: photo.analysis?.people_count || null,
+          ai_labels: {
+            ...(typeof photo.ai_labels === 'object' && photo.ai_labels ? photo.ai_labels : {}),
+            vision: photo.analysis,
+          },
+          theme_ids: photo.matched_theme_ids,
+        })
+        .eq('id', photo.id)
+    }
+
+    await updateJob(jobId, 65, 'Processing voice recordings...')
     const enrichedRecordings = []
     for (const recording of recordings || []) {
       let row = recording
@@ -218,30 +234,27 @@ async function runPipelines(memorialId, jobId) {
       })
       .filter((v) => v.intro_line && v.storage_path)
 
-    await updateJob(jobId, 70, 'Composing the memorial story...')
-    let storySlides = await composeStorySlideshow({
+    await updateJob(jobId, 75, 'Composing the memorial story...')
+    const storySlides = await composeStorySlideshow({
       subjectName: memorial.subject_name,
       memorial,
-      themes,
+      themes: albumThemes,
       analyzedPhotos,
       responses: responses || [],
       contributors: contributors || [],
       voiceMoments,
     })
 
-    await updateJob(jobId, 75, 'Processing voice recordings...')
     const voices = enrichedRecordings.map((r) => {
       const tags = typeof r.ai_tags === 'object' && r.ai_tags ? r.ai_tags : {}
-      const contributor = contributors?.find((c) => c.id === r.contributor_id)
       return {
         id: r.id,
         contributor_title: r.contributor_title,
-        contributor_name: contributor?.name || null,
-        relationship_type: contributor?.relationship_type || null,
-        key_quote: r.key_quote || null,
-        transcript_text: r.transcript_text || null,
+        key_quote: r.key_quote || r.transcript_text?.slice(0, 150) || 'No transcript yet',
+        transcript_text: r.transcript_text || 'Transcription pending',
         ai_category: r.ai_category || 'memory',
         audio_url: r.storage_path,
+        storage_bucket: r.storage_bucket,
         intro_line: tags.intro_line || null,
         clip_start_seconds: tags.clip_start_seconds ?? 0,
         clip_end_seconds: tags.clip_end_seconds ?? null,
@@ -249,82 +262,26 @@ async function runPipelines(memorialId, jobId) {
     })
 
     await updateJob(jobId, 85, 'Building the constellation map...')
-    const constellationNodes = []
-    for (const theme of themes) {
-      const themePhotos = analyzedPhotos.filter((p) =>
-        p.matched_theme_ids?.includes(theme.id),
-      )
-      const themeQuotes = await composeThemeQuotes(theme, responses || [], contributors || [])
-      constellationNodes.push({
-        id: theme.id,
-        label: theme.label,
-        summary: theme.summary,
-        prominence_score: theme.prominence_score,
-        quotes: themeQuotes,
-        photo_urls: themePhotos.slice(0, 6).map((p) => p.storage_path),
-      })
-    }
+    const constellation = await buildConstellationFromPhotos(
+      analyzedPhotos,
+      memorial.subject_name,
+      contributors || [],
+    )
+    const constellationNodes = (constellation.themes || []).map((theme) =>
+      typeof constellation.buildNodePayload === 'function'
+        ? constellation.buildNodePayload(theme)
+        : theme,
+    )
 
-    const edges =
-      themes.length > 1
-        ? themes.slice(0, -1).map((theme, i) => ({
-            source: theme.id,
-            target: themes[i + 1].id,
-            relationship_type: contributors?.[0]?.relationship_type || 'friend',
-            weight: 0.6,
-          }))
-        : []
-
-    // Build relationships grouped by type for the Relationships tab
-    const relationshipMap = {}
-    for (const contributor of (contributors || [])) {
-      const type = (contributor.relationship_type || 'other').toLowerCase()
-      if (!relationshipMap[type]) {
-        relationshipMap[type] = { type, contributorNames: [], quotes: [], photos: [] }
-      }
-      relationshipMap[type].contributorNames.push(contributor.name || 'A contributor')
-    }
-
-    for (const response of (responses || [])) {
-      const contributor = contributors?.find((c) => c.id === response.contributor_id)
-      if (!contributor || !response.response_text?.trim()) continue
-      const type = (contributor.relationship_type || 'other').toLowerCase()
-      if (relationshipMap[type]) {
-        relationshipMap[type].quotes.push({
-          text: response.response_text.slice(0, 200),
-          contributor_name: contributor.name,
-        })
-      }
-    }
-
-    for (const photo of analyzedPhotos) {
-      if (!photo.storage_path) continue
-      const contributor = contributors?.find((c) => c.id === photo.contributor_id)
-      if (!contributor) continue
-      const type = (contributor.relationship_type || 'other').toLowerCase()
-      if (relationshipMap[type]) {
-        relationshipMap[type].photos.push(photo.storage_path)
-      }
-    }
-
-    const relationships = Object.values(relationshipMap).map((group) => ({
-      type: group.type,
-      count: group.contributorNames.length,
-      summary: group.quotes[0]?.text
-        ? group.quotes[0].text
-        : `${group.contributorNames.length} ${group.type} contributor${group.contributorNames.length !== 1 ? 's' : ''} shared memories.`,
-      quote: group.quotes[0]?.text || null,
-      photos: group.photos.slice(0, 5),
-      contributor_names: group.contributorNames,
-    }))
-
-    const albums = themes.map((theme) => {
+    const albums = albumThemes.map((theme) => {
       const themePhotos = analyzedPhotos.filter((p) =>
         p.matched_theme_ids?.includes(theme.id),
       )
       return {
+        id: theme.id,
         name: theme.label,
         album_name: theme.label,
+        summary: theme.summary,
         cover_photo_url: themePhotos[0]?.storage_path || null,
         photo_count: themePhotos.length,
         photos: themePhotos.map((p) => {
@@ -332,6 +289,8 @@ async function runPipelines(memorialId, jobId) {
           return {
             id: p.id,
             url: p.storage_path,
+            storage_path: p.storage_path,
+            storage_bucket: p.storage_bucket,
             caption: p.caption,
             year: p.taken_at ? new Date(p.taken_at).getFullYear().toString() : null,
             contributor_name: contributor?.name || 'A contributor',
@@ -343,13 +302,13 @@ async function runPipelines(memorialId, jobId) {
     await updateJob(jobId, 95, 'Saving your memorial...')
     const outputPayload = await resolveOutputMediaUrls(supabase, {
       story: storySlides,
-      constellation: { nodes: constellationNodes, edges },
+      constellation: { nodes: constellationNodes, edges: constellation.edges || [] },
       voices,
       photos: { albums },
-      relationships,
+      discovery_themes: discoveryThemes,
     })
-    await saveOutput(memorialId, jobId, 'full', outputPayload)
 
+    await saveOutput(memorialId, jobId, outputPayload)
     await supabase
       .from('ai_jobs')
       .update({
@@ -375,20 +334,36 @@ async function runPipelines(memorialId, jobId) {
   }
 }
 
+// POST /ai/memorials/:id/generate — trigger AI generation
 router.post('/memorials/:id/generate', authMiddleware, async (req, res) => {
   try {
-    const userId = req.user?.id ?? req.user?.sub
+    // verify organizer owns this memorial
     const { data: memorial, error: memError } = await supabase
       .from('memorials')
       .select('id, status')
       .eq('id', req.params.id)
-      .eq('user_id', userId)
+      .eq('user_id', req.user.sub)
       .single()
-    if (memError || !memorial) return res.status(403).json({ error: 'Not authorized' })
+
+    if (memError || !memorial) {
+      return res.status(403).json({ error: 'Not authorized' })
+    }
+
+    // check there is at least 1 submitted contributor
+    const { data: contributors } = await supabase
+      .from('contributors')
+      .select('id')
+      .eq('memorial_id', req.params.id)
+      .eq('status', 'submitted')
+
+    if (!contributors || contributors.length === 0) {
+      return res.status(400).json({ error: 'At least one contributor must have submitted before generating' })
+    }
+
     if (memorial.status === 'generating') {
       const { data: existingJob } = await supabase
         .from('ai_jobs')
-        .select('id, status, progress, current_step')
+        .select('id, status, progress, current_step, error_message')
         .eq('memorial_id', req.params.id)
         .in('status', ['queued', 'processing'])
         .order('created_at', { ascending: false })
@@ -397,67 +372,42 @@ router.post('/memorials/:id/generate', authMiddleware, async (req, res) => {
 
       if (existingJob) {
         console.log('[Generate] resuming pipeline for job:', existingJob.id)
-        runPipelinesWithTimeout(req.params.id, existingJob.id).catch(async (err) => {
-          console.error('[Generate] pipeline error:', err.message)
-          await supabase
-            .from('ai_jobs')
-            .update({
-              status: 'failed',
-              current_step: 'Failed',
-              error_message: err.message,
-            })
-            .eq('id', existingJob.id)
-          await supabase.from('memorials').update({ status: 'collecting' }).eq('id', req.params.id)
-        })
-
+        startPipeline(req.params.id, existingJob.id)
         return res.status(202).json({ job: serializeJob(existingJob) })
       }
     }
 
-    const { data: contributors } = await supabase
-      .from('contributors')
-      .select('id')
-      .eq('memorial_id', req.params.id)
-      .eq('status', 'submitted')
-    if (!contributors || contributors.length === 0) {
-      return res.status(400).json({
-        error: 'At least one contributor must have submitted before generating',
+    // create ai_job row
+    const { data: job, error: jobError } = await supabase
+      .from('ai_jobs')
+      .insert({
+        memorial_id: req.params.id,
+        status: 'queued',
+        progress: 0,
+        current_step: 'Starting...',
+        started_at: new Date().toISOString(),
       })
-    }
+      .select()
+      .single()
 
-    const { data: job, error: jobError } = await supabase.from('ai_jobs').insert({
-      memorial_id: req.params.id,
-      status: 'queued',
-      progress: 0,
-      current_step: 'Starting...',
-      started_at: new Date().toISOString(),
-    }).select().single()
     if (jobError) return res.status(400).json({ error: jobError.message })
 
-    await supabase.from('memorials').update({ status: 'generating' }).eq('id', req.params.id)
+    // update memorial status to generating
+    await supabase
+      .from('memorials')
+      .update({ status: 'generating' })
+      .eq('id', req.params.id)
 
     console.log('[Generate] starting pipeline for job:', job.id)
-    runPipelinesWithTimeout(req.params.id, job.id).catch(async (err) => {
-      console.error('[Generate] pipeline error:', err.message)
-      await supabase
-        .from('ai_jobs')
-        .update({
-          status: 'failed',
-          current_step: 'Failed',
-          error_message: err.message,
-        })
-        .eq('id', job.id)
-      await supabase.from('memorials').update({ status: 'collecting' }).eq('id', req.params.id)
-    })
+    startPipeline(req.params.id, job.id)
 
-    res.status(201).json({
-      job: serializeJob(job),
-    })
+    res.status(201).json({ job: serializeJob(job) })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
 })
 
+// GET /ai/jobs/:id/status — poll job status
 router.get('/jobs/:id/status', authMiddleware, async (req, res) => {
   try {
     const { data: job, error } = await supabase
@@ -465,7 +415,11 @@ router.get('/jobs/:id/status', authMiddleware, async (req, res) => {
       .select('id, status, progress, current_step, error_message')
       .eq('id', req.params.id)
       .single()
-    if (error || !job) return res.status(404).json({ error: 'Job not found' })
+
+    if (error || !job) {
+      return res.status(404).json({ error: 'Job not found' })
+    }
+
     res.json({ job })
   } catch (err) {
     res.status(500).json({ error: err.message })
