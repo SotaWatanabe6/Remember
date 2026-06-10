@@ -138,7 +138,7 @@ export default function ContributorInviteLanding({ inviteToken }) {
 
     try {
       await beginContributorDraft(inviteToken, trimmedContributorName);
-      router.push(`/contribute/${inviteToken}/relationship`);
+      router.push(`/contribute/${inviteToken}/privacy`);
     } catch (error) {
       setSubmitError(
         error instanceof Error
