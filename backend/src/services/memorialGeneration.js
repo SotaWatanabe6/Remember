@@ -3,6 +3,7 @@ const OpenAI = require('openai')
 const { resolveQuestionPrompt } = require('../lib/questionnaireQuestions')
 
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null
+const MAX_STORY_SLIDES = 12
 
 function parseJson(content) {
   const clean = (content || '').replace(/```json|```/g, '').trim()
@@ -94,6 +95,33 @@ function sortPhotosChronologically(photos = [], memorial = null) {
     const keyB = resolveChronologicalSortKey(b, memorial)
     if (keyA !== keyB) return keyA - keyB
     return String(a.id || '').localeCompare(String(b.id || ''))
+  })
+}
+
+function selectStoryPhotoCatalog(photoCatalog = []) {
+  if (photoCatalog.length <= MAX_STORY_SLIDES) return photoCatalog
+
+  const selected = new Map()
+  const lastIndex = photoCatalog.length - 1
+
+  for (let i = 0; i < MAX_STORY_SLIDES; i += 1) {
+    const index = Math.round((i * lastIndex) / (MAX_STORY_SLIDES - 1))
+    const photo = photoCatalog[index]
+    if (photo?.photo_id) selected.set(photo.photo_id, photo)
+  }
+
+  for (const photo of photoCatalog) {
+    if (selected.size >= MAX_STORY_SLIDES) break
+    if (photo?.photo_id && !selected.has(photo.photo_id)) {
+      selected.set(photo.photo_id, photo)
+    }
+  }
+
+  return [...selected.values()].sort((a, b) => {
+    if (a.chronological_sort_key !== b.chronological_sort_key) {
+      return a.chronological_sort_key - b.chronological_sort_key
+    }
+    return String(a.photo_id || '').localeCompare(String(b.photo_id || ''))
   })
 }
 
@@ -610,7 +638,6 @@ async function composeStorySlideshow({
   analyzedPhotos,
   responses,
   contributors,
-  voiceMoments = [],
 }) {
   const memories = buildMemoryCorpus(responses, contributors, subjectName, memorial)
   const birthYear = resolveMemorialBirthYear(memorial)
@@ -621,16 +648,14 @@ async function composeStorySlideshow({
   const photoCatalog = sortPhotosChronologically(analyzedPhotos, memorial).map((p) =>
     buildPhotoCatalogEntry(p, contributors, themes, memorial),
   )
+  const storyPhotoCatalog = selectStoryPhotoCatalog(photoCatalog)
 
-  const voiceSlides = buildVoiceStorySlides(voiceMoments)
-
-  if (!photoCatalog.length) {
-    return interleaveVoiceSlides([], voiceSlides)
+  if (!storyPhotoCatalog.length) {
+    return []
   }
 
   if (!openai) {
-    const photoOnly = photoCatalog.map((p, i) => buildStorySlideFromCatalog(p, i))
-    return interleaveVoiceSlides(photoOnly, voiceSlides)
+    return storyPhotoCatalog.map((p, i) => buildStorySlideFromCatalog(p, i))
   }
 
   try {
@@ -645,10 +670,11 @@ LIFE SPAN: ${birthYear ? `Born ${birthYear}` : 'Birth year unknown'}${passingYea
 
 TONE: Warm, reflective, and beautifully written — like a thoughtful biographical film narrator. Sentences should flow with care and clarity. Ground every observation in the photo analyses or contributor memories below. Avoid greeting-card clichés ("cherished legacy", "tapestry of memories", "forever in our hearts") but do write with emotional intelligence.
 
-CHRONOLOGY (critical):
-- Photos below are pre-sorted youngest → oldest using vision estimates of ${subjectName}'s apparent age, life stage, and era.
+CHRONOLOGY AND COUNT (critical):
+- Photos below are a curated Story set, pre-sorted youngest → oldest using vision estimates of ${subjectName}'s apparent age, life stage, and era.
 - Keep this exact order. Do NOT reorder slides.
-- Use one slide per photo. Include every photo exactly once.
+- Use one slide per listed photo. Include every listed photo exactly once.
+- Return ${storyPhotoCatalog.length} slides. Do not add extra slides.
 
 EACH SLIDE needs two layers:
 1. photo_description (required): 2–4 sentences of vivid, observant analysis — who is in the frame, what is happening, setting, period details, body language, and what the moment seems to hold. Start from the vision_description when provided.
@@ -657,7 +683,7 @@ EACH SLIDE needs two layers:
 matched_quote: include only when a contributor wrote something that fits this slide — max 22 words, lightly edited.
 
 Photos (LOCKED order — youngest → oldest):
-${JSON.stringify(photoCatalog, null, 2)}
+${JSON.stringify(storyPhotoCatalog, null, 2)}
 
 Questionnaire memories (use when clearly relevant — do not invent facts):
 ${memories}
@@ -688,7 +714,7 @@ Return JSON only:
     })
 
     const parsed = parseJson(completion.choices[0].message.content)
-    const photoById = Object.fromEntries(photoCatalog.map((p) => [p.photo_id, p]))
+    const photoById = Object.fromEntries(storyPhotoCatalog.map((p) => [p.photo_id, p]))
 
     const photoSlides = finalizeStorySlides(
       (parsed.slides || [])
@@ -719,15 +745,14 @@ Return JSON only:
               s.chronological_sort_key || photo.chronological_sort_key,
           }
         }),
-      photoCatalog,
+      storyPhotoCatalog,
       memorial,
     )
 
-    return interleaveVoiceSlides(photoSlides, voiceSlides)
+    return photoSlides
   } catch (err) {
     console.error('[StoryCompose] error:', err.message)
-    const fallbackPhoto = photoCatalog.map((p, i) => buildStorySlideFromCatalog(p, i))
-    return interleaveVoiceSlides(fallbackPhoto, voiceSlides)
+    return storyPhotoCatalog.map((p, i) => buildStorySlideFromCatalog(p, i))
   }
 }
 
@@ -1070,4 +1095,3 @@ module.exports = {
   resolveChronologicalSortKey,
   sortPhotosChronologically,
 }
-
