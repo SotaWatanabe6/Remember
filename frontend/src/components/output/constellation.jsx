@@ -6,24 +6,13 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
+import { usePathname } from "next/navigation";
+
 function capitalizeFirstLetter(str) {
   if (!str || str === 'null') return str;
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-function contributorToGraphNode(contributor) {
-  return {
-    id: contributor.id,
-    name: contributor.name || 'Contributor',
-    relationship_type: capitalizeFirstLetter(contributor.relationship_type) || 'Other',
-    prominence: 0.7,
-    summary: '',
-    photos: [],
-    photo_urls: [],
-    quotes: [],
-    contributions: 1,
-  };
-}
 
 function placeholderProminence(index) {
   return 0.3 + ((index * 37) % 40) / 100;
@@ -194,12 +183,24 @@ export default function ConstellationGraph({
   height,
 }) {
   const ref = useRef(null);
+  const pathname = usePathname();  
   const [constellationLoading, setConstellationLoading] = useState(false);
+  const [themes,setThemes] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
   const [tab, setTab] = useState("Themes");
   const [hiddenContributors, setHiddenContributors] = useState({});
   const [hiddenRelationshipType, setHiddenRelationshipType] = useState({});
   const [hiddenThemes, setHiddenThemes] = useState({});
+  const [currentPage, setCurrentPage] = useState("Viewer");
+  useEffect(() => {
+    if (pathname.includes("output")){
+      setCurrentPage("Viewer");
+    }
+    else {
+      setCurrentPage("Manage");
+    }
+  },[currentPage, pathname]);
+
   const handleThemesChange = (nodeId) => {
     setHiddenThemes((prev) => ({
       ...prev,
@@ -247,7 +248,14 @@ export default function ConstellationGraph({
     })) || []
   );
   
-  
+  const categoriesColor = {
+    "Family": "#C8A99A" ,
+    "Friend": "#D97B6C" ,
+    "Colleague": "#8FAF82" ,
+    "Others": "#A8BFCF",
+    "Community": "#C9A08F",
+    "null": "#5cd6c6"
+  };
   // Generate placeholder nodes for loading state
   const placeholderNodes = [...Array(8)].map((_, i) => ({
     id: `placeholder-${i}`,
@@ -380,25 +388,40 @@ export default function ConstellationGraph({
       .attr("stroke-width", d => d.weight || 1)
       .attr("stroke-dasharray", d => edgeStyle(d.type));
 
+      
+    svg.append("defs")
+    .append("pattern")
+    .attr("id", "img-pattern")
+    .attr("width", 1)
+    .attr("height", 1)
+    .attr("patternContentUnits", "objectBoundingBox")
+    .append("image")
+    .attr("xlink:href", memorial?.cover_photo_url)
+    .attr("width", 1)
+    .attr("height", 1)
+    .attr("preserveAspectRatio", "xMidYMid slice");
+
     const node = svg
-      .append("g")
-      .selectAll("circle")
-      .data(displayNode)
-      .enter()
-      .append("circle")
-      .attr("r", d=> d.prominence * 80 + 5) // size based on prominence
-      .attr("fill", "#ffffff")
-      .attr("stroke", "#1a1a1a")
-      .call(
-        d3.drag()
-          .on("start", dragStarted)
-          .on("drag", dragged)
-          .on("end", dragEnded)
-      )
-      .style("cursor", "pointer")
-      .on("click", (_, d) => {
-        setSelectedNode(d);
-      });
+    .append("g")
+    .selectAll("circle")
+    .data(displayNode)
+    .enter()
+    .append("circle")
+    .attr("r", d=> d.prominence * 80 + 5) // size based on prominence
+    .attr("cx", 100)
+    .attr("cy", 100)
+    .attr("fill", d => d.relationship_type==="Memorial" ? "url(#img-pattern)" : categoriesColor[d.relationship_type] || "#b1bc93")
+    // .attr("stroke", d => categoriesColor[d.relationship_type] || "#b1bc93")
+    .call(
+      d3.drag()
+        .on("start", dragStarted)
+        .on("drag", dragged)
+        .on("end", dragEnded)
+    )
+    .style("cursor", "pointer")
+    .on("click", (_, d) => {
+      setSelectedNode(d);
+    });
     function truncate(text, maxLength = 10) {
       return text.length > maxLength
         ? text.slice(0, maxLength) + "..."
@@ -410,6 +433,7 @@ export default function ConstellationGraph({
     .data(displayNode)
     .enter()
     .append("text")
+    .filter(d => d.relationship_type !== "Memorial")
     .text((d) =>truncate(d.name, 12) || " No theme ")
     .attr("font-size", 14)
     .style("font-family", "Arial")
@@ -462,288 +486,307 @@ export default function ConstellationGraph({
 
   return (
     <div>
-      <div className="mb-6">
-        <select
-          value={tab}
-          onChange={handleChange}
-          className="border border-gray-300 bg-white px-4 py-2 text-sm shadow-sm outline-none"
-        >
-          <option value="Themes">
-            Constellation : Themes
-          </option>
+      {
+        currentPage === "Manage" ? (
+          <div className="mb-6">
+            <select
+              value={tab}
+              onChange={handleChange}
+              className="border border-gray-300 bg-white px-4 py-2 text-sm shadow-sm outline-none"
+            >
+              <option value="Themes">
+                Constellation : Themes
+              </option>
 
-          <option value="Relationships">
-            Constellation : Relationships
-          </option>
-        </select>
+              <option value="Relationships">
+                Constellation : Relationships
+              </option>
+            </select>
 
-        <h2 className="mt-8 mb-4 text-2xl font-serif italic">
-          Constellation
-        </h2>        
-      </div>  
-      <div className="relative h-full w-full rounded-sm bg-[#d9d9d9] p-10">        
-        {constellationLoading ? (
-          <PulsingPlaceholder />
+            <h2 className="mt-8 mb-4 text-2xl font-serif italic">
+              Constellation
+            </h2>        
+          </div> 
         ) : (
-          <svg ref={ref} ></svg>
-        )}
-        {tab === "Relationships" &&  (
-        <div className="absolute bottom-4 left-4 w-36 rounded bg-[#767676] p-3 text-white shadow-md">
-            <p className="mb-3 text-sm">Legend</p>
+        <div className="flex justify-between items-center px-15 pt-8">
+          <div className="flex gap-10 cursor-pointer text-lg">
+            <button className={tab==="Themes" ? "text-[#3c3c3c] border-[#3c3c3c] border-b pb-2" : "text-[#8a8a8a] border-[#8a8a8a] border-b pb-2"}
+              onClick={() => setTab("Themes")}
+            >
+              Themes
+            </button>
 
-            <div className="space-y-2 text-xs">
-                {
-                  relationshipCounts.map((item, index) => {
-                  return (
-                    <div key={index} className="flex items-center gap-2">
-                      <div className="h-3 w-3 rounded-sm bg-white" />
-                      <span>{item.relationship_type == "null" || item.relationship_type == undefined ? "No relationship type" : item.relationship_type}</span>
-                    </div>
-                  );
-                }
-              )}
-            </div>
-        </div>)}
-      </div>
-      {tab === "Themes" &&  (
-      <div>
-        <h2 className="mt-8 mb-4 text-2xl font-serif italic">
-          Themes
-        </h2>        
-        <div className="bg-white p-4">
-            <div className="space-y-4">
-              {nodes.map((item, index) => (
-                <div
-                  key={index}
-                  className="h-[400px] border rounded-md p-4 flex gap-6 relative"
-                >
-                  {/* Checkbox */}
-                  <label className="pt-1">
-                    <input
-                      type="checkbox"
-                      defaultChecked
-                      onChange={() => handleThemesChange(item.id)}                            
-                      className="
-                        h-4
-                        w-4
-                        cursor-pointer
-                        accent-black
-                      "
-                    />
-                  </label>
+            <button className={tab==="Relationships" ? "text-[#3c3c3c] border-[#3c3c3c] border-b pb-2" : "text-[#8a8a8a] border-[#8a8a8a] border-b pb-2"}
+              onClick={() => setTab("Relationships")}
+            >
+              Relationships
+            </button>
+          </div>
+          <select className="border border-[#c8beb0] bg-[#faf7f2] rounded-md px-4 py-2">
+            <option>Sort</option>
+            <option>Name</option>
+            <option>Date</option>
+          </select>
+        </div>
+        ) 
+      }
+        {selectedNode ? (
+          <div className="bg-[#F2EEE8] relative h-full w-full pt-10">
+            { themes ? 
+              (
+                <div className="flex px-15 py-8 gap-10">
+                  {/* Sidebar */}
+                  <aside className="w-48 pt-28">
+                    <h1 className="text-5xl font-serif font-semibold mb-8">
+                      {selectedNode.name || selectedNode.label}
+                    </h1>
 
-                  {/* Left Content */}
-                  <div className="flex-1">
-                    <h2 className="font-semibold text-sm mb-2">{item.name ||  "No theme provided"}</h2>
-
-                    <p className="text-[11px] text-gray-700 max-w-[320px] leading-4">
-                        {item.summary || "No summary available for this theme."}
-                    </p>
-
-                    <p className="text-[10px] mt-3 font-medium text-gray-800">
-                      {(item?.photo_urls?.length ?? item?.contributions ?? 0)} tagged photo{(item?.photo_urls?.length ?? item?.contributions ?? 0) === 1 ? '' : 's'}
-                    </p>
-                  </div>
-                  <div className="w-[240px] h-full overflow-y-auto rounded-sm bg-transparent lg:w-[430px]">
-                    <div className="space-y-4 pr-2">
-                      {(item?.photo_urls?.length ? item.photo_urls : []).slice(0, 4).map((photoUrl, photoIndex) => (
-                        <div key={`${item.id}-photo-${photoIndex}`} className="h-[160px] overflow-hidden rounded bg-[#dddddd]">
-                          {photoUrl ? (
-                            <img
-                              src={photoUrl}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : null}
-                        </div>
-                      ))}
-                      {!item?.photo_urls?.length ? (
-                        <p className="text-[11px] text-gray-500 py-8 text-center">No photos matched this theme yet.</p>
-                      ) : null}
-                    </div>
-                  </div>
-
-                </div>
-              ))}
-            </div>
-          </div>      
-        </div>      
-      )}  
-      {tab === "Relationships" &&  (  
-        <div>
-          <h2 className="mt-8 mb-4 text-2xl font-serif italic">
-            Relationships
-          </h2>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-[220px_1fr]">
-            {/* Filter */}
-            <div className="rounded border border-gray-300 bg-white p-4">
-              <p className="mb-4 text-sm">Filter</p>
-
-              <div className="space-y-4 text-sm">
-              {
-                relationshipCounts.map((item, index) => {
-                  return (
-                  <label key={index} className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      defaultChecked                      
-                      onChange={() => handleRelationshipTypesChange(item.relationship_type)}                        
-                      className="
-                        h-4
-                        w-4
-                        cursor-pointer
-                        accent-black
-                      "
-                    />
-                    <span>{item.count} {item.relationship_type == "null" || item.relationship_type==undefined ? "No relationship type" : item.relationship_type}</span>
-                  </label>
-                  );
-                }
-                )
-              }                
-              </div>
-            </div>
-
-            {/* Relationship Cards — one node per contributor */}
-            <div className="space-y-4">
-              {!contributor?.length ? (
-                <div className="rounded border border-gray-300 bg-white px-6 py-8 text-center text-sm text-gray-600">
-                  No contributors yet. Each person who completes the invite link will appear here
-                  with the relationship they selected in the questionnaire.
-                </div>
-              ) : (
-                contributor.map((item) => {
-                  const isHidden = hiddenContributors[item.id];
-                  const relationshipLabel =
-                    item.relationship_type == null || item.relationship_type === undefined
-                      ? 'No relationship type'
-                      : capitalizeFirstLetter(item.relationship_type);
-
-                  return (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between rounded border border-gray-300 bg-white px-6 py-5"
+                    <button 
+                      className="bg-[#cbbca8] hover:bg-[#bca992] transition px-6 py-3 rounded-full text-sm"
+                      onClick={() => { setThemes(null)}}
                     >
-                      <div className="flex items-center gap-6">
-                        <button type="button" className="cursor-pointer" onClick={() => toggleEye(item.id)}>
-                          {isHidden ? <EyeOff size={20} /> : <Eye size={20} />}
-                        </button>
-                        <div className="h-20 w-20 rounded-full bg-[#d9d9d9]" />
+                      Back to themes
+                    </button>
+                  </aside>
 
-                        <div className="min-w-0 flex-1">
-                          <h3 className="font-serif text-lg italic">{item.name || 'Contributor'}</h3>
+                  {/* Content Panel */}
+                  <section className="flex-1">
+                    <div className="bg-[#f8f4ef] border border-[#c8beb0] rounded-lg p-6 h-[full] overflow-y-auto">
+                      {/* Card 1 */}
+                      <div className="bg-[#cdbfae] h-40 rounded-sm mb-4"></div>
 
-                          <p className="text-xs text-gray-500">
-                            {item.status === 'submitted' ? 'Submitted' : 'In progress'}
-                          </p>
+                      {/* Card 2 */}
+                      <div className="bg-[#cdbfae] h-72 rounded-sm"></div>
+                    </div>
+                  </section>
+                </div>              
+              ) : (
+              <section className="relative max-w-7xl mx-auto px-8 py-16">
+                <button 
+                  className="absolute top-8 right-8 text-4xl text-[#4A443E] cursor-pointer"
+                  onClick={() => setSelectedNode(null)}
+                >
+                  x
+                </button>
 
-                          <button type="button" className="mt-3 rounded bg-[#d9d9d9] px-6 py-1 text-xs">
-                            {relationshipLabel}
-                          </button>
-                        </div>
+                <div className="flex flex-col lg:flex-row items-center gap-8 ml-[80px]">
+                  {/* Left Side */}
+                    <div className="relative flex items-center">
+                    {/* Horizontal Line */}
+                      <div className="w-[140px] h-[2px] bg-[#75835F]" />
+                      {/* Circle Image */}
+                      <div className="w-[260px] h-[260px] rounded-full border border-[#75835F] overflow-hidden bg-gray-100 flex items-center justify-center">
+                        <img
+                          src="/placeholder.png"
+                          alt="Theme"
+                          className="w-full h-full object-cover"
+                        />
                       </div>
                     </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-        )}
 
-        {selectedNode && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-            <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl overflow-hidden modal-enter">
-              <div className="flex items-center justify-between border-b px-6 py-4">
-                <div>
-                  <h2 className="text-3xl font-bold capitalize text-gray-900">
-                    {selectedNode.name || selectedNode.label}
-                  </h2>
-                  {selectedNode.relationship_type && selectedNode.relationship_type !== 'Memorial' ? (
-                    <p className="mt-1 text-sm text-gray-500 capitalize">
-                      {selectedNode.relationship_type}
-                    </p>
-                  ) : null}
+                    {/* Content */}
+                    <div className="max-w-md">
+                      <h1 className="text-5xl font-serif text-[#4A443E] mb-6">
+                        {selectedNode.name || selectedNode.label}
+                      </h1>
+
+                      <p className="text-[#6B655F] leading-relaxed mb-12">
+                        {selectedNode.summary || "No summary available for this theme."}
+                      </p>
+
+                      <button 
+                        className="bg-[#D2C2AA] hover:bg-[#C7B499] transition-colors px-10 py-4 rounded-full text-[#4A443E]"
+                        onClick={() => {
+                          setThemes(selectedNode.id);
+                        }}
+                      >
+                        View all
+                      </button>
+                    </div>
+                </div>
+              </section>
+              )
+            }            
+          </div>     
+        ):    
+        <div className="relative h-full w-full rounded-sm p-10">        
+          <svg ref={ref} ></svg>
+          {tab === "Relationships" &&  (
+          <div className="absolute bottom-4 left-4 inline-flex flex-col gap-3 rounded-2xl bg-[#F5EDE6] px-6 py-5 shadow-sm">
+              <h3 className="font-semibold text-[#5C4A3A] tracking-wide text-sm uppercase mb-1">Legend</h3>
+              <ul className="flex flex-col gap-2.5">
+                  {
+                    relationshipCounts.map((item, index) => {
+                    return (
+                      // <div key={index} className="flex items-center gap-2">
+                      //   <div className="h-3 w-3 rounded-sm bg-white" />
+                      //   <span>{item.relationship_type == "null" || item.relationship_type == undefined ? "No relationship type" : item.relationship_type}</span>
+                      // </div>
+                      <li key={index} className="flex items-center gap-3">
+                        <span
+                          className={`w-6 h-6 rounded-md flex-shrink-0 bg-[${categoriesColor[item.relationship_type]}]`}
+                          aria-hidden="true"
+                        />
+                        <span className="text-sm text-[#6B5748] font-medium">{item.relationship_type == "null" ? "No relationship type" : item.relationship_type}</span>
+                      </li>                      
+                    );
+                  }
+                )}
+              </ul>
+          </div>)}
+        </div>
+      }
+      {
+        currentPage === "Manage" && (
+        <div>
+          {tab === "Themes" &&  (
+          <div>
+            <h2 className="mt-8 mb-4 text-2xl font-serif italic">
+              Themes
+            </h2>        
+            <div className="bg-white p-4">
+                <div className="space-y-4">
+                  {nodes.map((item, index) => (
+                    <div
+                      key={index}
+                      className="h-[400px] border rounded-md p-4 flex gap-6 relative"
+                    >
+                      {/* Checkbox */}
+                      <label className="pt-1">
+                        <input
+                          type="checkbox"
+                          defaultChecked
+                          onChange={() => handleThemesChange(item.id)}                            
+                          className="
+                            h-4
+                            w-4
+                            cursor-pointer
+                            accent-black
+                          "
+                        />
+                      </label>
+
+                      {/* Left Content */}
+                      <div className="flex-1">
+                        <h2 className="font-semibold text-sm mb-2">{item.name ||  "No theme provided"}</h2>
+
+                        <p className="text-[11px] text-gray-700 max-w-[320px] leading-4">
+                            {item.summary || "No summary available for this theme."}
+                        </p>
+
+                        <p className="text-[10px] mt-3 font-medium text-gray-800">
+                          {(item?.photo_urls?.length ?? item?.contributions ?? 0)} tagged photo{(item?.photo_urls?.length ?? item?.contributions ?? 0) === 1 ? '' : 's'}
+                        </p>
+                      </div>
+                      <div className="w-[240px] h-full overflow-y-auto rounded-sm bg-transparent lg:w-[430px]">
+                        <div className="space-y-4 pr-2">
+                          {(item?.photo_urls?.length ? item.photo_urls : []).slice(0, 4).map((photoUrl, photoIndex) => (
+                            <div key={`${item.id}-photo-${photoIndex}`} className="h-[160px] overflow-hidden rounded bg-[#dddddd]">
+                              {photoUrl ? (
+                                <img
+                                  src={photoUrl}
+                                  alt=""
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : null}
+                            </div>
+                          ))}
+                          {!item?.photo_urls?.length ? (
+                            <p className="text-[11px] text-gray-500 py-8 text-center">No photos matched this theme yet.</p>
+                          ) : null}
+                        </div>
+                      </div>
+
+                    </div>
+                  ))}
+                </div>
+              </div>      
+            </div>      
+          )}  
+          {tab === "Relationships" &&  (  
+            <div>
+              <h2 className="mt-8 mb-4 text-2xl font-serif italic">
+                Relationships
+              </h2>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-[220px_1fr]">
+                {/* Filter */}
+                <div className="rounded border border-gray-300 bg-white p-4">
+                  <p className="mb-4 text-sm">Filter</p>
+
+                  <div className="space-y-4 text-sm">
+                  {
+                    relationshipCounts.map((item, index) => {
+                      return (
+                      <label key={index} className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          defaultChecked                      
+                          onChange={() => handleRelationshipTypesChange(item.relationship_type)}                        
+                          className="
+                            h-4
+                            w-4
+                            cursor-pointer
+                            accent-black
+                          "
+                        />
+                        <span>{item.count} {item.relationship_type == "null" ? "No relationship type" : item.relationship_type}</span>
+                      </label>
+                      );
+                    }
+                    )
+                  }                
+                  </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setSelectedNode(null)}
-                  className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium hover:bg-gray-200"
-                >
-                  Close
-                </button>
-              </div>
-
-              <div className="max-h-[75vh] overflow-y-auto p-6">
-                {(selectedNode.photo_urls?.length || selectedNode.photos?.length) ? (
-                  <div className="mb-8">
-                    <h3 className="mb-4 text-lg font-semibold text-gray-900">
-                      {tab === 'Relationships'
-                        ? `Photos with ${selectedNode.name || 'them'}`
-                        : 'Photos in this theme'}
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      {(selectedNode.photo_urls || selectedNode.photos || []).map((photoUrl, index) => (
-                        <div
-                          key={`${selectedNode.id}-modal-photo-${index}`}
-                          className="aspect-square overflow-hidden rounded-lg bg-gray-100"
-                        >
-                          {photoUrl ? (
-                            <img
-                              src={photoUrl}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : null}
-                        </div>
-                      ))}
+                {/* Relationship Cards — one node per contributor */}
+                <div className="space-y-4">
+                  {!contributor?.length ? (
+                    <div className="rounded border border-gray-300 bg-white px-6 py-8 text-center text-sm text-gray-600">
+                      No contributors yet. Each person who completes the invite link will appear here
+                      with the relationship they selected in the questionnaire.
                     </div>
-                  </div>
-                ) : null}
+                  ) : (
+                    contributor.map((item) => {
+                      const isHidden = hiddenContributors[item.id];
+                      const relationshipLabel =
+                        item.relationship_type == null || item.relationship_type === undefined
+                          ? 'No relationship type'
+                          : capitalizeFirstLetter(item.relationship_type);
 
-                {selectedNode.summary ? (
-                  <div className="mb-8">
-                    <h3 className="mb-3 text-lg font-semibold text-gray-900">Summary</h3>
-                    <div className="rounded-xl bg-gray-50 p-4 text-gray-700 leading-relaxed">
-                      {selectedNode.summary}
-                    </div>
-                  </div>
-                ) : null}
-
-                {selectedNode?.quotes?.length > 0 ? (
-                  <div>
-                    <h3 className="mb-4 text-lg font-semibold text-gray-900">Quotes &amp; memories</h3>
-                    <div className="space-y-4">
-                      {selectedNode.quotes.map((quote, index) => (
+                      return (
                         <div
-                          key={index}
-                          className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
+                          key={item.id}
+                          className="flex items-center justify-between rounded border border-gray-300 bg-white px-6 py-5"
                         >
-                          <p className="text-gray-800 italic leading-relaxed">{quote.text}</p>
-                          {quote.relationship_type ? (
-                            <div className="mt-4">
-                              <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium capitalize text-indigo-700">
-                                {quote.relationship_type}
-                              </span>
+                          <div className="flex items-center gap-6">
+                            <button type="button" className="cursor-pointer" onClick={() => toggleEye(item.id)}>
+                              {isHidden ? <EyeOff size={20} /> : <Eye size={20} />}
+                            </button>
+                            <div className="h-20 w-20 rounded-full bg-[#d9d9d9]" />
+
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-serif text-lg italic">{item.name || 'Contributor'}</h3>
+
+                              <p className="text-xs text-gray-500">
+                                {item.status === 'submitted' ? 'Submitted' : 'In progress'}
+                              </p>
+
+                              <button type="button" className="mt-3 rounded bg-[#d9d9d9] px-6 py-1 text-xs">
+                                {relationshipLabel}
+                              </button>
                             </div>
-                          ) : null}
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                {!selectedNode?.quotes?.length &&
-                !(selectedNode.photo_urls?.length || selectedNode.photos?.length) ? (
-                  <div className="rounded-xl bg-gray-50 p-6 text-center text-gray-500">
-                    No photos or memories for this node yet.
-                  </div>
-                ) : null}
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-      )}    
+            )}
+        </div>
+        )
+      }
     </div>
   ) ;
 }
