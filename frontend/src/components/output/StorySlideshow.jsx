@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Camera, ChevronLeft, ChevronRight } from 'lucide-react';
 
 function formatRelationship(relationshipType) {
   if (!relationshipType) return '';
@@ -39,12 +38,8 @@ function buildContributorLookup(output) {
 }
 
 function buildPhotoLookup(output) {
-  let albums = [];
-  if (Array.isArray(output?.photos)) {
-    albums = output.photos;
-  } else if (Array.isArray(output?.photos?.albums)) {
-    albums = output.photos.albums;
-  }
+  const raw = output?.photos;
+  const albums = Array.isArray(raw) ? raw : raw?.albums || [];
 
   return albums.reduce((lookup, album) => {
     (album.photos || []).forEach((photo) => {
@@ -56,13 +51,22 @@ function buildPhotoLookup(output) {
   }, {});
 }
 
+function resolveSlideYear(slide, matchedPhoto) {
+  const fromSlide = slide.photo_year || slide.year
+  if (fromSlide) return String(fromSlide)
+  if (matchedPhoto?.year) return String(matchedPhoto.year)
+  if (matchedPhoto?.taken_at) {
+    const y = new Date(matchedPhoto.taken_at).getFullYear()
+    if (Number.isFinite(y)) return String(y)
+  }
+  return null
+}
+
 function normalizeStorySlides(output, story) {
   const contributorLookup = buildContributorLookup(output);
   const photoLookup = buildPhotoLookup(output);
-  const seenPhotos = new Set();
-  const sourceSlides = getStorySource(output, story);
 
-  return sourceSlides
+  return getStorySource(output, story)
     .map((slide, index) => {
       const contributor = contributorLookup[slide.contributor_id] || {};
       const matchedPhoto = photoLookup[slide.photo_id] || {};
@@ -79,39 +83,103 @@ function normalizeStorySlides(output, story) {
         matchedPhoto.url ||
         matchedPhoto.photo_url ||
         null;
-      const photoKey = slide.photo_id || photoUrl;
-      const narration = slide.narration || slide.quote || slide.memory || slide.caption || '';
-      const matchedQuote = slide.matched_quote || slide.verbatim_quote || '';
+      const photoDescription =
+        slide.photo_description || slide.photoDescription || slide.scene || '';
+      const narration = slide.narration || '';
+      const fallbackQuote = slide.quote || slide.memory || slide.caption || '';
+      const photoYear = resolveSlideYear(slide, matchedPhoto);
+      const photoEraLabel =
+        slide.photo_era_label ||
+        slide.photoEraLabel ||
+        slide.subject_life_stage_label ||
+        matchedPhoto.era_label ||
+        null;
+      const chronologicalSortKey = Number(slide.chronological_sort_key);
+      const photoYearSort = Number.isFinite(chronologicalSortKey) && chronologicalSortKey < 9999
+        ? chronologicalSortKey
+        : photoYear
+          ? Number(photoYear)
+          : 9999;
 
       return {
         id: slide.id || slide.photo_id || `${index}-${contributorName}`,
         orderIndex: Number.isFinite(Number(slide.order_index)) ? Number(slide.order_index) : index,
         photoUrl,
-        photoKey,
+        photoDescription: photoDescription || fallbackQuote,
         narration,
-        matchedQuote,
+        matchedQuote: slide.matched_quote || slide.matchedQuote || '',
+        photoYear,
+        photoEraLabel,
+        photoYearSort,
         contributorName,
         relationshipLabel: formatRelationship(
           slide.relationship_type || contributor.relationship_type || matchedPhoto.relationship_type,
         ),
         themeLabel: slide.theme_label || slide.theme || slide.ai_theme || '',
-        lifePeriod: slide.life_period || slide.lifePeriod || '',
       };
     })
-    .sort((a, b) => a.orderIndex - b.orderIndex)
-    .filter((slide) => {
-      if (!slide.photoUrl || (!slide.narration && !slide.matchedQuote)) return false;
-      if (slide.photoKey && seenPhotos.has(slide.photoKey)) return false;
-      if (slide.photoKey) seenPhotos.add(slide.photoKey);
-      return true;
+    .filter((slide) => slide.photoUrl || slide.photoDescription || slide.narration)
+    .sort((a, b) => {
+      if (a.photoYearSort !== b.photoYearSort) return a.photoYearSort - b.photoYearSort;
+      return a.orderIndex - b.orderIndex;
     });
+}
+
+function StoryTimeline({ slides, currentIndex }) {
+  const years = slides
+    .map((s) => s.photoYearSort)
+    .filter((y) => y < 9999);
+  if (years.length < 2) return null;
+
+  const min = Math.min(...years);
+  const max = Math.max(...years);
+  const current = slides[currentIndex]?.photoYearSort;
+  const currentPct =
+    current < 9999 && max > min ? ((current - min) / (max - min)) * 100 : null;
+
+  return (
+    <div className="mt-3 w-full max-w-md">
+      <div className="mb-1 flex justify-between text-[10px] uppercase tracking-wider text-[#90a1b9]">
+        <span>{min}</span>
+        <span>{max}</span>
+      </div>
+      <div className="relative h-1.5 rounded-full bg-[#e2e8f0]">
+        <div className="absolute inset-y-0 left-0 rounded-full bg-[#45556c]/30" style={{ width: '100%' }} />
+        {currentPct != null ? (
+          <div
+            className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-[#45556c] shadow-sm"
+            style={{ left: `${currentPct}%` }}
+            aria-hidden="true"
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+    </svg>
+  );
 }
 
 function EmptyStoryState() {
   return (
     <div className="flex min-h-[420px] flex-col items-center justify-center rounded-[18px] border border-[#e2e8f0] bg-white px-6 text-center shadow-auth">
       <div className="mb-4 grid size-14 place-items-center rounded-full bg-[#eff6ff] text-[#45556c]">
-        <Camera size={24} strokeWidth={1.6} aria-hidden="true" />
+        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h16M4 19h16M7 5v14M17 5v14" />
+        </svg>
       </div>
       <p className="text-base font-medium text-neutral-950">No story slides are available yet.</p>
     </div>
@@ -175,8 +243,9 @@ export default function StorySlideshow({ output, story, loading = false, error =
   const isFirst = currentIndex === 0;
   const isLast = currentIndex === slides.length - 1;
   const progress = ((currentIndex + 1) / slides.length) * 100;
-  const altText = slide.narration || slide.matchedQuote
-    ? `Story photo paired with a memory from ${slide.contributorName}`
+  const ageLabel = slide.photoYear || slide.photoEraLabel;
+  const altText = slide.photoDescription
+    ? `Photo from ${ageLabel || 'an unknown year'}: ${slide.photoDescription}`
     : `Story photo contributed by ${slide.contributorName}`;
   const slideTransition = shouldReduceMotion ? { duration: 0 } : { duration: 0.35, ease: 'easeInOut' };
 
@@ -214,23 +283,31 @@ export default function StorySlideshow({ output, story, loading = false, error =
 
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-black/10" aria-hidden="true" />
 
-            <div className="absolute right-4 top-5 z-20 flex items-start justify-end sm:right-7 sm:top-7">
-              {slide.themeLabel ? (
-                <div className="max-w-[70vw] rounded-full bg-white/90 px-3 py-1 text-right text-xs font-medium text-[#1c398e] shadow-auth backdrop-blur-sm sm:text-sm">
-                  {slide.themeLabel}
+            {ageLabel ? (
+              <div className="absolute left-4 top-5 z-20 sm:left-7 sm:top-7">
+                <div className="rounded-lg bg-black/55 px-4 py-2 backdrop-blur-sm">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/70">
+                    {slide.photoYear ? 'Year' : 'Era'}
+                  </p>
+                  <p className="text-2xl font-semibold tabular-nums text-white sm:text-3xl">{ageLabel}</p>
                 </div>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
 
-            <div className="absolute inset-x-0 bottom-0 z-10 px-16 pb-7 pt-24 sm:px-24 sm:pb-9">
-              {slide.matchedQuote ? (
-                <blockquote className="max-w-3xl text-[24px] font-normal leading-tight text-white sm:text-[32px] sm:leading-[1.16]">
-                  <span>{slide.matchedQuote}</span>
-                </blockquote>
+            <div className="absolute inset-x-0 bottom-0 z-10 px-5 pb-7 pt-24 sm:px-8 sm:pb-9">
+              {slide.photoDescription ? (
+                <p className="max-w-3xl text-lg font-normal leading-relaxed text-white/95 sm:text-xl">
+                  {slide.photoDescription}
+                </p>
               ) : null}
               {slide.narration ? (
-                <p className="mt-4 max-w-2xl text-base leading-7 text-[#f8fafc] sm:text-xl sm:leading-8">
+                <p className="mt-3 max-w-3xl text-base leading-relaxed text-white/80 sm:text-lg">
                   {slide.narration}
+                </p>
+              ) : null}
+              {slide.matchedQuote ? (
+                <p className="mt-3 max-w-2xl text-sm italic text-white/60 sm:text-base">
+                  &ldquo;{slide.matchedQuote}&rdquo;
                 </p>
               ) : null}
               <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-[#cad5e2] sm:text-base">
@@ -238,11 +315,6 @@ export default function StorySlideshow({ output, story, loading = false, error =
                 {slide.relationshipLabel ? (
                   <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm sm:text-sm">
                     {slide.relationshipLabel}
-                  </span>
-                ) : null}
-                {slide.lifePeriod ? (
-                  <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm sm:text-sm">
-                    {slide.lifePeriod}
                   </span>
                 ) : null}
               </div>
@@ -257,7 +329,7 @@ export default function StorySlideshow({ output, story, loading = false, error =
           aria-label="Previous story slide"
           className="absolute left-3 top-1/2 z-20 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-white/20 text-white backdrop-blur-sm transition hover:bg-white/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-35 sm:left-5 sm:size-14"
         >
-          <ChevronLeft size={26} aria-hidden="true" />
+          <ChevronLeftIcon />
         </button>
 
         <button
@@ -267,18 +339,22 @@ export default function StorySlideshow({ output, story, loading = false, error =
           aria-label="Next story slide"
           className="absolute right-3 top-1/2 z-20 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-white/20 text-white backdrop-blur-sm transition hover:bg-white/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-35 sm:right-5 sm:size-14"
         >
-          <ChevronRight size={26} aria-hidden="true" />
+          <ChevronRightIcon />
         </button>
       </div>
 
       <div className="flex min-h-[88px] items-center justify-between gap-4 border-t border-[#e2e8f0] px-5 py-5 sm:px-7">
-        <div className="flex items-center gap-3 text-[#45556c]">
-          <span className="grid size-10 place-items-center rounded-full bg-[#45556c] text-white" aria-hidden="true">
-            <ChevronRight size={22} aria-hidden="true" />
-          </span>
-          <span className="text-sm">
-            {currentIndex + 1} / {slides.length}
-          </span>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-3 text-[#45556c]">
+            <span className="grid size-10 place-items-center rounded-full bg-[#45556c] text-white" aria-hidden="true">
+              <ChevronRightIcon />
+            </span>
+            <span className="text-sm">
+              {currentIndex + 1} / {slides.length}
+              {slide.photoYear ? ` · ${slide.photoYear}` : slide.photoEraLabel ? ` · ${slide.photoEraLabel}` : ''}
+            </span>
+          </div>
+          <StoryTimeline slides={slides} currentIndex={currentIndex} />
         </div>
 
         <div className="flex items-center gap-1.5" aria-label="Story slide position">
