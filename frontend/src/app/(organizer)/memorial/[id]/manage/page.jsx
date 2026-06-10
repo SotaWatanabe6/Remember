@@ -23,10 +23,28 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 const GENERATION_POLL_INTERVAL_MS = 1500;
 const GENERATION_MAX_POLL_ATTEMPTS = 60;
+const OUTPUT_PENDING_POLL_INTERVAL_MS = 5000;
 const GENERATION_SUCCESS_STATUSES = new Set(["complete", "completed", "succeeded", "success"]);
 const GENERATION_FAILURE_STATUSES = new Set(["failed", "error"]);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function normalizeMemorialForView(memorial) {
+  if (!memorial) return null;
+  return {
+    id: memorial.id,
+    subject_name: memorial.subject_name || memorial.deceased_name,
+    cover_photo_url: memorial.cover_photo_url || memorial.profile_photo_url || null,
+    date_of_birth: memorial.date_of_birth || memorial.birth_date || null,
+    date_of_passing: memorial.date_of_passing || memorial.death_date || null,
+    bio: memorial.brief_biography || memorial.short_description || memorial.biography || null,
+    status: memorial.status || null,
+  };
+}
+
+function isGeneratingMemorial(memorial) {
+  return String(memorial?.status || "").toLowerCase() === "generating";
+}
 
 // ─── Memorial Header ──────────────────────────────────────────────────────────
 
@@ -486,6 +504,7 @@ function AllPhotosSection({ albums }) {
 // ─── Pre-generation empty state ───────────────────────────────────────────────
 
 function PreGenerationEmpty({ canGenerate, disabledMessage, generationError, generationJob, generating, onGenerate }) {
+  const isPending = generating && !generationError;
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <div className="h-16 w-16 rounded-full bg-neutral-100 flex items-center justify-center mb-4">
@@ -493,15 +512,19 @@ function PreGenerationEmpty({ canGenerate, disabledMessage, generationError, gen
           <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
         </svg>
       </div>
-      <p className="text-neutral-950 text-base font-medium">Generation hasn&apos;t run yet</p>
+      <p className="text-neutral-950 text-base font-medium">
+        {isPending ? "Generation is in progress" : "Generation hasn&apos;t run yet"}
+      </p>
       <p className="text-slate-500 text-sm mt-1 max-w-xs leading-relaxed">
-        Once you have contributions, click Generate to create the Story, Constellation, Voices, and Photos.
+        {isPending
+          ? "Outputs will appear here automatically once the memorial is ready."
+          : "Once you have contributions, click Generate to create the Story, Constellation, Voices, and Photos."}
       </p>
       <button type="button" onClick={onGenerate} disabled={!canGenerate || generating}
         className="mt-6 flex h-[50px] w-[207px] items-center justify-center rounded-full bg-neutral-950 px-6 text-sm font-semibold text-white transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-45">
         {generating ? "Generating..." : "Generate"}
       </button>
-      {generating && (
+      {isPending && (
         <div className="mt-4 w-full max-w-xs" aria-live="polite">
           <div className="h-1.5 overflow-hidden rounded-full bg-neutral-100">
             <div className="h-full rounded-full bg-neutral-950 transition-all duration-300"
@@ -730,16 +753,10 @@ export default function MemorialOutputPage() {
     getMemorial(id)
       .then((data) => {
         const m = data?.memorial ?? data;
-        if (!m) return;
-        setMemorial({
-          id: m.id,
-          subject_name: m.subject_name || m.deceased_name,
-          cover_photo_url: m.cover_photo_url || m.profile_photo_url || null,
-          date_of_birth: m.date_of_birth || m.birth_date || null,
-          date_of_passing: m.date_of_passing || m.death_date || null,
-          bio: m.brief_biography || m.short_description || m.biography || null,
-          status: m.status || null,
-        });
+        const normalized = normalizeMemorialForView(m);
+        if (!normalized) return;
+        setMemorial(normalized);
+        setGenerating(isGeneratingMemorial(normalized));
       })
       .catch(() => {
         setMemorial(null);
@@ -755,16 +772,10 @@ export default function MemorialOutputPage() {
       const contributor = await getMemorialContributors(memorialId, token);
       const memorialApi = await getMemorial(memorialId);
       const m = memorialApi?.memorial ?? memorialApi;
-      if (m) {
-        setMemorial({
-          id: m.id,
-          subject_name: m.subject_name || m.deceased_name,
-          cover_photo_url: m.cover_photo_url || m.profile_photo_url || null,
-          date_of_birth: m.date_of_birth || m.birth_date || null,
-          date_of_passing: m.date_of_passing || m.death_date || null,
-          bio: m.brief_biography || m.short_description || m.biography || null,
-          status: m.status || null,
-        });
+      const normalized = normalizeMemorialForView(m);
+      if (normalized) {
+        setMemorial(normalized);
+        setGenerating((current) => current || isGeneratingMemorial(normalized));
       }
       setContributors(contributor.contributors ?? []);
     } catch (err) {
@@ -799,6 +810,7 @@ export default function MemorialOutputPage() {
     setGenerationError(null);
     setGenerationJob(null);
     const token = await getAuthToken();
+    let keepGenerating = false;
     try {
       const generation = await generateMemorialOutput(memorialId, token);
       const initialJob = generation?.job ?? null;
@@ -819,7 +831,9 @@ export default function MemorialOutputPage() {
         }
         const finalStatus = String(latestJob?.status || "").toLowerCase();
         if (!GENERATION_SUCCESS_STATUSES.has(finalStatus)) {
-          throw new Error("Generation is taking longer than expected. Please try refreshing the outputs shortly.");
+          keepGenerating = true;
+          await loadOutput({ fallbackToMock: process.env.NODE_ENV !== 'production' });
+          return;
         }
       }
 
@@ -827,9 +841,45 @@ export default function MemorialOutputPage() {
     } catch (err) {
       setGenerationError(err instanceof Error ? err.message : "Generation failed. Please try again.");
     } finally {
-      setGenerating(false);
+      if (!keepGenerating) setGenerating(false);
     }
   }, [generating, loadOutput, memorialId]);
+
+  useEffect(() => {
+    if (!id || output || !generating) return undefined;
+
+    let cancelled = false;
+
+    async function pollPendingOutput() {
+      const token = await getAuthToken();
+      const data = await getMemorialOutput(id, token);
+      if (cancelled) return;
+
+      if (data) {
+        setOutput(data);
+        setOutputError(null);
+        setGenerating(false);
+        setGenerationJob((job) => job ? { ...job, status: 'complete', progress: 100, current_step: 'Complete' } : job);
+        try {
+          const memorialApi = await getMemorial(id);
+          if (!cancelled) {
+            const normalized = normalizeMemorialForView(memorialApi?.memorial ?? memorialApi);
+            if (normalized) setMemorial(normalized);
+          }
+        } catch {
+          // Output is loaded; header refresh can wait for the next page visit.
+        }
+      }
+    }
+
+    pollPendingOutput();
+    const intervalId = window.setInterval(pollPendingOutput, OUTPUT_PENDING_POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [generating, id, output]);
 
   const submittedContributionCount = contributors.filter((contributor) => {
     const status = String(contributor?.status || "").toLowerCase();

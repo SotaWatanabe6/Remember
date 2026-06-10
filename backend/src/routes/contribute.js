@@ -19,6 +19,8 @@ const VOICE_STORAGE_BUCKET =
   'memorial-assets'
 const MAX_PHOTO_BYTES = 50 * 1024 * 1024
 const MAX_AUDIO_BYTES = 50 * 1024 * 1024
+const MAX_CONTRIBUTOR_PHOTOS = 500
+const MAX_PHOTO_UPLOAD_BATCH_SIZE = 20
 const ALLOWED_PHOTO_EXTENSIONS = new Set(['heic', 'heif', 'jpg', 'jpeg', 'png', 'webp'])
 const ALLOWED_AUDIO_EXTENSIONS = new Set(['m4a', 'mp3', 'wav', 'webm'])
 const PHOTO_MIME_BY_EXTENSION = {
@@ -313,19 +315,11 @@ router.post('/:token/submit', async (req, res) => {
   }
 })
 
-// POST /contribute/:token/photos
-router.post('/:token/photos', async (req, res) => {
+// GET /contribute/:token/photos — list saved contributor photos
+router.get('/:token/photos', async (req, res) => {
   try {
-    const formData = await parseMultipartFormData(req)
-    const contributor_token = formData.get('contributor_token')
-    const submittedFiles = [
-      ...formData.getAll('files[]'),
-      ...formData.getAll('files'),
-      ...formData.getAll('photos')
-    ].filter(isFormDataFile)
-
+    const contributor_token = req.query.contributor_token
     if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
-    if (!submittedFiles.length) return res.status(400).json({ error: 'At least one photo file is required.' })
 
     const { data: invite, error: inviteError } = await supabase
       .from('invite_links')
@@ -348,16 +342,125 @@ router.post('/:token/photos', async (req, res) => {
       return res.status(403).json({ error: 'Contributor does not belong to this invitation.' })
     }
 
-    const uploadedFiles = []
+    const { data: photos, error } = await supabase
+      .from('media_assets')
+      .select('id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption, created_at')
+      .eq('contributor_id', contributor.id)
+      .eq('memorial_id', contributor.memorial_id)
+      .order('created_at', { ascending: true })
+
+    if (error) return res.status(400).json({ error: error.message })
+
+    const photosWithUrls = await Promise.all((photos || []).map(async (photo) => {
+      const { data } = await supabase.storage
+        .from(photo.storage_bucket || PHOTO_STORAGE_BUCKET)
+        .createSignedUrl(photo.storage_path, 60 * 60)
+
+      return {
+        ...photo,
+        url: data?.signedUrl || null,
+        photo_url: data?.signedUrl || null
+      }
+    }))
+
+    res.json({
+      photos: photosWithUrls,
+      count: photosWithUrls.length,
+      max_photos: MAX_CONTRIBUTOR_PHOTOS,
+      remaining: Math.max(MAX_CONTRIBUTOR_PHOTOS - photosWithUrls.length, 0)
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// POST /contribute/:token/photos
+router.post('/:token/photos', async (req, res) => {
+  try {
+    const formData = await parseMultipartFormData(req)
+    const contributor_token = formData.get('contributor_token')
+    const submittedFiles = [
+      ...formData.getAll('files[]'),
+      ...formData.getAll('files'),
+      ...formData.getAll('photos')
+    ].filter(isFormDataFile)
+
+    if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
+    if (!submittedFiles.length) return res.status(400).json({ error: 'At least one photo file is required.' })
+    if (submittedFiles.length > MAX_PHOTO_UPLOAD_BATCH_SIZE) {
+      return res.status(413).json({
+        error: `Please upload no more than ${MAX_PHOTO_UPLOAD_BATCH_SIZE} photos at a time.`,
+        code: 'photo_batch_too_large',
+        max_batch_size: MAX_PHOTO_UPLOAD_BATCH_SIZE
+      })
+    }
+
+    const { data: invite, error: inviteError } = await supabase
+      .from('invite_links')
+      .select('id, memorial_id, is_active')
+      .eq('token', req.params.token)
+      .single()
+
+    if (inviteError || !invite || !invite.is_active) {
+      return res.status(410).json({ error: 'This link is no longer active.' })
+    }
+
+    const { data: contributor } = await supabase
+      .from('contributors')
+      .select('id, memorial_id')
+      .eq('id', contributor_token)
+      .single()
+
+    if (!contributor) return res.status(404).json({ error: 'Contributor not found' })
+    if (contributor.memorial_id !== invite.memorial_id) {
+      return res.status(403).json({ error: 'Contributor does not belong to this invitation.' })
+    }
+
     const uploadErrors = []
+    const validFiles = []
 
     for (const file of submittedFiles) {
       const validationError = validatePhotoFile(file)
       if (validationError) {
         uploadErrors.push({ file_name: file.name || 'photo', error: validationError })
-        continue
+      } else {
+        validFiles.push(file)
       }
+    }
 
+    if (!validFiles.length) {
+      return res.status(400).json({
+        error: 'No photos were uploaded.',
+        uploaded: 0,
+        files: [],
+        errors: uploadErrors
+      })
+    }
+
+    const { count: existingPhotoCount, error: countError } = await supabase
+      .from('media_assets')
+      .select('id', { count: 'exact', head: true })
+      .eq('contributor_id', contributor.id)
+      .eq('memorial_id', contributor.memorial_id)
+
+    if (countError) return res.status(400).json({ error: countError.message })
+
+    const savedPhotoCount = existingPhotoCount || 0
+    const remainingPhotoSlots = Math.max(MAX_CONTRIBUTOR_PHOTOS - savedPhotoCount, 0)
+
+    if (validFiles.length > remainingPhotoSlots) {
+      return res.status(409).json({
+        error: `This contribution can include up to ${MAX_CONTRIBUTOR_PHOTOS} photos.`,
+        code: 'photo_limit_exceeded',
+        max_photos: MAX_CONTRIBUTOR_PHOTOS,
+        uploaded_count: savedPhotoCount,
+        remaining: remainingPhotoSlots
+      })
+    }
+
+    const uploadedFiles = []
+
+    for (const file of validFiles) {
       const safeFileName = sanitizeFileName(file.name)
       const storagePath = `memorials/${contributor.memorial_id}/contributions/${contributor.id}/photos/${randomUUID()}-${safeFileName}`
       const mimeType = getPhotoMimeType(file)

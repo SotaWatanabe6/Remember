@@ -27,6 +27,8 @@ export const MAX_AUDIO_FILE_SIZE_MB = 50;
 export const MAX_AUDIO_FILE_SIZE_BYTES = MAX_AUDIO_FILE_SIZE_MB * 1024 * 1024;
 export const MAX_PHOTO_FILE_SIZE_MB = 50;
 export const MAX_PHOTO_FILE_SIZE_BYTES = MAX_PHOTO_FILE_SIZE_MB * 1024 * 1024;
+export const MAX_CONTRIBUTOR_PHOTOS = 500;
+export const PHOTO_UPLOAD_BATCH_SIZE = 20;
 const ALLOWED_PHOTO_EXTENSIONS = ['heic', 'heif', 'jpg', 'jpeg', 'png', 'webp'];
 export const ALLOWED_AUDIO_EXTENSIONS = ['m4a', 'mp3', 'wav', 'webm'];
 const AUDIO_MIME_BY_EXTENSION = {
@@ -395,6 +397,14 @@ function validatePhotoFile(file) {
   }
 
   return null;
+}
+
+function chunkFiles(files, size) {
+  const chunks = [];
+  for (let index = 0; index < files.length; index += size) {
+    chunks.push(files.slice(index, index + size));
+  }
+  return chunks;
 }
 
 // ─── BLESSING: AUTH ───────────────────────────────────────────────────────────
@@ -1019,66 +1029,7 @@ export async function getResponses(token, contributorInput) {
  * Backend returns:  { uploaded, files: [...], errors: [] }
  *                   207 for partial success, 400/4xx for full failure.
  */
-export async function uploadPhotos(token, files) {
-  const session = readContributorSession(token);
-  const contributorToken = session?.contributorToken || session?.contributorId;
-
-  if (!contributorToken) {
-    throw new ApiRequestError("A contributor session is required before uploading photos.", {
-      code: "missing_contributor_token",
-    });
-  }
-
-  // ── Mock path ──────────────────────────────────────────────────────────────
-  if (isLocalMockInviteToken(token)) {
-    await delay(MOCK_DELAY / 2);
-
-    const errors = [];
-    const validFiles = [];
-
-    files.forEach((file) => {
-      const validationError = validatePhotoFile(file);
-      if (validationError) {
-        errors.push({ file_name: file.name || 'photo', error: validationError });
-      } else {
-        validFiles.push(file);
-      }
-    });
-
-    if (!validFiles.length) {
-      throw new ApiRequestError(errors[0]?.error || 'At least one photo file is required.', {
-        status: 400,
-        code: 'photo_validation_failed',
-        data: { errors },
-      });
-    }
-
-    const timestamp = Date.now();
-    const localAssets = validFiles.map((file, index) => ({
-      id: `photo-${timestamp}-${index}-${Math.random().toString(36).slice(2)}`,
-      file_name: file.name || `Photo ${index + 1}`,
-      file_type: file.type || '',
-      file_size_bytes: file.size || 0,
-      storage_path: null,
-      storage_bucket: 'local-mock',
-      taken_at: null,
-      caption: null,
-      previewUrl: null,
-    }));
-
-    const existing = readStoredPhotos(token);
-    writeStoredPhotos(token, [...existing, ...localAssets]);
-
-    return {
-      success: true,
-      uploaded: localAssets.length,
-      assets: localAssets,
-      errors,
-      partialFailure: errors.length > 0,
-    };
-  }
-
-  // ── Real backend path ──────────────────────────────────────────────────────
+async function uploadPhotoBatch(token, contributorToken, files) {
   const formData = new FormData();
   files.forEach((file) => formData.append('files[]', file));
   formData.append('contributor_token', contributorToken);
@@ -1107,11 +1058,16 @@ export async function uploadPhotos(token, files) {
   // 207 = partial success (some files uploaded, some failed) — treat as ok
   if (!response.ok && response.status !== 207) {
     let errorMessage = data?.error || `Photo upload failed with status ${response.status}.`;
-    let errorCode = 'photo_upload_failed';
+    let errorCode = data?.code || 'photo_upload_failed';
 
     if (response.status === 413 || data?.code === 'file_too_large') {
-      errorMessage = 'One or more files are too large. Maximum file size is 50 MB.';
-      errorCode = 'file_too_large';
+      errorMessage = data?.error || 'One or more files are too large. Maximum file size is 50 MB.';
+      errorCode = data?.code || 'file_too_large';
+    }
+
+    if (data?.code === 'photo_limit_exceeded') {
+      const remaining = Number.isFinite(data.remaining) ? data.remaining : 0;
+      errorMessage = `${data.error} You can add ${remaining} more ${remaining === 1 ? 'photo' : 'photos'}.`;
     }
 
     throw new ApiRequestError(errorMessage, {
@@ -1121,38 +1077,155 @@ export async function uploadPhotos(token, files) {
     });
   }
 
-  // Backend returns { uploaded, files: [...], errors: [] }
-  const backendAssets = Array.isArray(data?.files)
-    ? data.files.filter((f) => f?.id && f?.file_name)
-    : [];
+  return { response, data };
+}
 
-  if (!backendAssets.length) {
-    throw new ApiRequestError(
-      'The Remember API responded, but did not confirm that any photos were saved.',
-      { status: response.status, code: 'upload_not_confirmed', data }
-    );
+export async function uploadPhotos(token, files, { onProgress } = {}) {
+  const session = readContributorSession(token);
+  const contributorToken = session?.contributorToken || session?.contributorId;
+  const fileList = Array.from(files || []);
+
+  if (!contributorToken) {
+    throw new ApiRequestError("A contributor session is required before uploading photos.", {
+      code: "missing_contributor_token",
+    });
   }
 
-  const finalAssets = backendAssets.map((file, index) => {
-    const originalFile = files[index];
-    const remoteUrl = file.url || file.photo_url || null;
-    let previewUrl = remoteUrl;
-    if (!previewUrl && originalFile) {
-      try { previewUrl = URL.createObjectURL(originalFile); } catch {}
+  if (!fileList.length) {
+    throw new ApiRequestError('At least one photo file is required.', {
+      status: 400,
+      code: 'photo_validation_failed',
+    });
+  }
+
+  // ── Mock path ──────────────────────────────────────────────────────────────
+  if (isLocalMockInviteToken(token)) {
+    await delay(MOCK_DELAY / 2);
+
+    const errors = [];
+    const validFiles = [];
+
+    fileList.forEach((file) => {
+      const validationError = validatePhotoFile(file);
+      if (validationError) {
+        errors.push({ file_name: file.name || 'photo', error: validationError });
+      } else {
+        validFiles.push(file);
+      }
+    });
+
+    const existing = readStoredPhotos(token);
+    const remainingPhotoSlots = MAX_CONTRIBUTOR_PHOTOS - existing.length;
+
+    if (validFiles.length > remainingPhotoSlots) {
+      throw new ApiRequestError(
+        `This contribution can include up to ${MAX_CONTRIBUTOR_PHOTOS} photos. You can add ${Math.max(remainingPhotoSlots, 0)} more.`,
+        {
+          status: 409,
+          code: 'photo_limit_exceeded',
+          data: {
+            max_photos: MAX_CONTRIBUTOR_PHOTOS,
+            uploaded_count: existing.length,
+            remaining: Math.max(remainingPhotoSlots, 0),
+          },
+        },
+      );
     }
+
+    if (!validFiles.length) {
+      throw new ApiRequestError(errors[0]?.error || 'At least one photo file is required.', {
+        status: 400,
+        code: 'photo_validation_failed',
+        data: { errors },
+      });
+    }
+
+    const timestamp = Date.now();
+    const localAssets = validFiles.map((file, index) => ({
+      id: `photo-${timestamp}-${index}-${Math.random().toString(36).slice(2)}`,
+      file_name: file.name || `Photo ${index + 1}`,
+      file_type: file.type || '',
+      file_size_bytes: file.size || 0,
+      storage_path: null,
+      storage_bucket: 'local-mock',
+      taken_at: null,
+      caption: null,
+      previewUrl: null,
+    }));
+
+    writeStoredPhotos(token, [...existing, ...localAssets]);
+
     return {
-      id: file.id,
-      file_name: file.file_name,
-      file_type: file.file_type ?? originalFile?.type ?? '',
-      file_size_bytes: file.file_size_bytes ?? originalFile?.size ?? 0,
-      storage_path: file.storage_path,
-      storage_bucket: file.storage_bucket ?? 'memorial-assets',
-      taken_at: file.taken_at ?? null,
-      caption: file.caption ?? null,
-      url: remoteUrl,
-      previewUrl,
+      success: true,
+      uploaded: localAssets.length,
+      assets: localAssets,
+      errors,
+      partialFailure: errors.length > 0,
     };
-  });
+  }
+
+  // ── Real backend path ──────────────────────────────────────────────────────
+  const batches = chunkFiles(fileList, PHOTO_UPLOAD_BATCH_SIZE);
+  const finalAssets = [];
+  const allErrors = [];
+
+  for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+    const batch = batches[batchIndex];
+
+    try {
+      const { response, data } = await uploadPhotoBatch(token, contributorToken, batch);
+
+      // Backend returns { uploaded, files: [...], errors: [] }
+      const backendAssets = Array.isArray(data?.files)
+        ? data.files.filter((f) => f?.id && f?.file_name)
+        : [];
+
+      if (!backendAssets.length) {
+        throw new ApiRequestError(
+          'The Remember API responded, but did not confirm that any photos were saved.',
+          { status: response.status, code: 'upload_not_confirmed', data }
+        );
+      }
+
+      const batchAssets = backendAssets.map((file, index) => {
+        const originalFile = batch[index];
+        const remoteUrl = file.url || file.photo_url || null;
+        let previewUrl = remoteUrl;
+        if (!previewUrl && originalFile) {
+          try { previewUrl = URL.createObjectURL(originalFile); } catch {}
+        }
+        return {
+          id: file.id,
+          file_name: file.file_name,
+          file_type: file.file_type ?? originalFile?.type ?? '',
+          file_size_bytes: file.file_size_bytes ?? originalFile?.size ?? 0,
+          storage_path: file.storage_path,
+          storage_bucket: file.storage_bucket ?? 'memorial-assets',
+          taken_at: file.taken_at ?? null,
+          caption: file.caption ?? null,
+          url: remoteUrl,
+          previewUrl,
+        };
+      });
+
+      finalAssets.push(...batchAssets);
+      if (Array.isArray(data?.errors)) allErrors.push(...data.errors);
+      onProgress?.({
+        uploaded: finalAssets.length,
+        total: fileList.length,
+        batch: batchIndex + 1,
+        batches: batches.length,
+      });
+    } catch (error) {
+      if (!finalAssets.length) throw error;
+
+      allErrors.push({
+        file_name: `Batch ${batchIndex + 1}`,
+        error: error instanceof Error ? error.message : 'Upload failed.',
+      });
+      break;
+    }
+  }
 
   const existing = readStoredPhotos(token);
   writeStoredPhotos(token, [...existing, ...finalAssets]);
@@ -1161,8 +1234,8 @@ export async function uploadPhotos(token, files) {
     success: true,
     uploaded: finalAssets.length,
     assets: finalAssets,
-    errors: Array.isArray(data?.errors) ? data.errors : [],
-    partialFailure: Array.isArray(data?.errors) && data.errors.length > 0,
+    errors: allErrors,
+    partialFailure: allErrors.length > 0,
   };
 }
 
@@ -1346,6 +1419,7 @@ export async function fetchContributorPhotos(token, contributorToken) {
 export async function getContributorSummary(token) {
   const session = readContributorSession(token);
   const store = getStore();
+  const contributorToken = session?.contributorToken || session?.contributorId;
 
   // Check in-memory store first — used when photos/page.jsx uses addPhotos
   // Fall back to localStorage — used when backend upload path writes via writeStoredPhotos
@@ -1358,7 +1432,11 @@ export async function getContributorSummary(token) {
       caption: p.caption ?? null,
     }));
   } else {
-    photos = readStoredPhotos(token).map((p) => ({
+    const savedPhotos = contributorToken
+      ? await fetchContributorPhotos(token, contributorToken)
+      : readStoredPhotos(token);
+
+    photos = savedPhotos.map((p) => ({
       id: p.id,
       file_name: p.file_name || '',
       previewUrl: p.previewUrl || p.url || null,

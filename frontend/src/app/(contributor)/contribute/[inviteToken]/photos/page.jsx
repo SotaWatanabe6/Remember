@@ -6,7 +6,13 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { deletePhoto, getContributorSummary, uploadPhotos } from '@/lib/api';
+import {
+  deletePhoto,
+  getContributorSummary,
+  MAX_CONTRIBUTOR_PHOTOS,
+  PHOTO_UPLOAD_BATCH_SIZE,
+  uploadPhotos,
+} from '@/lib/api';
 
 const PHOTO_ACCEPT = 'image/*,.heic,.heif,.jpg,.jpeg,.png,.webp';
 const MAX_PHOTO_BYTES = 50 * 1024 * 1024;
@@ -187,25 +193,50 @@ export default function PhotosPage() {
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [uploadProgress, setUploadProgress] = useState(null);
   const selectedPhotosRef = useRef([]);
   const uploadedAssetsRef = useRef([]);
 
   const handleFiles = useCallback((files) => {
     setErrorMessage('');
     setMessage('');
-    if (!files.length) { setErrorMessage('No photos were selected.'); return; }
+    setUploadProgress(null);
+
+    if (!files.length) {
+      setErrorMessage('No photos were selected.');
+      return;
+    }
+
+    const remainingSlots = MAX_CONTRIBUTOR_PHOTOS - uploadedAssets.length - selectedPhotos.length;
+    if (remainingSlots <= 0) {
+      setErrorMessage(`This contribution can include up to ${MAX_CONTRIBUTOR_PHOTOS} photos.`);
+      return;
+    }
+
     const validPhotos = [];
     const rejectedPhotos = [];
-    files.forEach((file) => {
+
+    files.slice(0, remainingSlots).forEach((file) => {
       if (!isAcceptedPhotoFile(file)) { rejectedPhotos.push(file.name || 'A selected file'); return; }
       if (file.size > MAX_PHOTO_BYTES) { rejectedPhotos.push(file.name || 'A selected file'); return; }
       validPhotos.push(file);
     });
-    if (rejectedPhotos.length) setErrorMessage(`${formatCount(rejectedPhotos.length, 'file')} could not be added. Please choose image files under 50 MB.`);
+
+    if (files.length > remainingSlots) {
+      const skippedCount = files.length - remainingSlots;
+      setErrorMessage(
+        `Only ${formatCount(remainingSlots, 'photo')} can be added. ${formatCount(skippedCount, 'photo')} skipped because this contribution is limited to ${MAX_CONTRIBUTOR_PHOTOS} photos.`,
+      );
+    }
+
+    if (rejectedPhotos.length && files.length <= remainingSlots) {
+      setErrorMessage(`${formatCount(rejectedPhotos.length, 'file')} could not be added. Please choose image files under 50 MB.`);
+    }
+
     if (!validPhotos.length) return;
     setSelectedPhotos((current) => [...current, ...validPhotos.map(createSelectedPhoto)]);
     setStatus('selected');
-  }, []);
+  }, [selectedPhotos.length, uploadedAssets.length]);
 
   const revokePreviewUrls = useCallback((photos) => {
     if (typeof URL === 'undefined') return;
@@ -218,9 +249,13 @@ export default function PhotosPage() {
     setStatus('uploading');
     setErrorMessage('');
     setMessage('');
+    setUploadProgress({ uploaded: 0, total: selectedPhotos.length, batch: 0, batches: Math.ceil(selectedPhotos.length / PHOTO_UPLOAD_BATCH_SIZE) });
+
     try {
       const selectedAtUpload = selectedPhotos;
-      const result = await uploadPhotos(inviteToken, selectedAtUpload.map((photo) => photo.file));
+      const result = await uploadPhotos(inviteToken, selectedAtUpload.map((photo) => photo.file), {
+        onProgress: setUploadProgress,
+      });
       const previewQueues = new Map();
       selectedAtUpload.forEach((photo) => {
         const queue = previewQueues.get(photo.file_name) ?? [];
@@ -245,7 +280,11 @@ export default function PhotosPage() {
       if (result.partialFailure) setErrorMessage('Please review the selected photos and try again for anything that did not upload.');
     } catch (error) {
       setStatus('error');
-      setErrorMessage(error instanceof Error ? error.message : 'We could not upload those photos. Please try again.');
+      setErrorMessage(
+        error instanceof Error ? error.message : 'We could not upload those photos. Please try again.',
+      );
+    } finally {
+      setUploadProgress(null);
     }
   }
 
@@ -329,6 +368,7 @@ export default function PhotosPage() {
 
   const selectedCount = selectedPhotos.length;
   const uploadedCount = uploadedAssets.length;
+  const remainingCount = Math.max(MAX_CONTRIBUTOR_PHOTOS - uploadedCount - selectedCount, 0);
   const hasUnuploadedSelection = selectedCount > 0;
   const isUploading = status === 'uploading';
   const canContinue = !isUploading && !hasUnuploadedSelection;
@@ -342,7 +382,9 @@ export default function PhotosPage() {
 
         <div className="text-center">
           <h1 className="text-h1 text-r-text">Upload your memories</h1>
-          <p className="mt-2 text-body-2 text-r-secondary">Upload photos below.</p>
+          <p className="mt-2 text-body-2 text-r-secondary">
+            Add up to {MAX_CONTRIBUTOR_PHOTOS} photos from your camera roll.
+          </p>
         </div>
 
         <DropZone onFiles={handleFiles} disabled={isUploading} />
@@ -352,7 +394,9 @@ export default function PhotosPage() {
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-h3 text-r-text">Ready to upload</p>
-                <p className="text-caption text-r-muted">{formatCount(selectedCount, 'photo')} selected</p>
+                <p className="text-caption text-r-muted">
+                  {formatCount(selectedCount, 'photo')} selected, {formatCount(remainingCount, 'spot')} remaining
+                </p>
               </div>
               <button type="button" onClick={handleUpload} disabled={isUploading}
                 className="rounded-full px-5 py-2.5 text-body-2 font-medium transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60 border-none"
@@ -360,6 +404,11 @@ export default function PhotosPage() {
                 {isUploading ? 'Uploading...' : `Upload ${selectedCount === 1 ? 'photo' : 'photos'}`}
               </button>
             </div>
+            {uploadProgress ? (
+              <p className="mb-4 text-caption text-r-muted" role="status">
+                Uploaded {uploadProgress.uploaded} of {uploadProgress.total} photos
+              </p>
+            ) : null}
             <div className="grid grid-cols-3 gap-3">
               {selectedPhotos.map((asset) => (
                 <PhotoThumb key={asset.id} asset={asset} onDelete={isUploading ? null : handleRemoveSelected} uploading={isUploading} onPreviewError={handlePreviewError} />
