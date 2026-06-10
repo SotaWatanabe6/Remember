@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 
+const MAX_STORY_SLIDES = 12;
+
 function formatRelationship(relationshipType) {
   if (!relationshipType) return '';
   return relationshipType
@@ -62,11 +64,36 @@ function resolveSlideYear(slide, matchedPhoto) {
   return null
 }
 
+function selectStorySlides(slides) {
+  if (slides.length <= MAX_STORY_SLIDES) return slides;
+
+  const selected = new Map();
+  const lastIndex = slides.length - 1;
+
+  for (let i = 0; i < MAX_STORY_SLIDES; i += 1) {
+    const index = Math.round((i * lastIndex) / (MAX_STORY_SLIDES - 1));
+    const slide = slides[index];
+    if (slide?.id) selected.set(slide.id, slide);
+  }
+
+  for (const slide of slides) {
+    if (selected.size >= MAX_STORY_SLIDES) break;
+    if (slide?.id && !selected.has(slide.id)) {
+      selected.set(slide.id, slide);
+    }
+  }
+
+  return [...selected.values()].sort((a, b) => {
+    if (a.photoYearSort !== b.photoYearSort) return a.photoYearSort - b.photoYearSort;
+    return a.orderIndex - b.orderIndex;
+  });
+}
+
 function normalizeStorySlides(output, story) {
   const contributorLookup = buildContributorLookup(output);
   const photoLookup = buildPhotoLookup(output);
 
-  return getStorySource(output, story)
+  const normalizedSlides = getStorySource(output, story)
     .map((slide, index) => {
       const contributor = contributorLookup[slide.contributor_id] || {};
       const matchedPhoto = photoLookup[slide.photo_id] || {};
@@ -123,38 +150,8 @@ function normalizeStorySlides(output, story) {
       if (a.photoYearSort !== b.photoYearSort) return a.photoYearSort - b.photoYearSort;
       return a.orderIndex - b.orderIndex;
     });
-}
 
-function StoryTimeline({ slides, currentIndex }) {
-  const years = slides
-    .map((s) => s.photoYearSort)
-    .filter((y) => y < 9999);
-  if (years.length < 2) return null;
-
-  const min = Math.min(...years);
-  const max = Math.max(...years);
-  const current = slides[currentIndex]?.photoYearSort;
-  const currentPct =
-    current < 9999 && max > min ? ((current - min) / (max - min)) * 100 : null;
-
-  return (
-    <div className="mt-3 w-full max-w-md">
-      <div className="mb-1 flex justify-between text-[10px] uppercase tracking-wider text-[#90a1b9]">
-        <span>{min}</span>
-        <span>{max}</span>
-      </div>
-      <div className="relative h-1.5 rounded-full bg-[#e2e8f0]">
-        <div className="absolute inset-y-0 left-0 rounded-full bg-[#45556c]/30" style={{ width: '100%' }} />
-        {currentPct != null ? (
-          <div
-            className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-[#45556c] shadow-sm"
-            style={{ left: `${currentPct}%` }}
-            aria-hidden="true"
-          />
-        ) : null}
-      </div>
-    </div>
-  );
+  return selectStorySlides(normalizedSlides);
 }
 
 function ChevronLeftIcon() {
@@ -243,9 +240,8 @@ export default function StorySlideshow({ output, story, loading = false, error =
   const isFirst = currentIndex === 0;
   const isLast = currentIndex === slides.length - 1;
   const progress = ((currentIndex + 1) / slides.length) * 100;
-  const ageLabel = slide.photoYear || slide.photoEraLabel;
   const altText = slide.photoDescription
-    ? `Photo from ${ageLabel || 'an unknown year'}: ${slide.photoDescription}`
+    ? `Story photo: ${slide.photoDescription}`
     : `Story photo contributed by ${slide.contributorName}`;
   const slideTransition = shouldReduceMotion ? { duration: 0 } : { duration: 0.35, ease: 'easeInOut' };
 
@@ -282,17 +278,6 @@ export default function StorySlideshow({ output, story, loading = false, error =
             )}
 
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-black/10" aria-hidden="true" />
-
-            {ageLabel ? (
-              <div className="absolute left-4 top-5 z-20 sm:left-7 sm:top-7">
-                <div className="rounded-lg bg-black/55 px-4 py-2 backdrop-blur-sm">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/70">
-                    {slide.photoYear ? 'Year' : 'Era'}
-                  </p>
-                  <p className="text-2xl font-semibold tabular-nums text-white sm:text-3xl">{ageLabel}</p>
-                </div>
-              </div>
-            ) : null}
 
             <div className="absolute inset-x-0 bottom-0 z-10 px-5 pb-7 pt-24 sm:px-8 sm:pb-9">
               {slide.photoDescription ? (
@@ -343,35 +328,6 @@ export default function StorySlideshow({ output, story, loading = false, error =
         </button>
       </div>
 
-      <div className="flex min-h-[88px] items-center justify-between gap-4 border-t border-[#e2e8f0] px-5 py-5 sm:px-7">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-3 text-[#45556c]">
-            <span className="grid size-10 place-items-center rounded-full bg-[#45556c] text-white" aria-hidden="true">
-              <ChevronRightIcon />
-            </span>
-            <span className="text-sm">
-              {currentIndex + 1} / {slides.length}
-              {slide.photoYear ? ` · ${slide.photoYear}` : slide.photoEraLabel ? ` · ${slide.photoEraLabel}` : ''}
-            </span>
-          </div>
-          <StoryTimeline slides={slides} currentIndex={currentIndex} />
-        </div>
-
-        <div className="flex items-center gap-1.5" aria-label="Story slide position">
-          {slides.map((item, index) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setRequestedIndex(index)}
-              aria-label={`Go to story slide ${index + 1}`}
-              aria-current={index === currentIndex}
-              className={`h-2 rounded-full transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-400 ${
-                index === currentIndex ? 'w-7 bg-[#45556c]' : 'w-2 bg-[#cad5e2] hover:bg-[#90a1b9]'
-              }`}
-            />
-          ))}
-        </div>
-      </div>
     </section>
   );
 }
