@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -35,66 +37,9 @@ const inviteErrorCopy = {
   },
 };
 
-function InviteErrorState({ status }) {
-  const copy = inviteErrorCopy[status] ?? inviteErrorCopy.invalid;
-
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-r-bg px-6 py-10 text-neutral-950 sm:px-[50px]">
-      <section className="flex w-full max-w-[560px] flex-col items-center gap-5 text-center">
-        <div className="flex size-16 items-center justify-center rounded-full bg-slate-100 text-2xl font-medium text-slate-600">
-          R
-        </div>
-        <div className="flex flex-col gap-3">
-          <h1 className="text-[32px] font-medium leading-[38px] text-neutral-950 sm:text-[40px] sm:leading-[48px]">
-            {copy.title}
-          </h1>
-          <p className="text-base leading-7 text-slate-600 sm:text-lg">{copy.body}</p>
-        </div>
-      </section>
-    </main>
-  );
-}
-
-function LoadingState() {
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-r-bg px-6 py-10 text-neutral-950 sm:px-[50px]">
-      <section className="flex flex-col items-center gap-4 text-center" aria-live="polite">
-        <div className="size-12 rounded-full border-2 border-slate-200 border-t-neutral-950" />
-        <p className="text-base leading-6 text-slate-600">Opening your invitation...</p>
-      </section>
-    </main>
-  );
-}
-
-function DeceasedAvatar({ name, photoUrl }) {
-  const initial = useMemo(() => name.trim().charAt(0).toUpperCase() || "R", [name]);
-
-  return (
-    <div className="relative flex size-[148px] items-center justify-center overflow-hidden rounded-full bg-slate-100 text-[56px] font-medium text-slate-500 shadow-auth sm:size-[180px] sm:text-[68px]">
-      {photoUrl ? (
-        <Image
-          src={photoUrl}
-          alt={`Photo of ${name}`}
-          fill
-          sizes="(min-width: 640px) 180px, 148px"
-          className="object-cover"
-          unoptimized
-        />
-      ) : (
-        <span aria-hidden="true">{initial}</span>
-      )}
-    </div>
-  );
-}
-
-export default function ContributorInviteLanding({ inviteToken }) {
-  const router = useRouter();
+function useContributorInvite(inviteToken) {
   const [invite, setInvite] = useState(null);
-  const [contributorName, setContributorName] = useState("");
-  const [nameError, setNameError] = useState("");
-  const [submitError, setSubmitError] = useState("");
   const [isValidating, setIsValidating] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -116,8 +61,278 @@ export default function ContributorInviteLanding({ inviteToken }) {
     };
   }, [inviteToken]);
 
+  return { invite, isValidating };
+}
+
+function InviteErrorState({ status }) {
+  const copy = inviteErrorCopy[status] ?? inviteErrorCopy.invalid;
+
+  return (
+    <ContributorPageShell>
+      <section className="mx-auto flex min-h-[calc(100vh-140px)] w-full max-w-[560px] flex-col items-center justify-center gap-5 text-center">
+        <div className="flex size-16 items-center justify-center rounded-full bg-r-card text-2xl font-medium text-r-secondary">
+          R
+        </div>
+        <div className="flex flex-col gap-3">
+          <h1 className="[font-family:var(--font-family-display)] text-[32px] font-bold leading-[38px] text-r-text sm:text-[40px] sm:leading-[52px]">
+            {copy.title}
+          </h1>
+          <p className="text-base leading-7 text-r-secondary sm:text-xl sm:leading-8">
+            {copy.body}
+          </p>
+        </div>
+      </section>
+    </ContributorPageShell>
+  );
+}
+
+function LoadingState() {
+  return (
+    <ContributorPageShell>
+      <section className="mx-auto flex min-h-[calc(100vh-140px)] flex-col items-center justify-center gap-4 text-center" aria-live="polite">
+        <div className="size-12 animate-spin rounded-full border-2 border-r-border border-t-r-text" />
+        <p className="text-base leading-6 text-r-secondary">Opening your invitation...</p>
+      </section>
+    </ContributorPageShell>
+  );
+}
+
+function ContributorBrand() {
+  return (
+    <Link href="/" className="flex items-center gap-5 text-r-text" aria-label="Remember home">
+      <Image
+        src="/images/remember-logo.png"
+        alt=""
+        width={34}
+        height={36}
+        className="h-9 w-[34px] object-contain"
+        priority
+      />
+      <span className="[font-family:var(--font-family-display)] text-2xl font-medium leading-[31px]">
+        Remember
+      </span>
+    </Link>
+  );
+}
+
+function ContributorPageShell({ children, backHref }) {
+  return (
+    <main className="min-h-screen bg-r-bg px-6 py-8 text-r-text sm:px-[50px] sm:py-[50px]">
+      <header className="flex h-10 items-center justify-between">
+        <ContributorBrand />
+        {backHref ? (
+          <Link
+            href={backHref}
+            className="flex items-center gap-3 text-base leading-6 text-r-text transition-opacity hover:opacity-75"
+          >
+            <ArrowLeft aria-hidden="true" size={20} strokeWidth={2} />
+            Back
+          </Link>
+        ) : null}
+      </header>
+      {children}
+    </main>
+  );
+}
+
+function DeceasedAvatar({ name, photoUrl, size = "large" }) {
+  const initial = useMemo(() => name.trim().charAt(0).toUpperCase() || "R", [name]);
+  const sizeClass = size === "small" ? "size-[100px] text-[40px]" : "size-[220px] text-[76px] sm:size-[314px] sm:text-[104px]";
+  const sizes = size === "small" ? "100px" : "(min-width: 640px) 314px, 220px";
+
+  return (
+    <div className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-r-card [font-family:var(--font-family-display)] font-medium text-r-muted ${sizeClass}`}>
+      {photoUrl ? (
+        <Image
+          src={photoUrl}
+          alt={`Photo of ${name}`}
+          fill
+          sizes={sizes}
+          className="object-cover"
+          unoptimized
+        />
+      ) : (
+        <span aria-hidden="true">{initial}</span>
+      )}
+    </div>
+  );
+}
+
+function PrimaryContributorButton({ children, className = "", ...props }) {
+  return (
+    <button
+      className={`flex h-[62px] w-full max-w-[434px] items-center justify-center rounded-full bg-r-btn px-8 text-xl leading-[26px] text-r-text transition hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-r-border-focus disabled:cursor-not-allowed disabled:opacity-55 ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+function formatYear(value) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return String(date.getFullYear());
+}
+
+function getMemorialYears(memorial) {
+  const birthYear = formatYear(memorial?.date_of_birth ?? memorial?.dateOfBirth ?? memorial?.birth_date);
+  const passingYear = formatYear(
+    memorial?.date_of_passing ?? memorial?.dateOfPassing ?? memorial?.death_date,
+  );
+
+  if (birthYear && passingYear) return `${birthYear} - ${passingYear}`;
+  if (birthYear) return `Born ${birthYear}`;
+  if (passingYear) return `Passed ${passingYear}`;
+  return "";
+}
+
+function getMemorialBiography(memorial) {
+  return (
+    memorial?.biography ??
+    memorial?.bio ??
+    memorial?.description ??
+    memorial?.profile ??
+    memorial?.brief_biography ??
+    memorial?.short_description ??
+    ""
+  ).trim();
+}
+
+function getFirstName(name) {
+  return name.trim().split(/\s+/)[0] || name;
+}
+
+export default function ContributorInviteLanding({ inviteToken }) {
+  const router = useRouter();
+  const { invite, isValidating } = useContributorInvite(inviteToken);
+
+  if (isValidating) {
+    return <LoadingState />;
+  }
+
+  if (!invite || invite.status !== "valid") {
+    return <InviteErrorState status={invite?.status ?? "invalid"} />;
+  }
+
+  const subjectName = invite.deceased.name;
+
+  return (
+    <ContributorPageShell>
+      <section className="mx-auto flex w-full max-w-[886px] flex-col items-center pt-[101px] text-center max-sm:pt-16">
+        <div className="flex flex-col items-center gap-5">
+          <h1 className="[font-family:var(--font-family-display)] text-[40px] font-bold leading-[52px] text-r-text">
+            Welcome to Remember
+          </h1>
+          <p className="max-w-[886px] text-xl leading-[26px] text-r-secondary sm:leading-[26px]">
+            A digital platform where you can create a private, dignified space where family and friends can share memories of your loved one.
+          </p>
+        </div>
+
+        <div className="mt-[100px] flex min-h-[360px] w-full max-w-[476px] flex-col items-center rounded-[20px] border border-[#97877B] px-5 pb-9 pt-10 max-sm:mt-16">
+          <DeceasedAvatar name={subjectName} photoUrl={invite.deceased.photoUrl} size="small" />
+          <h2 className="mt-6 max-w-[434px] [font-family:var(--font-family-display)] text-2xl font-medium leading-[31px] text-r-text">
+            You&apos;ve been invited to contribute memories of {subjectName}.
+          </h2>
+          <p className="mt-5 max-w-[434px] text-xl leading-[26px] text-r-secondary">
+            Share photos, videos, voice recordings, and written memories that celebrate the life and legacy of someone special.
+          </p>
+        </div>
+
+        <PrimaryContributorButton
+          type="button"
+          className="mt-[100px] max-sm:mt-16"
+          onClick={() => router.push(`/contribute/${inviteToken}/onboarding`)}
+        >
+          Start
+        </PrimaryContributorButton>
+      </section>
+    </ContributorPageShell>
+  );
+}
+
+export function ContributorOnboardingBrief({ inviteToken }) {
+  const router = useRouter();
+  const { invite, isValidating } = useContributorInvite(inviteToken);
+
+  if (isValidating) {
+    return <LoadingState />;
+  }
+
+  if (!invite || invite.status !== "valid") {
+    return <InviteErrorState status={invite?.status ?? "invalid"} />;
+  }
+
+  const subjectName = invite.deceased.name;
+  const firstName = getFirstName(subjectName);
+  const years = getMemorialYears(invite.memorial);
+  const biography = getMemorialBiography(invite.memorial);
+
+  return (
+    <ContributorPageShell backHref={`/contribute/${inviteToken}`}>
+      <section className="mx-auto flex w-full max-w-[886px] flex-col items-center pt-[101px] max-sm:pt-16">
+        <div className="flex max-w-[886px] flex-col items-center gap-5 text-center">
+          <h1 className="[font-family:var(--font-family-display)] text-[40px] font-bold leading-[52px] text-r-text">
+            Remembering {subjectName}
+          </h1>
+          <p className="max-w-[886px] text-xl leading-7 text-r-secondary">
+            <span className="block">
+              You&apos;ve been invited to share your memories with {subjectName} to contribute to their memorial.
+            </span>
+            <span className="block">
+              Remember will get to learn who {firstName} was as a person through your perspective and guide
+            </span>
+            <span className="block">you on uploading various forms of media.</span>
+          </p>
+        </div>
+
+        <div className="mt-[100px] grid w-full grid-cols-1 items-start gap-10 sm:grid-cols-[314px_1fr] sm:gap-[139px]">
+          <DeceasedAvatar name={subjectName} photoUrl={invite.deceased.photoUrl} />
+          <div className="flex max-w-[433px] flex-col text-left max-sm:items-center max-sm:text-center sm:pt-[70px]">
+            <h2 className="[font-family:var(--font-family-display)] text-4xl font-medium italic leading-[47px] text-r-text">
+              {subjectName}
+            </h2>
+            {years ? (
+              <p className="mt-3 text-base leading-[21px] text-r-secondary">{years}</p>
+            ) : null}
+            {biography ? (
+              <p className="mt-4 text-xl leading-[26px] text-r-secondary">{biography}</p>
+            ) : null}
+          </div>
+        </div>
+
+        <PrimaryContributorButton
+          type="button"
+          className="mt-[100px] max-sm:mt-16"
+          onClick={() => router.push(`/contribute/${inviteToken}/public-contributor`)}
+        >
+          Continue
+        </PrimaryContributorButton>
+      </section>
+    </ContributorPageShell>
+  );
+}
+
+export function PublicContributorPage({ inviteToken }) {
+  const router = useRouter();
+  const { invite, isValidating } = useContributorInvite(inviteToken);
+  const [contributorName, setContributorName] = useState("");
+  const [nameError, setNameError] = useState("");
+  const [submitError, setSubmitError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  if (isValidating) {
+    return <LoadingState />;
+  }
+
+  if (!invite || invite.status !== "valid") {
+    return <InviteErrorState status={invite?.status ?? "invalid"} />;
+  }
+
   const trimmedContributorName = contributorName.trim();
-  const isBeginDisabled = isSubmitting || trimmedContributorName.length === 0;
+  const isContinueDisabled = isSubmitting || trimmedContributorName.length === 0;
 
   const handleNameChange = (event) => {
     setContributorName(event.target.value);
@@ -129,7 +344,7 @@ export default function ContributorInviteLanding({ inviteToken }) {
     event.preventDefault();
 
     if (!trimmedContributorName) {
-      setNameError("Please enter your name to begin.");
+      setNameError("Please enter your name.");
       return;
     }
 
@@ -137,19 +352,24 @@ export default function ContributorInviteLanding({ inviteToken }) {
     setSubmitError("");
 
     try {
-    await beginContributorDraft(inviteToken, trimmedContributorName);
+      await beginContributorDraft(inviteToken, trimmedContributorName);
 
-    // Save memorial subject name to session so all downstream pages can read it
-    try {
-      const sessionKey = `remember_contributor_session:${inviteToken}`;
-      const existing = JSON.parse(localStorage.getItem(sessionKey) || '{}');
-      localStorage.setItem(sessionKey, JSON.stringify({
-        ...existing,
-        memorialSubjectName: invite.deceased.name || '',
-      }));
-    } catch {}
+      try {
+        const sessionKey = `remember_contributor_session:${inviteToken}`;
+        const existing = JSON.parse(localStorage.getItem(sessionKey) || "{}");
+        localStorage.setItem(
+          sessionKey,
+          JSON.stringify({
+            ...existing,
+            contributorName: trimmedContributorName,
+            display_name: trimmedContributorName,
+            is_anonymous: false,
+            memorialSubjectName: invite.deceased.name || "",
+          }),
+        );
+      } catch {}
 
-    router.push(`/contribute/${inviteToken}/privacy`);
+      router.push(`/contribute/${inviteToken}/relationship`);
     } catch (error) {
       setSubmitError(
         error instanceof Error
@@ -160,82 +380,64 @@ export default function ContributorInviteLanding({ inviteToken }) {
     }
   };
 
-  if (isValidating) {
-    return <LoadingState />;
-  }
-
-  if (!invite || invite.status !== "valid") {
-    return <InviteErrorState status={invite?.status ?? "invalid"} />;
-  }
-
   return (
-    <main className="min-h-screen bg-r-bg px-6 py-8 text-neutral-950 sm:px-[50px] sm:py-[50px]">
-      <div className="mx-auto flex min-h-[calc(100vh-64px)] w-full max-w-[960px] flex-col items-center justify-center gap-10 sm:min-h-[calc(100vh-100px)]">
-        <section className="flex w-full flex-col items-center gap-8 text-center">
-          <DeceasedAvatar name={invite.deceased.name} photoUrl={invite.deceased.photoUrl} />
+    <ContributorPageShell backHref={`/contribute/${inviteToken}/onboarding`}>
+      <section className="mx-auto flex w-full max-w-[578px] flex-col items-center pt-[101px] max-sm:pt-16">
+        <div className="flex flex-col items-center gap-5 text-center">
+          <h1 className="[font-family:var(--font-family-display)] text-[40px] font-bold leading-[52px] text-r-text">
+            Contribution privacy
+          </h1>
+          <p className="text-xl leading-[26px] text-r-secondary">
+            Write the name that will be displayed with your contributions.
+          </p>
+        </div>
 
-          <div className="flex max-w-[640px] flex-col items-center gap-4">
-            <p className="text-sm font-medium uppercase leading-5 text-slate-500">
-              You have been invited to contribute
-            </p>
-            <h1 className="text-[38px] font-medium leading-[44px] text-neutral-950 sm:text-[56px] sm:leading-[64px]">
-              {invite.deceased.name}
-            </h1>
-            <p className="max-w-[560px] text-base leading-7 text-slate-600 sm:text-xl sm:leading-8">
-              Share a memory, a story, or a few words that will help their family preserve who
-              they were.
-            </p>
-          </div>
-
-          <form
-            onSubmit={handleSubmit}
-            noValidate
-            className="mt-2 flex w-full max-w-[520px] flex-col items-stretch gap-5 text-left"
+        <form
+          onSubmit={handleSubmit}
+          noValidate
+          className="mt-[99px] flex w-full max-w-[434px] flex-col items-stretch"
+        >
+          <label
+            htmlFor="contributor-name"
+            className="[font-family:var(--font-family-display)] text-2xl font-medium leading-[31px] text-r-text"
           >
-            <div className="flex flex-col gap-[10px]">
-              <label
-                htmlFor="contributor-name"
-                className="text-[17px] font-medium leading-[25px] text-neutral-950"
-              >
-                Your name
-              </label>
-              <input
-                id="contributor-name"
-                name="contributorName"
-                type="text"
-                value={contributorName}
-                onChange={handleNameChange}
-                autoComplete="name"
-                placeholder="Enter your name"
-                aria-invalid={Boolean(nameError)}
-                aria-describedby={nameError ? "contributor-name-error" : undefined}
-                className={`h-[63px] w-full rounded-[13px] border bg-white px-5 text-xl text-neutral-950 outline-none transition placeholder:text-neutral-950/50 focus:border-slate-500 focus:ring-2 focus:ring-slate-200 ${
-                  nameError ? "border-red-400" : "border-slate-300"
-                }`}
-              />
-              {nameError ? (
-                <p id="contributor-name-error" className="text-sm leading-5 text-red-600">
-                  {nameError}
-                </p>
-              ) : null}
-            </div>
+            Your name
+          </label>
+          <input
+            id="contributor-name"
+            name="contributorName"
+            type="text"
+            value={contributorName}
+            onChange={handleNameChange}
+            autoComplete="name"
+            placeholder="Full name"
+            aria-invalid={Boolean(nameError)}
+            aria-describedby={nameError ? "contributor-name-error" : undefined}
+            className={`mt-[10px] h-16 w-full rounded-[13px] border bg-transparent px-5 text-xl leading-[26px] text-r-text outline-none transition placeholder:text-r-secondary focus:border-r-border-focus ${
+              nameError ? "border-r-danger" : "border-[#97877B]"
+            }`}
+          />
+          {nameError ? (
+            <p id="contributor-name-error" className="mt-2 text-sm leading-5 text-r-danger">
+              {nameError}
+            </p>
+          ) : null}
 
-            {submitError ? (
-              <p className="text-center text-sm leading-5 text-red-600" role="alert">
-                {submitError}
-              </p>
-            ) : null}
+          {submitError ? (
+            <p className="mt-4 text-center text-sm leading-5 text-r-danger" role="alert">
+              {submitError}
+            </p>
+          ) : null}
 
-            <button
-              type="submit"
-              disabled={isBeginDisabled}
-              className="flex h-[64px] w-full items-center justify-center rounded-full bg-neutral-950 px-10 text-[20px] font-bold leading-[30px] text-white transition hover:bg-neutral-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-500 disabled:cursor-not-allowed disabled:bg-neutral-400"
-            >
-              {isSubmitting ? "Beginning..." : "Begin"}
-            </button>
-          </form>
-        </section>
-      </div>
-    </main>
+          <PrimaryContributorButton
+            type="submit"
+            disabled={isContinueDisabled}
+            className="mt-[100px]"
+          >
+            {isSubmitting ? "Continuing..." : "Continue"}
+          </PrimaryContributorButton>
+        </form>
+      </section>
+    </ContributorPageShell>
   );
 }

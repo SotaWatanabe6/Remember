@@ -144,7 +144,7 @@ router.get('/:token', async (req, res) => {
 
     const { data: memorial } = await supabase
       .from('memorials')
-      .select('id, subject_name, cover_photo_url')
+      .select('*')
       .eq('id', invite.memorial_id)
       .single()
 
