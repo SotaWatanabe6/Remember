@@ -28,10 +28,16 @@ async function resolveMediaRecord(supabase, record) {
   const bucket = record.storage_bucket || DEFAULT_BUCKET
   const path = record.storage_path || record.url || record.photo_url
   const signedUrl = await resolveStorageUrl(supabase, path, bucket)
+  const photoIdentity =
+    record.photo_identity ||
+    (typeof record.ai_labels === 'object' && record.ai_labels?.photo_identity
+      ? record.ai_labels.photo_identity
+      : null)
   return {
     ...record,
     url: signedUrl || (isHttpUrl(record.url) ? record.url : null),
     photo_url: signedUrl || (isHttpUrl(record.photo_url) ? record.photo_url : null),
+    photo_identity: photoIdentity,
   }
 }
 
@@ -61,7 +67,11 @@ async function resolveOutputMediaUrls(supabase, output) {
   if (Array.isArray(resolved.story)) {
     resolved.story = await Promise.all(
       resolved.story.map(async (slide) => {
-        const photoUrl = await resolveStorageUrl(supabase, slide.photo_url || slide.url)
+        const rawPhotoPath = slide.photo_url || slide.url
+        const photoUrl =
+          slide.slide_type === 'intro'
+            ? await resolveMemorialCoverUrl(supabase, rawPhotoPath)
+            : await resolveStorageUrl(supabase, rawPhotoPath)
         const audioUrl = await resolveStorageUrl(
           supabase,
           slide.audio_url,
@@ -103,18 +113,6 @@ async function resolveOutputMediaUrls(supabase, output) {
       }),
     )
   }
-
-  if (Array.isArray(resolved.relationships)) {
-    resolved.relationships = await Promise.all(
-      resolved.relationships.map(async (group) => {
-        const photos = await Promise.all(
-          (group.photos || []).map((path) => resolveStorageUrl(supabase, path))
-        )
-        return { ...group, photos: photos.filter(Boolean) }
-      })
-    )
-  }
-
 
   const photoAlbums = Array.isArray(resolved.photos)
     ? resolved.photos
