@@ -395,105 +395,171 @@ function Lightbox({ photo, onClose, onPrev, onNext }) {
 
 // ─── All Photos Section ───────────────────────────────────────────────────────
 
-function AllPhotosSection({ albums }) {
-  const [openAlbum, setOpenAlbum] = useState(null);
+function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
+  const PHOTOS_PER_PAGE = 6;
+  const [filterContributor, setFilterContributor] = useState('all');
+  const [sortOrder, setSortOrder] = useState('newest');
+  const [page, setPage] = useState(1);
   const [lightboxPhoto, setLightboxPhoto] = useState(null);
   const [lightboxIndex, setLightboxIndex] = useState(0);
-  const albumList = (Array.isArray(albums) ? albums : albums?.albums ?? []).map((album) => ({
-    ...album,
-    album_name: album.album_name || album.name || "Album",
-  }));
-  const currentAlbumPhotos = openAlbum?.photos || [];
+
+  // Flatten all photos from all albums into one list
+  const albumList = Array.isArray(albums) ? albums : albums?.albums ?? [];
+  const allPhotos = albumList.flatMap((album) =>
+    (album.photos || []).map((p) => ({ ...p, album_name: album.album_name || album.name || 'Album' }))
+  );
+
+  // Unique contributors for filter dropdown
+  const contributors = ['all', ...Array.from(new Set(allPhotos.map((p) => p.contributor_name).filter(Boolean)))];
+
+  // Filter
+  const filtered = filterContributor === 'all'
+    ? allPhotos
+    : allPhotos.filter((p) => p.contributor_name === filterContributor);
+
+  // Sort
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortOrder === 'newest') return new Date(b.taken_at || 0) - new Date(a.taken_at || 0);
+    if (sortOrder === 'oldest') return new Date(a.taken_at || 0) - new Date(b.taken_at || 0);
+    return 0;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PHOTOS_PER_PAGE));
+  const paginated = sorted.slice((page - 1) * PHOTOS_PER_PAGE, page * PHOTOS_PER_PAGE);
 
   function openLightbox(photo, index) { setLightboxPhoto(photo); setLightboxIndex(index); }
   function prevPhoto() {
-    const i = (lightboxIndex - 1 + currentAlbumPhotos.length) % currentAlbumPhotos.length;
-    setLightboxIndex(i); setLightboxPhoto(currentAlbumPhotos[i]);
+    const i = (lightboxIndex - 1 + paginated.length) % paginated.length;
+    setLightboxIndex(i); setLightboxPhoto(paginated[i]);
   }
   function nextPhoto() {
-    const i = (lightboxIndex + 1) % currentAlbumPhotos.length;
-    setLightboxIndex(i); setLightboxPhoto(currentAlbumPhotos[i]);
-  }
-
-  if (albumList.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="h-16 w-16 rounded-full bg-neutral-100 flex items-center justify-center mb-4">
-          <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" className="text-neutral-400">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-        </div>
-        <p className="text-neutral-950 text-base font-medium">No photos yet</p>
-        <p className="text-slate-500 text-sm mt-1 max-w-xs">Photos will appear here once contributors have submitted and the memorial has been generated.</p>
-      </div>
-    );
-  }
-
-  if (!openAlbum) {
-    return (
-      <div>
-        <div className="mb-4 flex items-center justify-between">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Albums</p>
-          <div className="flex items-center gap-2 text-slate-400">
-            <button className="p-1 hover:text-neutral-950">
-              <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-            </button>
-            <span className="text-xs">1/{albumList.length}</span>
-            <button className="p-1 hover:text-neutral-950">
-              <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-            </button>
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          {albumList.map((album, i) => (
-            <button key={i}
-              onClick={() => setOpenAlbum(openAlbum?.album_name === album.album_name ? null : album)}
-              className={`group rounded-2xl border p-4 text-left transition-colors ${
-                openAlbum?.album_name === album.album_name
-                  ? 'border-neutral-950 bg-neutral-50'
-                  : 'border-neutral-200 bg-white hover:border-neutral-300'
-              }`}>
-              <div className="aspect-square overflow-hidden rounded-xl bg-neutral-100 mb-3">
-                {album.photos?.[0]?.url
-                  ? <img src={album.photos[0].url} alt={album.album_name} className="h-full w-full object-cover" />
-                  : <div className="h-full w-full bg-neutral-200 flex items-center justify-center"><span className="text-neutral-400 text-xs text-center px-2">{album.album_name}</span></div>}
-              </div>
-              <p className="text-xs font-medium text-neutral-950 leading-snug">{album.album_name}</p>
-            </button>
-          ))}
-        </div>
-      </div>
-    );
+    const i = (lightboxIndex + 1) % paginated.length;
+    setLightboxIndex(i); setLightboxPhoto(paginated[i]);
   }
 
   return (
-    <div>
-      <button onClick={() => setOpenAlbum(null)}
-        className="mb-6 flex items-center gap-1.5 text-sm text-slate-500 hover:text-neutral-950 transition-colors">
-        <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-        </svg>
-        All albums
-      </button>
-      <h2 className="text-xl font-medium text-neutral-950 mb-1">{openAlbum.album_name}</h2>
-      <p className="text-sm text-slate-500 mb-6">{openAlbum.photos?.length || 0} photos</p>
-      <div className="grid grid-cols-3 gap-3">
-        {openAlbum.photos?.map((photo, index) => (
-          <button key={photo.id} onClick={() => openLightbox(photo, index)}
-            className="group relative aspect-square overflow-hidden rounded-xl bg-neutral-100">
-            {photo.url
-              ? <img src={photo.url} alt="" className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
-              : <div className="h-full w-full bg-neutral-200" />}
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors duration-200 flex items-end p-2 opacity-0 group-hover:opacity-100">
-              <div className="w-full">
-                {photo.caption && <p className="text-white text-xs font-semibold truncate">{photo.caption}</p>}
-                {photo.contributor_name && <p className="text-white text-xs font-medium truncate">{photo.contributor_name}</p>}
-                {photo.taken_at && <p className="text-white/70 text-xs">{new Date(photo.taken_at).getFullYear()}</p>}
-              </div>
-            </div>
+    <div className="flex flex-col gap-5 pt-4">
+
+      {/* Top bar — title + generate + pagination */}
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="text-[36px] font-medium italic text-neutral-950" style={{ fontFamily: 'var(--font-boska, serif)' }}>
+          All photos
+        </h2>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onGenerate}
+            disabled={!canGenerate || generating}
+            className="rounded-full px-6 py-[14px] text-base text-neutral-950 transition-opacity hover:opacity-80 disabled:opacity-45 disabled:cursor-not-allowed border-none"
+            style={{ backgroundColor: 'var(--color-r-btn)' }}
+          >
+            {generating ? 'Generating…' : 'Generate'}
           </button>
-        ))}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="transition-opacity hover:opacity-70 disabled:opacity-30"
+              aria-label="Previous page"
+            >
+              <svg width="25" height="50" viewBox="0 0 25 50" fill="none">
+                <path fillRule="evenodd" clipRule="evenodd"
+                  d="M3.83906 26.4813L15.6245 38.2667L18.5703 35.3208L8.25781 25.0083L18.5703 14.6958L15.6245 11.75L3.83906 23.5354C3.4485 23.9261 3.22909 24.4559 3.22909 25.0083C3.22909 25.5608 3.4485 26.0906 3.83906 26.4813Z"
+                  fill="#423F39"/>
+              </svg>
+            </button>
+            <span className="text-2xl font-medium text-neutral-950 min-w-[48px] text-center"
+              style={{ fontFamily: 'var(--font-boska, serif)' }}>
+              {page} {page}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="transition-opacity hover:opacity-70 disabled:opacity-30"
+              aria-label="Next page"
+            >
+              <svg width="25" height="50" viewBox="0 0 25 50" fill="none">
+                <path fillRule="evenodd" clipRule="evenodd"
+                  d="M21.1609 26.4813L9.37552 38.2667L6.42969 35.3208L16.7422 25.0083L6.42969 14.6958L9.37552 11.75L21.1609 23.5354C21.5515 23.9261 21.7709 24.4559 21.7709 25.0083C21.7709 25.5608 21.5515 26.0906 21.1609 26.4813Z"
+                  fill="#423F39"/>
+              </svg>
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* Filter row */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="relative flex-1 max-w-[434px]">
+          <select
+            value={filterContributor}
+            onChange={(e) => { setFilterContributor(e.target.value); setPage(1); }}
+            className="w-full appearance-none rounded-[12.7px] border border-neutral-200 px-5 py-4 pr-12 text-xl font-medium text-neutral-950 bg-transparent focus:outline-none cursor-pointer"
+            style={{ fontFamily: 'var(--font-boska, serif)' }}
+          >
+            <option value="all">All photos</option>
+            {contributors.filter((c) => c !== 'all').map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2">
+            <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+              <path d="M15 30L2.00962 7.5L27.9904 7.5L15 30Z" fill="#423F39" />
+            </svg>
+          </span>
+        </div>
+        <div className="relative w-[207px]">
+          <select
+            value={sortOrder}
+            onChange={(e) => { setSortOrder(e.target.value); setPage(1); }}
+            className="w-full appearance-none rounded-[12.7px] border border-neutral-200 px-5 py-4 pr-12 text-xl font-medium text-neutral-950 bg-transparent focus:outline-none cursor-pointer"
+            style={{ fontFamily: 'var(--font-boska, serif)' }}
+          >
+            <option value="newest">Sort</option>
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+          </select>
+          <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2">
+            <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+              <path d="M15 30L2.00962 7.5L27.9904 7.5L15 30Z" fill="#423F39" />
+            </svg>
+          </span>
+        </div>
+      </div>
+
+      {/* Photo grid */}
+      {paginated.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <p className="text-base font-medium text-neutral-950">No photos yet</p>
+          <p className="text-sm text-slate-500 mt-1 max-w-xs">
+            Photos will appear here once contributors have submitted and the memorial has been generated.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-5">
+          {paginated.map((photo, index) => (
+            <button
+              key={photo.id || index}
+              onClick={() => openLightbox(photo, index)}
+              className="group relative w-full overflow-hidden rounded-none bg-neutral-100"
+              style={{ aspectRatio: '4/3' }}
+            >
+              {photo.url ? (
+                <img src={photo.url} alt={photo.caption || ''}
+                  className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+              ) : (
+                <div className="h-full w-full bg-neutral-200" />
+              )}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors duration-200 flex items-end p-3 opacity-0 group-hover:opacity-100">
+                <div className="w-full">
+                  {photo.caption && <p className="text-white text-xs font-semibold truncate">{photo.caption}</p>}
+                  {photo.contributor_name && <p className="text-white text-xs truncate">{photo.contributor_name}</p>}
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
       {lightboxPhoto && (
         <Lightbox photo={lightboxPhoto} onClose={() => setLightboxPhoto(null)} onPrev={prevPhoto} onNext={nextPhoto} />
       )}
@@ -595,9 +661,14 @@ function OutputsTab({memorial, contributors, canGenerate, disabledMessage, gener
       <CollapsibleSection title="Voices">
         <VoicesTab output={output} voices={output?.voices} />
       </CollapsibleSection>
-      <CollapsibleSection title="All Photos" defaultOpen={true}>
-        <AllPhotosSection albums={output?.photos} />
-      </CollapsibleSection>
+      <div className="pt-2 border-t border-neutral-100">
+        <AllPhotosSection
+          albums={output?.photos}
+          onGenerate={onGenerate}
+          generating={generating}
+          canGenerate={canGenerate}
+        />
+      </div>
     </div>
   );
 }
