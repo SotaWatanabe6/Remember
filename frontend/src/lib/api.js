@@ -13,10 +13,12 @@ import { mockMemorials } from "@/data/mockMemorials.js";
 import { getSupabaseClient } from "@/lib/supabaseClient.js";
 import { normalizeShareUrl } from "@/lib/copyToClipboard.js";
 import { getStore } from "@/lib/contributionStore";
+import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS } from "@/lib/contribute/questionnaireQuestions.js";
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 const MOCK_DELAY = 500;
 const MOCK_INVITE_TOKEN = 'mock_invite_abc123';
+const CONTRIBUTOR_QUESTION_IDS = new Set(CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.map((question) => question.id));
 
 // API base URL — reads from env for production, falls back to localhost for dev
 // Set NEXT_PUBLIC_API_URL in Vercel dashboard for production deployment
@@ -1462,6 +1464,7 @@ export async function getContributorSummary(token) {
   const responsesByContributor = readStoredResponses(token);
   const contributorResponses = contributorId ? responsesByContributor[contributorId] ?? {} : {};
   const responses = Object.values(contributorResponses)
+    .filter((r) => CONTRIBUTOR_QUESTION_IDS.has(r.question_id))
     .sort((a, b) => (a.question_order ?? 0) - (b.question_order ?? 0))
     .map((r) => ({
       question_text: r.question_text || r.question_id || 'Question',
