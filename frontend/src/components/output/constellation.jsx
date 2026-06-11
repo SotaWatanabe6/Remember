@@ -193,11 +193,12 @@ export default function ConstellationGraph({
   const [hiddenThemes, setHiddenThemes] = useState({});
   const [currentPage, setCurrentPage] = useState("Viewer");
   useEffect(() => {
+    console.log(pathname);
     if (pathname.includes("output")){
       setCurrentPage("Viewer");
     }
     else {
-      setCurrentPage("Manage");
+      setCurrentPage("Organizer");
     }
   },[currentPage, pathname]);
 
@@ -308,7 +309,7 @@ export default function ConstellationGraph({
   }
 
   useEffect(() => {
-    if (!graphNodes || graphNodes.length === 0) return;
+    if (!graphNodes) return;
     if (!graphLinks) return;
     if (!tab) return;
     if (!hiddenRelationshipType) return;
@@ -418,10 +419,13 @@ export default function ConstellationGraph({
         .on("drag", dragged)
         .on("end", dragEnded)
     )
-    .style("cursor", "pointer")
-    .on("click", (_, d) => {
-      setSelectedNode(d);
-    });
+    .style("cursor", "pointer");
+    console.log(currentPage);
+    if (currentPage=="Viewer"){
+      node.on("click", (_, d) => {
+          setSelectedNode(d);
+      });
+    }
     function truncate(text, maxLength = 10) {
       return text.length > maxLength
         ? text.slice(0, maxLength) + "..."
@@ -482,12 +486,12 @@ export default function ConstellationGraph({
     }
 
     return () => simulation.stop();
-  }, [graphNodes, graphLinks, hiddenRelationshipType, hiddenContributors, hiddenThemes, tab, width, height, memorial?.id]);
+  }, [graphNodes, graphLinks, hiddenRelationshipType, hiddenContributors, hiddenThemes, tab, currentPage,selectedNode]);
 
   return (
     <div>
       {
-        currentPage === "Manage" ? (
+        currentPage === "Organizer" ? (
           <div className="mb-6">
             <select
               value={tab}
@@ -508,107 +512,140 @@ export default function ConstellationGraph({
             </h2>        
           </div> 
         ) : (
-        <div className="flex justify-between items-center px-15 pt-8">
-          <div className="flex gap-10 cursor-pointer text-lg">
-            <button className={tab==="Themes" ? "text-[#3c3c3c] border-[#3c3c3c] border-b pb-2" : "text-[#8a8a8a] border-[#8a8a8a] border-b pb-2"}
-              onClick={() => setTab("Themes")}
-            >
-              Themes
-            </button>
+        <div>
+          <div className="flex justify-between items-center px-15 pt-8">
+            <div className="flex gap-10 cursor-pointer text-lg">
+              <button className={tab==="Themes" ? "text-[#3c3c3c] border-[#3c3c3c] border-b pb-2" : "text-[#8a8a8a] border-[#8a8a8a] border-b pb-2"}
+                onClick={() => setTab("Themes")}
+              >
+                Themes
+              </button>
 
-            <button className={tab==="Relationships" ? "text-[#3c3c3c] border-[#3c3c3c] border-b pb-2" : "text-[#8a8a8a] border-[#8a8a8a] border-b pb-2"}
-              onClick={() => setTab("Relationships")}
-            >
-              Relationships
-            </button>
+              <button className={tab==="Relationships" ? "text-[#3c3c3c] border-[#3c3c3c] border-b pb-2" : "text-[#8a8a8a] border-[#8a8a8a] border-b pb-2"}
+                onClick={() => setTab("Relationships")}
+              >
+                Relationships
+              </button>
+            </div>
+            <select className="border border-[#c8beb0] bg-[#faf7f2] rounded-md px-4 py-2">
+              <option>Sort</option>
+              <option>Name</option>
+              <option>Date</option>
+            </select>
           </div>
-          <select className="border border-[#c8beb0] bg-[#faf7f2] rounded-md px-4 py-2">
-            <option>Sort</option>
-            <option>Name</option>
-            <option>Date</option>
-          </select>
+
         </div>
-        ) 
+        )
       }
-        {selectedNode ? (
-          <div className="bg-[#F2EEE8] relative h-full w-full pt-10">
-            { themes ? 
-              (
-                <div className="flex px-15 py-8 gap-10">
-                  {/* Sidebar */}
-                  <aside className="w-48 pt-28">
-                    <h1 className="text-5xl font-serif font-semibold mb-8">
-                      {selectedNode.name || selectedNode.label}
-                    </h1>
+      { 
+        selectedNode!=null ? (
+        <div className="bg-[#F2EEE8] relative h-full w-full pt-10">
+          { themes ? 
+            (
+              <div className="flex items-center justify-center px-10 py-8 gap-20">
+                {/* Sidebar */}
+                <aside className="w-48 pt-28">
+                  <h1 className="text-5xl font-serif font-semibold mb-8">
+                    {selectedNode.name || selectedNode.label}
+                  </h1>
 
-                    <button 
-                      className="bg-[#cbbca8] hover:bg-[#bca992] transition px-6 py-3 rounded-full text-sm"
-                      onClick={() => { setThemes(null)}}
-                    >
-                      Back to themes
-                    </button>
-                  </aside>
+                  <button 
+                    className="bg-[#cbbca8] hover:bg-[#bca992] transition px-6 py-3 rounded-full text-sm"
+                    onClick={() => { setThemes(null)}}
+                  >
+                    Back to themes
+                  </button>
+                </aside>
 
-                  {/* Content Panel */}
-                  <section className="flex-1">
-                    <div className="bg-[#f8f4ef] border border-[#c8beb0] rounded-lg p-6 h-[full] overflow-y-auto">
-                      {/* Card 1 */}
-                      <div className="bg-[#cdbfae] h-40 rounded-sm mb-4"></div>
-
-                      {/* Card 2 */}
-                      <div className="bg-[#cdbfae] h-72 rounded-sm"></div>
-                    </div>
-                  </section>
-                </div>              
-              ) : (
-              <section className="relative max-w-7xl mx-auto px-8 py-16">
-                <button 
-                  className="absolute top-8 right-8 text-4xl text-[#4A443E] cursor-pointer"
-                  onClick={() => setSelectedNode(null)}
-                >
-                  x
-                </button>
-
-                <div className="flex flex-col lg:flex-row items-center gap-8 ml-[80px]">
-                  {/* Left Side */}
-                    <div className="relative flex items-center">
-                    {/* Horizontal Line */}
-                      <div className="w-[140px] h-[2px] bg-[#75835F]" />
-                      {/* Circle Image */}
-                      <div className="w-[260px] h-[260px] rounded-full border border-[#75835F] overflow-hidden bg-gray-100 flex items-center justify-center">
-                        <img
-                          src="/placeholder.png"
-                          alt="Theme"
-                          className="w-full h-full object-cover"
-                        />
+                {/* Content Panel */}
+                <section>
+                    <div className="bg-[#f8f4ef] border border-[#c8beb0] w-[640px] rounded-lg p-6 overflow-y-auto">
+                      <div className="space-y-4 pr-2">
+                        {(selectedNode?.photo_urls?.length ? selectedNode.photo_urls : []).slice(0, 4).map((photoUrl, photoIndex) => (
+                          <div key={`${selectedNode.id}-photo-${photoIndex}`} className="h-[160px] overflow-hidden rounded bg-[#dddddd]">
+                            {photoUrl ? (
+                              <img
+                                src={photoUrl}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            ) : null}
+                          </div>
+                        ))}
+                        {!selectedNode?.photo_urls?.length ? (
+                            <div className="bg-[#f8f4ef] p-6">
+                              <div className="bg-[#cdbfae] h-40 rounded-sm mb-4"></div>
+                              <div className="bg-[#cdbfae] h-72 rounded-sm"></div>
+                            </div>
+                        ) : null}
                       </div>
                     </div>
+                </section>
+              </div>              
+            ) : (
+            <section className="relative max-w-7xl mx-auto px-8 py-16">
+              <button 
+                className="absolute top-8 right-8 text-4xl text-[#4A443E] cursor-pointer"
+                onClick={() => setSelectedNode(null)}
+              >
+                x
+              </button>
 
-                    {/* Content */}
-                    <div className="max-w-md">
-                      <h1 className="text-5xl font-serif text-[#4A443E] mb-6">
-                        {selectedNode.name || selectedNode.label}
-                      </h1>
-
-                      <p className="text-[#6B655F] leading-relaxed mb-12">
-                        {selectedNode.summary || "No summary available for this theme."}
-                      </p>
-
-                      <button 
-                        className="bg-[#D2C2AA] hover:bg-[#C7B499] transition-colors px-10 py-4 rounded-full text-[#4A443E]"
-                        onClick={() => {
-                          setThemes(selectedNode.id);
-                        }}
-                      >
-                        View all
-                      </button>
+              <div className="flex flex-col lg:flex-row items-center gap-8 ml-[80px]">
+                  <div className="relative flex items-center">
+                    <div className="w-[140px] h-[2px] bg-[#75835F]" />
+                    <div className="w-[260px] h-[260px] rounded-full border border-[#75835F] overflow-hidden bg-gray-100 flex items-center justify-center">
+                      <img
+                        src="/placeholder.png"
+                        alt="Theme"
+                        className="w-full h-full object-cover"
+                      />
                     </div>
-                </div>
-              </section>
-              )
-            }            
-          </div>     
-        ):    
+                  </div>
+                  {
+                    tab === "Themes" ? (
+                      <div className="max-w-md">
+                        <h1 className="text-5xl font-serif text-[#4A443E] mb-6">
+                          {selectedNode.name || selectedNode.label}
+                        </h1>
+                        <p className="text-[#6B655F] leading-relaxed mb-12">
+                          {selectedNode.summary || "No summary available for this theme."}
+                        </p>
+                        <button 
+                          className="bg-[#D2C2AA] hover:bg-[#C7B499] transition-colors px-10 py-4 rounded-full text-[#4A443E]"
+                          onClick={() => {
+                            setThemes(selectedNode.id);
+                          }}
+                        >
+                          View all
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="max-w-md">
+                        <h1 className="font-serif text-3xl font-semibold text-stone-800 mb-5 tracking-tight">
+                          {selectedNode.name || selectedNode.label}
+                        </h1>                  
+                        <p className="font-serif text-xl italic text-stone-700 leading-snug mb-5">
+                          &ldquo;{selectedNode.quote || "No quote available for this contributor."}.&rdquo;
+                        </p>
+                        <p className="text-sm text-stone-600 leading-relaxed mb-7 font-sans">
+                          {selectedNode.summary || "No summary available for this contributor."}
+                        </p>
+                        <button 
+                          className="transition-colors px-10 py-4 rounded-full text-[#4A443E]"
+                          style={{ backgroundColor: categoriesColor[selectedNode.relationship_type] || "#b1bc93" }}
+                        >
+                          {selectedNode.relationship_type}
+                        </button>
+                      </div>                        
+                    )
+                  }
+              </div>
+            </section>
+            )
+          }            
+        </div>     
+      ) : (
         <div className="relative h-full w-full rounded-sm p-10">        
           <svg ref={ref} ></svg>
           {tab === "Relationships" &&  (
@@ -624,8 +661,8 @@ export default function ConstellationGraph({
                       // </div>
                       <li key={index} className="flex items-center gap-3">
                         <span
-                          className={`w-6 h-6 rounded-md flex-shrink-0 bg-[${categoriesColor[item.relationship_type]}]`}
-                          aria-hidden="true"
+                          className={"w-6 h-6 rounded-md flex-shrink-0 "}
+                          style={{ backgroundColor: categoriesColor[item.relationship_type] }}
                         />
                         <span className="text-sm text-[#6B5748] font-medium">{item.relationship_type == "null" ? "No relationship type" : item.relationship_type}</span>
                       </li>                      
@@ -635,9 +672,10 @@ export default function ConstellationGraph({
               </ul>
           </div>)}
         </div>
-      }
+      )
+    }      
       {
-        currentPage === "Manage" && (
+        currentPage === "Organizer" && (
         <div>
           {tab === "Themes" &&  (
           <div>
@@ -678,10 +716,10 @@ export default function ConstellationGraph({
                           {(item?.photo_urls?.length ?? item?.contributions ?? 0)} tagged photo{(item?.photo_urls?.length ?? item?.contributions ?? 0) === 1 ? '' : 's'}
                         </p>
                       </div>
-                      <div className="w-[240px] h-full overflow-y-auto rounded-sm bg-transparent lg:w-[430px]">
+                      <div className="flex-1 w-[240px] h-full rounded-sm lg:w-[430px]">
                         <div className="space-y-4 pr-2">
                           {(item?.photo_urls?.length ? item.photo_urls : []).slice(0, 4).map((photoUrl, photoIndex) => (
-                            <div key={`${item.id}-photo-${photoIndex}`} className="h-[160px] overflow-hidden rounded bg-[#dddddd]">
+                            <div key={`${item.id}-photo-${photoIndex}`} className="h-[160px] overflow-y-auto rounded bg-[#dddddd]">
                               {photoUrl ? (
                                 <img
                                   src={photoUrl}
