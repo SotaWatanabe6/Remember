@@ -363,7 +363,7 @@ export default function MemorialCreateForm() {
             type="text"
             value={remembered.nickName}
             onChange={updateField}
-            placeholder="Smith"
+            placeholder="Johnny"
             disabled={isSubmitting}
           />
         </div>
