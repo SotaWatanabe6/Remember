@@ -483,22 +483,24 @@ export async function getQuestionnaireResponses(inviteToken) {
     contributor_id: draft.session.contributorId,
     contributor_token: draft.session.contributorToken,
   });
+  const currentQuestionIds = new Set(CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.map((question) => question.id));
 
   return (result.responses ?? []).map((response) => {
     const questionIndex = Number.isFinite(Number(response.order_index))
       ? Number(response.order_index) - 1
       : Number(response.question_order) - 1;
     const question = CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS[questionIndex];
+    const questionId = response.question_id ?? question?.id ?? response.question_text;
 
     return {
       ...response,
-      question_id: response.question_id ?? question?.id ?? response.question_text,
+      question_id: questionId,
       question_order: response.question_order ?? response.order_index,
       answer_text: response.answer_text ?? response.response_text ?? "",
       input_mode: response.input_mode === "speech" ? "speech" : "text",
       saved_at: response.saved_at ?? response.updated_at ?? response.created_at ?? null,
     };
-  });
+  }).filter((response) => currentQuestionIds.has(response.question_id));
 }
 export async function getMemorialContributors(memorialId, token) {
   if (!memorialId) throw new Error("memorialId is required");
