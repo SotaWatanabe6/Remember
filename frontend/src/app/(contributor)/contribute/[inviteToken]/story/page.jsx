@@ -116,10 +116,10 @@ export default function StoryPage() {
 
   async function handleContinue() {
     if (listening) toggleMic();
-    if (!title.trim() && !body.trim()) {
-      setError('Please add a title or write something before continuing.');
-      return;
-    }
+    // if (!title.trim() && !body.trim()) {
+    //   setError('Please add a title or write something before continuing.');
+    //   return;
+    // }
     setSaving(true);
     setError('');
     try {
@@ -147,7 +147,7 @@ export default function StoryPage() {
   return (
     <main className="min-h-screen bg-r-bg text-r-text flex flex-col">
 
-      <ContributorNav backHref={`/contribute/${inviteToken}/upload`} />
+      <ContributorNav backHref={`/contribute/${inviteToken}/voice`} />
 
       <div className="flex-1 flex flex-col items-center px-6 sm:px-[50px] pb-16 gap-16 sm:gap-24 mt-6 sm:mt-10">
 
@@ -273,13 +273,25 @@ export default function StoryPage() {
         </div>
 
         {/* Continue button */}
-        <button
-          onClick={handleContinue}
-          disabled={saving}
-          className="w-full max-w-[434px] rounded-full py-[18px] px-8 text-body-2 font-medium tracking-wide transition-opacity hover:opacity-80 active:opacity-70 disabled:opacity-50 bg-r-btn text-r-btn-text border-none"
-        >
-          {saving ? 'Saving…' : 'Continue'}
-        </button>
+        <div className="w-full max-w-[434px] flex flex-col gap-3">
+          <button
+            onClick={handleContinue}
+            disabled={saving}
+            className="w-full rounded-full py-[18px] px-8 text-body-2 font-medium tracking-wide transition-opacity hover:opacity-80 active:opacity-70 disabled:opacity-50 bg-r-btn text-r-btn-text border-none"
+          >
+            {saving ? 'Saving…' : 'Continue'}
+          </button>
+          {!title.trim() && !body.trim() && (
+            <button
+              onClick={() => router.push(`/contribute/${inviteToken}/review`)}
+              className="w-full py-3 text-caption transition-colors text-r-muted"
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-r-text)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-r-muted)'; }}
+            >
+              Skip - I don&apos;t have a story to share
+            </button>
+          )}
+        </div>
 
       </div>
     </main>

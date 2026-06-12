@@ -306,7 +306,7 @@ export function ContributorOnboardingBrief({ inviteToken }) {
         <PrimaryContributorButton
           type="button"
           className="mt-[100px] max-sm:mt-16"
-          onClick={() => router.push(`/contribute/${inviteToken}/public-contributor`)}
+          onClick={() => router.push(`/contribute/${inviteToken}/privacy`)}
         >
           Continue
         </PrimaryContributorButton>
@@ -352,7 +352,7 @@ export function PublicContributorPage({ inviteToken }) {
     setSubmitError("");
 
     try {
-      await beginContributorDraft(inviteToken, trimmedContributorName);
+      const result = await beginContributorDraft(inviteToken, trimmedContributorName);
 
       try {
         const sessionKey = `remember_contributor_session:${inviteToken}`;
@@ -361,6 +361,8 @@ export function PublicContributorPage({ inviteToken }) {
           sessionKey,
           JSON.stringify({
             ...existing,
+            contributorId: result?.contributorId ?? existing.contributorId ?? "",
+            contributorToken: result?.contributorToken ?? existing.contributorToken ?? "",
             contributorName: trimmedContributorName,
             display_name: trimmedContributorName,
             is_anonymous: false,
@@ -381,7 +383,7 @@ export function PublicContributorPage({ inviteToken }) {
   };
 
   return (
-    <ContributorPageShell backHref={`/contribute/${inviteToken}/onboarding`}>
+    <ContributorPageShell backHref={`/contribute/${inviteToken}/privacy`}>
       <section className="mx-auto flex w-full max-w-[578px] flex-col items-center pt-[101px] max-sm:pt-16">
         <div className="flex flex-col items-center gap-5 text-center">
           <h1 className="[font-family:var(--font-family-display)] text-[40px] font-bold leading-[52px] text-r-text">

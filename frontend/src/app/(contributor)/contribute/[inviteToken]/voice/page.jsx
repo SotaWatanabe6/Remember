@@ -324,12 +324,12 @@ export default function VoicePage() {
           )}
 
           <div className="flex flex-col gap-3">
-            <button onClick={() => router.push(`/contribute/${inviteToken}/review`)} disabled={uploading}
+            <button onClick={() => router.push(`/contribute/${inviteToken}/story`)} disabled={uploading}
               className="w-full rounded-full py-4 text-body-2 font-medium tracking-wide transition-opacity hover:opacity-80 active:opacity-70 disabled:opacity-55 bg-r-btn text-r-btn-text border-none">
               Continue
             </button>
             {recordings.length === 0 && (
-              <button onClick={() => router.push(`/contribute/${inviteToken}/review`)}
+              <button onClick={() => router.push(`/contribute/${inviteToken}/story`)}
                 className="w-full py-3 text-caption transition-colors text-r-muted"
                 onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-r-text)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-r-muted)'; }}>

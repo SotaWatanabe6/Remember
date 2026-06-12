@@ -158,8 +158,10 @@ function PhotoThumb({ asset, onDelete, onEdit, uploading, onPreviewError }) {
       )}
 
       {uploading ? (
-        <div className="absolute inset-x-0 bottom-0 h-1 bg-r-border">
-          <div className="h-full w-1/2 animate-pulse rounded-full" style={{ backgroundColor: 'var(--color-r-accent)' }} />
+        <div className="absolute inset-x-0 bottom-0 flex items-center justify-center px-3 pb-3">
+          <div className="h-1.5 w-full rounded-full bg-white/60 overflow-hidden">
+            <div className="h-full w-1/2 animate-pulse rounded-full" style={{ backgroundColor: 'var(--color-r-accent)' }} />
+          </div>
         </div>
       ) : null}
 
