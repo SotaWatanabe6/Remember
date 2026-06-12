@@ -892,13 +892,15 @@ async function composeStorySlideshow({
         role: 'user',
         content: `Compose a cinematic, biographical slideshow for ${subjectName}.
 
+
+
 MULTI-CONTRIBUTOR NARRATIVE (critical):
 - Multiple people may have answered the same memorial questionnaire. Read ALL contributor responses below and weave them into ONE seamless film from the introduction through the closing slide — not separate mini-stories per person.
 - Draw from every contributor's answers across the full slideshow: the intro and early chapters can foreshadow themes that later chapters and the closing deepen; the final slides should feel like a natural conclusion to threads introduced earlier.
 - Synthesize the strongest, non-redundant details from each contributor. Do not repeat the same memory on multiple slides unless it clearly belongs in two different life moments.
 - When several contributors describe the same habit, value, or relationship, merge those voices into unified third-person prose rather than attributing each line to one person.
 - Pull from all contributor's questionnaire answers when they fit a slide's era or theme — not only one contributor's block of answers.
-
+- Do not use jargon, Do not use fluffy language - use middle school to high school language and the viewer should feel like the description is genuine and gets a sense of warmth when reading it
 This is ONE cohesive film. Multiple contributors may have answered the same memorial questionnaire on the same link — synthesize everyone's memories into a single masterpiece. Do not create parallel stories per person; weave the strongest, non-redundant details from each contributor into shared chapters and perspective beats.
 
 STRUCTURE (follow order_index in this order):
@@ -908,19 +910,20 @@ STRUCTURE (follow order_index in this order):
    - Third person only ("${subjectName} was born...", never "your grandmother" or other viewer-directed pronouns).
    - Memorial facts: ${memorialFacts || '(limited — use only what contributors wrote)'}
 
-2. LIFE CHAPTERS — at least 4 and up to 6 chapters from questionnaire themes (hobbies, career, family, daily life, humor, traditions). Never fewer than 4 chapters when enough source material exists:
+2. LIFE CHAPTERS — at least 4 and up to 6 chapters from questionnaire themes (hobbies, career, family, daily life, humor, traditions, unique stories, proud moments, how they made others feel). Never fewer than 4 chapters when enough source material exists: 
    For EACH chapter:
-   a) Photo slides (slide_type: "photo") for that era — draw from the photo catalog in chronological order (youngest → oldest). Each catalog photo used ONCE across the entire slideshow.
-      - narration: 1–2 sentences in third person setting the chapter.
-      - photo_description: vivid cinematic description of what we see (from vision analysis).
+   b) Photo slides for that era — draw from the photo catalog in chronological order (youngest → oldest). Each catalog photo used ONCE across the entire slideshow.
+      - ONE chapter opener narration: 1–2 sentences in third person setting the chapter.
       - narration: how this moment fits ${subjectName}'s life, drawing from contributor memories when relevant.
       - matched_quote: optional short contributor phrase (max 22 words) when it clearly fits.
+   c) ONE perspective slide  
       - narration begins with an audience frame like "To her grandchildren, ${subjectName} was..." or "To those who worked alongside her, ${subjectName} was..."
-      - 2–4 sentences synthesizing what contributors in that relationship group shared. Third person throughout. Make sure this description is written on the actual pictures and not made as an additional slide. 
-
+      - 2–4 sentences synthesizing what contributors in that relationship group shared. Third person throughout. Make sure this description is written on the actual pictures and not made as an additional slide.
 
 3. CLOSING — exactly ONE slide (slide_type: "closing", photo_id: null)
+   - in rememberence of ${subjectName}
    - Final reflective beat. Quiet, warm, forward-looking. Third person.
+
 
 VOICE RULES:
 - ALWAYS third person: "${subjectName} was...", she/he/they — NEVER "you", "your", or viewer-specific pronouns.
