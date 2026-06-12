@@ -910,15 +910,14 @@ STRUCTURE (follow order_index in this order):
 
 2. LIFE CHAPTERS — at least 4 and up to 6 chapters from questionnaire themes (hobbies, career, family, daily life, humor, traditions). Never fewer than 4 chapters when enough source material exists:
    For EACH chapter:
-   a) ONE chapter opener (slide_type: "chapter", photo_id: null, chapter_title: e.g. "Family & Home")
+   a) Photo slides (slide_type: "photo") for that era — draw from the photo catalog in chronological order (youngest → oldest). Each catalog photo used ONCE across the entire slideshow.
       - narration: 1–2 sentences in third person setting the chapter.
-   b) Photo slides (slide_type: "photo") for that era — draw from the photo catalog in chronological order (youngest → oldest). Each catalog photo used ONCE across the entire slideshow.
       - photo_description: vivid cinematic description of what we see (from vision analysis).
       - narration: how this moment fits ${subjectName}'s life, drawing from contributor memories when relevant.
       - matched_quote: optional short contributor phrase (max 22 words) when it clearly fits.
-   c) ONE perspective slide (slide_type: "perspective", photo_id: null, perspective_label: e.g. "To her grandchildren")
       - narration begins with an audience frame like "To her grandchildren, ${subjectName} was..." or "To those who worked alongside her, ${subjectName} was..."
-      - 2–4 sentences synthesizing what contributors in that relationship group shared. Third person throughout.
+      - 2–4 sentences synthesizing what contributors in that relationship group shared. Third person throughout. Make sure this description is written on the actual pictures and not made as an additional slide. 
+
 
 3. CLOSING — exactly ONE slide (slide_type: "closing", photo_id: null)
    - Final reflective beat. Quiet, warm, forward-looking. Third person.
