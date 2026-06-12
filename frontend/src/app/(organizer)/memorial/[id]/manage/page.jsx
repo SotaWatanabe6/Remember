@@ -648,7 +648,7 @@ function OutputsTab({memorial, contributors, canGenerate, disabledMessage, gener
         <StorySlideshow output={output} story={output?.story} />
       </CollapsibleSection>
       <CollapsibleSection title="Constellation">
-        <div className="rounded-2xl border border-neutral-100 bg-neutral-50 p-6 aspect-video flex items-center justify-center">
+        <div className="rounded-2xl border border-neutral-100 bg-r-bg py-6 flex items-center justify-center">
           <ConstellationGraph
             ai_output={output}
             memorial={memorial}

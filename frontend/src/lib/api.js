@@ -693,6 +693,27 @@ export async function getContributors(memorialId) {
   }
 }
 
+/**
+ * GET /contribute/:contributorid/photos
+ * Returns all contributors photos for a memorial. Protected.
+ * Used by Mendrika's viewer page.
+ * TODO: Replace with real fetch() on Day 9.
+ */
+export async function getContributorsPhotos(contributorId) {
+  try {
+    const token = await getAuthToken();
+    const response = await fetch(`${API_URL}/contribute/${encodeURIComponent(contributorId)}/photoUrls`, {
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error('Failed to fetch photos from contributor');
+    return response.json();
+  } catch {
+    // Fallback to mock — prevents constellation page from crashing
+    await delay(MOCK_DELAY);
+    return { contributors: MOCK_CONTRIBUTORS };
+  }
+}
+
 // ─── TEAM: SHARE LINK (confirm owner with team) ───────────────────────────────
 
 /**

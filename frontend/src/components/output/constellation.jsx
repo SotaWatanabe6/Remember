@@ -7,7 +7,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
-
+import { getContributorsPhotos } from "@/lib/api"
 function capitalizeFirstLetter(str) {
   if (!str || str === 'null') return str;
   return str.charAt(0).toUpperCase() + str.slice(1);
@@ -121,16 +121,41 @@ function PulsingPlaceholder() {
   );
 }
 
+const familyRelationship = [
+  "Parent",
+  "Child",
+  "Sibling",
+  "Partner",
+  "Spouse",
+  "Aunt",
+  "Uncle",
+  "Grandparent",
+  "Grandchild",
+  "Extended"
+]
+const otherRelationship = [
+  "Other",
+  "Friend",
+  "Colleague",
+  "Classmate",
+  "Neighbor",
+  "Community"
+]
+
+
 function buildRelationshipCounts(contributors = []) {
   const counts = contributors.reduce((acc, contributor) => {
     const type = capitalizeFirstLetter(contributor.relationship_type) || 'Other';
     acc[type] = (acc[type] || 0) + 1;
     return acc;
   }, {});
-  return Object.entries(counts).map(([relationship_type, count]) => ({
+  const realtionships =  Object.entries(counts).map(([relationship_type, count]) => ({
     relationship_type,
     count,
   }));
+  const familyCounts = realtionships.filter(item => familyRelationship.includes(item.relationship_type));
+  const otherRelatedCounts = realtionships.filter(item => otherRelationship.includes(item.relationship_type));
+  return {familyCounts , otherRelatedCounts}
 }
 
 // Replace the entire buildRelationshipGraph function:
@@ -187,6 +212,7 @@ export default function ConstellationGraph({
   const [constellationLoading, setConstellationLoading] = useState(false);
   const [themes,setThemes] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
+  const [photoCarroussel, setPhotoCarroussel] = useState([]);
   const [tab, setTab] = useState("Themes");
   const [hiddenContributors, setHiddenContributors] = useState({});
   const [hiddenRelationshipType, setHiddenRelationshipType] = useState({});
@@ -196,11 +222,20 @@ export default function ConstellationGraph({
     console.log(pathname);
     if (pathname.includes("output")){
       setCurrentPage("Viewer");
+      loadPhotoContributor();
     }
     else {
       setCurrentPage("Organizer");
     }
-  },[currentPage, pathname]);
+    async function loadPhotoContributor() {
+      if (selectedNode) {      
+        console.log("This is node ",selectedNode);
+        const photos = await getContributorsPhotos(selectedNode.id);
+        console.log("This is photo ",photos.photos);
+        setPhotoCarroussel(photos.photos);
+      }
+    }
+  },[currentPage, pathname,selectedNode]);
 
   const handleThemesChange = (nodeId) => {
     setHiddenThemes((prev) => ({
@@ -224,7 +259,7 @@ export default function ConstellationGraph({
     }));
 
   };  
-  const relationshipCounts = buildRelationshipCounts(contributor || []);
+  const {familyCounts , otherRelatedCounts} = buildRelationshipCounts(contributor || []);
 
   const [nodes, setNodes] = useState(
       ai_output?.constellation?.nodes?.map(t => ({
@@ -249,13 +284,37 @@ export default function ConstellationGraph({
     })) || []
   );
   
+  const [indexPhoto, setIndexPhoto] = useState(0);
+  useEffect(() => {
+    if(photoCarroussel.length!=0){
+      const interval = setInterval(() => {
+        setIndexPhoto((prev) => (prev + 1) % photoCarroussel.length);
+      }, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [photoCarroussel]);
+
   const categoriesColor = {
+    "Partner": "#c65def",        
+    "Spouse": "#f6c4e5",       
+    "Uncle": "#A98F7A",        
+    "Grandparent": "#94de9b",  
+    "Grandchild": "#ffac6d",   
+    "Extended": "#C7B9A3",     
+    "Other": "#A7B0B7",        
+    "Classmate": "#7FA8C9",    
+    "Neighbor": "#7a9cea",      
     "Family": "#C8A99A" ,
     "Friend": "#D97B6C" ,
     "Colleague": "#8FAF82" ,
-    "Others": "#A8BFCF",
+    "Others": "#818b92",
     "Community": "#C9A08F",
-    "null": "#5cd6c6"
+    "Parent": "#75d270",
+    "Child": "#5961d3",
+    "Sibling": "#b0819a",
+    "Cousin": "#f6e54a",
+    "Aunt": "#e79947",
+    "Grandchildren": "#5cd6c6"
   };
   // Generate placeholder nodes for loading state
   const placeholderNodes = [...Array(8)].map((_, i) => ({
@@ -423,7 +482,7 @@ export default function ConstellationGraph({
     console.log(currentPage);
     if (currentPage=="Viewer"){
       node.on("click", (_, d) => {
-          setSelectedNode(d);
+          setSelectedNode(d);                   
       });
     }
     function truncate(text, maxLength = 10) {
@@ -595,11 +654,28 @@ export default function ConstellationGraph({
                   <div className="relative flex items-center">
                     <div className="w-[140px] h-[2px] bg-[#75835F]" />
                     <div className="w-[260px] h-[260px] rounded-full border border-[#75835F] overflow-hidden bg-gray-100 flex items-center justify-center">
-                      <img
-                        src="/placeholder.png"
-                        alt="Theme"
-                        className="w-full h-full object-cover"
-                      />
+                      <div
+                        className="flex transition-transform duration-500"
+                        style={{ transform: `translateX(-${indexPhoto*100}%)` }}
+                      >
+                        {photoCarroussel.map((src, i) => (
+                          <img
+                            key={i}
+                            src={src.photo_url}
+                            alt={`slide-${i}`}
+                            className="w-full flex-shrink-0 object-cover"
+                          />
+                        ))}                        
+                        {/* {
+                          photoCarroussel.length!=0 && (
+                            <img
+                              key={indexPhoto}
+                              src={photoCarroussel[indexPhoto].photo_url}
+                              className="w-full flex-shrink-0 object-cover"
+                            />
+                          )
+                        } */}
+                      </div>
                     </div>
                   </div>
                   {
@@ -646,28 +722,38 @@ export default function ConstellationGraph({
           }            
         </div>     
       ) : (
-        <div className="relative h-full w-full rounded-sm p-10">        
+        <div className={`relative h-full w-full rounded-sm p-10 ${currentPage === "Organizer" ? "bg-white border border-gray-300" : ""}`}>
+
           <svg ref={ref} ></svg>
           {tab === "Relationships" &&  (
-          <div className="absolute bottom-4 left-4 inline-flex flex-col gap-3 rounded-2xl bg-[#F5EDE6] px-6 py-5 shadow-sm">
+          <div className="absolute bottom-4 left-4 inline-flex flex-col gap-3 rounded-2xl border border-gray-300 bg-white px-6 py-5 shadow-sm">
               <h3 className="font-semibold text-[#5C4A3A] tracking-wide text-sm uppercase mb-1">Legend</h3>
               <ul className="flex flex-col gap-2.5">
                   {
-                    relationshipCounts.map((item, index) => {
-                    return (
-                      // <div key={index} className="flex items-center gap-2">
-                      //   <div className="h-3 w-3 rounded-sm bg-white" />
-                      //   <span>{item.relationship_type == "null" || item.relationship_type == undefined ? "No relationship type" : item.relationship_type}</span>
-                      // </div>
-                      <li key={index} className="flex items-center gap-3">
-                        <span
-                          className={"w-6 h-6 rounded-md flex-shrink-0 "}
-                          style={{ backgroundColor: categoriesColor[item.relationship_type] }}
-                        />
-                        <span className="text-sm text-[#6B5748] font-medium">{item.relationship_type == "null" ? "No relationship type" : item.relationship_type}</span>
-                      </li>                      
-                    );
+                    familyCounts.map((item, index) => {
+                      return (
+                        <li key={index} className="flex items-center gap-3">
+                          <span
+                            className={"w-6 h-6 rounded-md flex-shrink-0 "}
+                            style={{ backgroundColor: categoriesColor[item.relationship_type] }}
+                          />
+                          <span className="text-sm text-[#6B5748] font-medium">{item.relationship_type == "null" ? "No relationship type" : item.relationship_type}</span>
+                        </li>                      
+                      );
+                    })
                   }
+                  {
+                    otherRelatedCounts.map((item, index) => {
+                      return (
+                        <li key={index} className="flex items-center gap-3">
+                          <span
+                            className={"w-6 h-6 rounded-md flex-shrink-0 "}
+                            style={{ backgroundColor: categoriesColor[item.relationship_type] }}
+                          />
+                          <span className="text-sm text-[#6B5748] font-medium">{item.relationship_type == "null" ? "No relationship type" : item.relationship_type}</span>
+                        </li>                      
+                      );
+                    }
                 )}
               </ul>
           </div>)}
@@ -682,12 +768,12 @@ export default function ConstellationGraph({
             <h2 className="mt-8 mb-4 text-2xl font-serif italic">
               Themes
             </h2>        
-            <div className="bg-white p-4">
+            <div className="bg-[#f4f0ea] p-4">
                 <div className="space-y-4">
                   {nodes.map((item, index) => (
                     <div
                       key={index}
-                      className="h-[400px] border rounded-md p-4 flex gap-6 relative"
+                      className="h-[400px] border border-gray-300 rounded-md p-4 flex gap-6 relative"
                     >
                       {/* Checkbox */}
                       <label className="pt-1">
@@ -742,85 +828,67 @@ export default function ConstellationGraph({
             </div>      
           )}  
           {tab === "Relationships" &&  (  
-            <div>
-              <h2 className="mt-8 mb-4 text-2xl font-serif italic">
-                Relationships
-              </h2>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-[220px_1fr]">
-                {/* Filter */}
-                <div className="rounded border border-gray-300 bg-white p-4">
-                  <p className="mb-4 text-sm">Filter</p>
+              <div className="max-w-5xl">
+                  <h1 className="mb-6 mt-6 text-3xl italic font-serif text-gray-700">
+                    Relationships
+                  </h1>
 
-                  <div className="space-y-4 text-sm">
-                  {
-                    relationshipCounts.map((item, index) => {
-                      return (
-                      <label key={index} className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          defaultChecked                      
-                          onChange={() => handleRelationshipTypesChange(item.relationship_type)}                        
-                          className="
-                            h-4
-                            w-4
-                            cursor-pointer
-                            accent-black
-                          "
-                        />
-                        <span>{item.count} {item.relationship_type == "null" ? "No relationship type" : item.relationship_type}</span>
-                      </label>
-                      );
-                    }
-                    )
-                  }                
+                  <div className="rounded border border-gray-300 bg-[#f4f0ea] p-5">
+                    <p className="mb-4 text-sm text-gray-600">Filter</p>
+
+                    <div className="grid grid-cols-4 gap-10">
+                      {/* Family Column */}
+                      <div>
+                        <label className="flex items-center gap-2 text-gray-700">
+                          <input
+                            type="checkbox"
+                            defaultChecked
+                            className="h-4 w-4 accent-gray-700"
+                          />
+                          <span className="text-sm">
+                            <span className="mr-1 text-gray-500">{familyCounts.length}</span>
+                            Family
+                          </span>
+                        </label>
+
+                        <div className="mt-4 ml-6 space-y-3">
+                          {familyCounts.map((item,index) => (
+                            <label
+                              key={index}
+                              className="flex items-center gap-2 text-sm text-gray-600"
+                            >
+                              <input
+                                type="checkbox"
+                                defaultChecked
+                                onChange={() => handleRelationshipTypesChange(item.relationship_type)}                        
+                                className="h-4 w-4 accent-gray-700"
+                              />
+                              {item.count} {item.relationship_type}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Other Categories */}
+                      {otherRelatedCounts.slice(1).map((item,index) => (
+                        <div key={index}>
+                          <label className="flex items-center gap-2 text-gray-700">
+                            <input
+                              type="checkbox"
+                              defaultChecked
+                              onChange={() => handleRelationshipTypesChange(item.relationship_type)}                        
+                              className="h-4 w-4 accent-gray-700"
+                            />
+                            <span className="text-sm">
+                              <span className="mr-1 text-gray-500">{item.count}</span>
+                              {item.relationship_type == "null" ? "No relationship type" : item.relationship_type}
+                            </span>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
-
-                {/* Relationship Cards — one node per contributor */}
-                <div className="space-y-4">
-                  {!contributor?.length ? (
-                    <div className="rounded border border-gray-300 bg-white px-6 py-8 text-center text-sm text-gray-600">
-                      No contributors yet. Each person who completes the invite link will appear here
-                      with the relationship they selected in the questionnaire.
-                    </div>
-                  ) : (
-                    contributor.map((item) => {
-                      const isHidden = hiddenContributors[item.id];
-                      const relationshipLabel =
-                        item.relationship_type == null || item.relationship_type === undefined
-                          ? 'No relationship type'
-                          : capitalizeFirstLetter(item.relationship_type);
-
-                      return (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between rounded border border-gray-300 bg-white px-6 py-5"
-                        >
-                          <div className="flex items-center gap-6">
-                            <button type="button" className="cursor-pointer" onClick={() => toggleEye(item.id)}>
-                              {isHidden ? <EyeOff size={20} /> : <Eye size={20} />}
-                            </button>
-                            <div className="h-20 w-20 rounded-full bg-[#d9d9d9]" />
-
-                            <div className="min-w-0 flex-1">
-                              <h3 className="font-serif text-lg italic">{item.name || 'Contributor'}</h3>
-
-                              <p className="text-xs text-gray-500">
-                                {item.status === 'submitted' ? 'Submitted' : 'In progress'}
-                              </p>
-
-                              <button type="button" className="mt-3 rounded bg-[#d9d9d9] px-6 py-1 text-xs">
-                                {relationshipLabel}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
             )}
         </div>
         )
