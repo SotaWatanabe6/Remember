@@ -892,8 +892,6 @@ async function composeStorySlideshow({
         role: 'user',
         content: `Compose a cinematic, biographical slideshow for ${subjectName}.
 
-
-
 MULTI-CONTRIBUTOR NARRATIVE (critical):
 - Multiple people may have answered the same memorial questionnaire. Read ALL contributor responses below and weave them into ONE seamless film from the introduction through the closing slide — not separate mini-stories per person.
 - Draw from every contributor's answers across the full slideshow: the intro and early chapters can foreshadow themes that later chapters and the closing deepen; the final slides should feel like a natural conclusion to threads introduced earlier.
@@ -923,7 +921,6 @@ STRUCTURE (follow order_index in this order):
 3. CLOSING — exactly ONE slide (slide_type: "closing", photo_id: null)
    - in rememberence of ${subjectName}
    - Final reflective beat. Quiet, warm, forward-looking. Third person.
-
 
 VOICE RULES:
 - ALWAYS third person: "${subjectName} was...", she/he/they — NEVER "you", "your", or viewer-specific pronouns.
