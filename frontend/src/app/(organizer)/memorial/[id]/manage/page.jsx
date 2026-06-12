@@ -23,28 +23,10 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 const GENERATION_POLL_INTERVAL_MS = 1500;
 const GENERATION_MAX_POLL_ATTEMPTS = 60;
-const OUTPUT_PENDING_POLL_INTERVAL_MS = 5000;
 const GENERATION_SUCCESS_STATUSES = new Set(["complete", "completed", "succeeded", "success"]);
 const GENERATION_FAILURE_STATUSES = new Set(["failed", "error"]);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-function normalizeMemorialForView(memorial) {
-  if (!memorial) return null;
-  return {
-    id: memorial.id,
-    subject_name: memorial.subject_name || memorial.deceased_name,
-    cover_photo_url: memorial.cover_photo_url || memorial.profile_photo_url || null,
-    date_of_birth: memorial.date_of_birth || memorial.birth_date || null,
-    date_of_passing: memorial.date_of_passing || memorial.death_date || null,
-    bio: memorial.brief_biography || memorial.short_description || memorial.biography || null,
-    status: memorial.status || null,
-  };
-}
-
-function isGeneratingMemorial(memorial) {
-  return String(memorial?.status || "").toLowerCase() === "generating";
-}
 
 // ─── Memorial Header ──────────────────────────────────────────────────────────
 
@@ -177,91 +159,21 @@ function TabError({ title, message, onRetry }) {
 
 // ─── Archive Tab ──────────────────────────────────────────────────────────────
 
-function ArchiveTab({ contributors, output }) {
-  const [query, setQuery] = useState('');
-
-  // Gather all content from output albums and voices
-  const allPhotos = [];
-  const albums = Array.isArray(output?.photos)
-    ? output.photos
-    : output?.photos?.albums ?? [];
-  albums.forEach((album) => {
-    (album.photos || []).forEach((p) => allPhotos.push({ type: 'photo', ...p }));
-  });
-
-  const allVoices = (output?.voices || []).map((v) => ({ type: 'voice', ...v }));
-  const allItems = [...allPhotos, ...allVoices];
-
-  const filtered = query.trim()
-    ? allItems.filter((item) => {
-        const text = [
-          item.caption,
-          item.contributor_name,
-          item.contributor_title,
-          item.key_quote,
-          item.transcript_text,
-        ].filter(Boolean).join(' ').toLowerCase();
-        return text.includes(query.toLowerCase());
-      })
-    : allItems;
-
+function ArchiveTab() {
   return (
     <div className="flex flex-col gap-6 pt-6">
       <div className="flex items-center gap-3">
         <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24" className="text-neutral-950 shrink-0">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
         </svg>
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Show me happy memories"
-          className="flex-1 rounded-xl border border-neutral-200 px-4 py-2.5 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-neutral-200"
-        />
+        <input type="text" placeholder="Show me happy memories"
+          className="flex-1 rounded-xl border border-neutral-200 px-4 py-2.5 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-neutral-200" />
         <button className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-80 transition-opacity">Filter</button>
         <button className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-80 transition-opacity">Sort</button>
       </div>
-
-      {filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <p className="text-neutral-950 text-base font-medium">
-            {allItems.length === 0 ? 'No contributions yet' : 'No results found'}
-          </p>
-          <p className="text-slate-500 text-sm mt-1 max-w-xs">
-            {allItems.length === 0
-              ? 'Submitted contributions will appear here once generated.'
-              : 'Try a different search term.'}
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-3 gap-4">
-          {filtered.map((item, i) => (
-            <div key={item.id || i} className="rounded-xl overflow-hidden border border-neutral-200 bg-white">
-              {item.type === 'photo' && (
-                item.url
-                  ? <img src={item.url} alt={item.caption || ''} className="aspect-[4/3] w-full object-cover" />
-                  : <div className="aspect-[4/3] w-full bg-neutral-200 flex items-center justify-center">
-                      <span className="text-xs text-neutral-400">{item.contributor_name || 'Photo'}</span>
-                    </div>
-              )}
-              {item.type === 'voice' && (
-                <div className="aspect-[4/3] w-full bg-neutral-100 flex flex-col items-center justify-center gap-2 p-4">
-                  <p className="text-sm font-medium text-neutral-950 text-center">{item.contributor_title}</p>
-                  <div className="flex items-center gap-[2px]">
-                    {Array.from({ length: 20 }).map((_, j) => (
-                      <div key={j} className="w-[2px] rounded-full bg-neutral-400"
-                        style={{ height: `${8 + ((j * 5) % 16)}px` }} />
-                    ))}
-                  </div>
-                  {item.contributor_name && (
-                    <p className="text-xs text-neutral-500">Submitted by {item.contributor_name}</p>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="grid grid-cols-3 gap-4">
+        {[...Array(3)].map((_, i) => <div key={i} className="aspect-[4/3] rounded-xl bg-neutral-200" />)}
+      </div>
     </div>
   );
 }
@@ -504,7 +416,6 @@ function AllPhotosSection({ albums }) {
 // ─── Pre-generation empty state ───────────────────────────────────────────────
 
 function PreGenerationEmpty({ canGenerate, disabledMessage, generationError, generationJob, generating, onGenerate }) {
-  const isPending = generating && !generationError;
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <div className="h-16 w-16 rounded-full bg-neutral-100 flex items-center justify-center mb-4">
@@ -512,19 +423,15 @@ function PreGenerationEmpty({ canGenerate, disabledMessage, generationError, gen
           <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
         </svg>
       </div>
-      <p className="text-neutral-950 text-base font-medium">
-        {isPending ? "Generation is in progress" : "Generation hasn&apos;t run yet"}
-      </p>
+      <p className="text-neutral-950 text-base font-medium">Generation hasn&apos;t run yet</p>
       <p className="text-slate-500 text-sm mt-1 max-w-xs leading-relaxed">
-        {isPending
-          ? "Outputs will appear here automatically once the memorial is ready."
-          : "Once you have contributions, click Generate to create the Story, Constellation, Voices, and Photos."}
+        Once you have contributions, click Generate to create the Story, Constellation, Voices, and Photos.
       </p>
       <button type="button" onClick={onGenerate} disabled={!canGenerate || generating}
         className="mt-6 flex h-[50px] w-[207px] items-center justify-center rounded-full bg-neutral-950 px-6 text-sm font-semibold text-white transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-45">
         {generating ? "Generating..." : "Generate"}
       </button>
-      {isPending && (
+      {generating && (
         <div className="mt-4 w-full max-w-xs" aria-live="polite">
           <div className="h-1.5 overflow-hidden rounded-full bg-neutral-100">
             <div className="h-full rounded-full bg-neutral-950 transition-all duration-300"
@@ -741,6 +648,7 @@ export default function MemorialOutputPage() {
   const [contributorsError, setContributorsError] = useState(null);
   const [showShare, setShowShare] = useState(false);
   const [contributors, setContributors] = useState([]);
+  const [contributorPhotoCount, setContributorPhotoCount] = useState(0);
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState(null);
   const [generationJob, setGenerationJob] = useState(null);
@@ -753,10 +661,16 @@ export default function MemorialOutputPage() {
     getMemorial(id)
       .then((data) => {
         const m = data?.memorial ?? data;
-        const normalized = normalizeMemorialForView(m);
-        if (!normalized) return;
-        setMemorial(normalized);
-        setGenerating(isGeneratingMemorial(normalized));
+        if (!m) return;
+        setMemorial({
+          id: m.id,
+          subject_name: m.subject_name || m.deceased_name,
+          cover_photo_url: m.cover_photo_url || m.profile_photo_url || null,
+          date_of_birth: m.date_of_birth || m.birth_date || null,
+          date_of_passing: m.date_of_passing || m.death_date || null,
+          bio: m.brief_biography || m.short_description || m.biography || null,
+          status: m.status || null,
+        });
       })
       .catch(() => {
         setMemorial(null);
@@ -772,12 +686,19 @@ export default function MemorialOutputPage() {
       const contributor = await getMemorialContributors(memorialId, token);
       const memorialApi = await getMemorial(memorialId);
       const m = memorialApi?.memorial ?? memorialApi;
-      const normalized = normalizeMemorialForView(m);
-      if (normalized) {
-        setMemorial(normalized);
-        setGenerating((current) => current || isGeneratingMemorial(normalized));
+      if (m) {
+        setMemorial({
+          id: m.id,
+          subject_name: m.subject_name || m.deceased_name,
+          cover_photo_url: m.cover_photo_url || m.profile_photo_url || null,
+          date_of_birth: m.date_of_birth || m.birth_date || null,
+          date_of_passing: m.date_of_passing || m.death_date || null,
+          bio: m.brief_biography || m.short_description || m.biography || null,
+          status: m.status || null,
+        });
       }
       setContributors(contributor.contributors ?? []);
+      setContributorPhotoCount(contributor.generation_requirements?.photo_count ?? 0);
     } catch (err) {
       setContributorsError(err instanceof Error ? err.message : "Failed to fetch contributors");
       setContributors([]);
@@ -810,7 +731,6 @@ export default function MemorialOutputPage() {
     setGenerationError(null);
     setGenerationJob(null);
     const token = await getAuthToken();
-    let keepGenerating = false;
     try {
       const generation = await generateMemorialOutput(memorialId, token);
       const initialJob = generation?.job ?? null;
@@ -831,9 +751,7 @@ export default function MemorialOutputPage() {
         }
         const finalStatus = String(latestJob?.status || "").toLowerCase();
         if (!GENERATION_SUCCESS_STATUSES.has(finalStatus)) {
-          keepGenerating = true;
-          await loadOutput({ fallbackToMock: process.env.NODE_ENV !== 'production' });
-          return;
+          throw new Error("Generation is taking longer than expected. Please try refreshing the outputs shortly.");
         }
       }
 
@@ -841,65 +759,44 @@ export default function MemorialOutputPage() {
     } catch (err) {
       setGenerationError(err instanceof Error ? err.message : "Generation failed. Please try again.");
     } finally {
-      if (!keepGenerating) setGenerating(false);
+      setGenerating(false);
     }
   }, [generating, loadOutput, memorialId]);
-
-  useEffect(() => {
-    if (!id || output || !generating) return undefined;
-
-    let cancelled = false;
-
-    async function pollPendingOutput() {
-      const token = await getAuthToken();
-      const data = await getMemorialOutput(id, token);
-      if (cancelled) return;
-
-      if (data) {
-        setOutput(data);
-        setOutputError(null);
-        setGenerating(false);
-        setGenerationJob((job) => job ? { ...job, status: 'complete', progress: 100, current_step: 'Complete' } : job);
-        try {
-          const memorialApi = await getMemorial(id);
-          if (!cancelled) {
-            const normalized = normalizeMemorialForView(memorialApi?.memorial ?? memorialApi);
-            if (normalized) setMemorial(normalized);
-          }
-        } catch {
-          // Output is loaded; header refresh can wait for the next page visit.
-        }
-      }
-    }
-
-    pollPendingOutput();
-    const intervalId = window.setInterval(pollPendingOutput, OUTPUT_PENDING_POLL_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, [generating, id, output]);
 
   const submittedContributionCount = contributors.filter((contributor) => {
     const status = String(contributor?.status || "").toLowerCase();
     return status === "submitted" || Boolean(contributor?.submitted_at);
   }).length;
 
-  const canGenerate = !contributorsLoading && !contributorsError && submittedContributionCount > 0;
+  const memorialStatus = String(memorial?.status || "").toLowerCase();
+  const isAlreadyGenerated = memorialStatus === "complete";
+  const hasContributorPhotos = contributorPhotoCount > 0;
+  const canGenerate =
+    !contributorsLoading &&
+    !contributorsError &&
+    !isAlreadyGenerated &&
+    memorialStatus !== "generating" &&
+    submittedContributionCount > 0 &&
+    hasContributorPhotos;
   const generationDisabledMessage = contributorsLoading
     ? "Checking submitted contributions..."
     : contributorsError
       ? "Contributor data could not be loaded, so generation is unavailable right now."
-      : submittedContributionCount === 0
-        ? "Generation is available after at least one contributor submits a memory."
-        : "";
+      : isAlreadyGenerated
+        ? "This memorial has already been generated. Generations are final."
+        : memorialStatus === "generating"
+          ? "Generation is already in progress."
+          : submittedContributionCount === 0
+            ? "Generation is available after at least one contributor submits a memory."
+            : !hasContributorPhotos
+              ? "At least one contributor photo is required before generating."
+              : "";
 
   useEffect(() => { queueMicrotask(loadContributors); }, [loadContributors]);
   useEffect(() => { queueMicrotask(loadOutput); }, [loadOutput]);
 
   return (
-    <main className="min-h-screen bg-r-bg px-6 py-10 text-neutral-950 sm:px-[50px]">
+    <main className="min-h-screen bg-white px-6 py-10 text-neutral-950 sm:px-[50px]">
       <div className="mx-auto flex w-full max-w-[960px] flex-col gap-8">
 
         <nav className="flex h-10 items-center justify-between">
@@ -914,7 +811,7 @@ export default function MemorialOutputPage() {
         <TabBar active={activeTab} onChange={setActiveTab} />
 
         <div>
-          {activeTab === 'Archive' && <ArchiveTab contributors={contributors} output={output} />}
+          {activeTab === 'Archive' && <ArchiveTab />}
           {activeTab === 'Contributions' && (
             <ContributionsTab
               contributorslist={contributors}
@@ -947,3 +844,4 @@ export default function MemorialOutputPage() {
     </main>
   );
 }
+
