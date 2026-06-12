@@ -214,26 +214,6 @@ async function runPipelines(memorialId, jobId) {
       enrichedRecordings.push(row)
     }
 
-    const voiceMoments = enrichedRecordings
-      .map((r) => {
-        const tags = typeof r.ai_tags === 'object' && r.ai_tags ? r.ai_tags : {}
-        const contributor = contributors?.find((c) => c.id === r.contributor_id)
-        return {
-          id: r.id,
-          intro_line: tags.intro_line || null,
-          key_quote: r.key_quote,
-          storage_path: r.storage_path,
-          storage_bucket: r.storage_bucket,
-          clip_start_seconds: tags.clip_start_seconds ?? 0,
-          clip_end_seconds: tags.clip_end_seconds,
-          contributor_name: contributor?.name,
-          contributor_title: r.contributor_title,
-          relationship_type: contributor?.relationship_type,
-          ai_category: r.ai_category,
-        }
-      })
-      .filter((v) => v.intro_line && v.storage_path)
-
     await updateJob(jobId, 75, 'Composing the memorial story...')
     const storySlides = await composeStorySlideshow({
       subjectName: memorial.subject_name,
@@ -242,7 +222,6 @@ async function runPipelines(memorialId, jobId) {
       analyzedPhotos,
       responses: responses || [],
       contributors: contributors || [],
-      voiceMoments,
     })
 
     const voices = enrichedRecordings.map((r) => {

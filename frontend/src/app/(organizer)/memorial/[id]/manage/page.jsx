@@ -46,6 +46,10 @@ function isGeneratingMemorial(memorial) {
   return String(memorial?.status || "").toLowerCase() === "generating";
 }
 
+function isCompleteMemorial(memorial) {
+  return String(memorial?.status || "").toLowerCase() === "complete";
+}
+
 // ─── Memorial Header ──────────────────────────────────────────────────────────
 
 function MemorialHeader({ memorial, onShare }) {
@@ -886,14 +890,27 @@ export default function MemorialOutputPage() {
     return status === "submitted" || Boolean(contributor?.submitted_at);
   }).length;
 
-  const canGenerate = !contributorsLoading && !contributorsError && submittedContributionCount > 0;
+  const memorialAlreadyGenerated = isCompleteMemorial(memorial);
+  const memorialCurrentlyGenerating = isGeneratingMemorial(memorial) || generating;
+
+  const canGenerate =
+    !contributorsLoading &&
+    !contributorsError &&
+    !memorialAlreadyGenerated &&
+    !memorialCurrentlyGenerating &&
+    submittedContributionCount > 0;
+
   const generationDisabledMessage = contributorsLoading
     ? "Checking submitted contributions..."
     : contributorsError
       ? "Contributor data could not be loaded, so generation is unavailable right now."
-      : submittedContributionCount === 0
-        ? "Generation is available after at least one contributor submits a memory."
-        : "";
+      : memorialAlreadyGenerated
+        ? "This memorial has already been generated. Generations are final."
+        : memorialCurrentlyGenerating
+          ? "Generation is already in progress."
+          : submittedContributionCount === 0
+            ? "Generation is available after at least one contributor submits a memory."
+            : "";
 
   useEffect(() => { queueMicrotask(loadContributors); }, [loadContributors]);
   useEffect(() => { queueMicrotask(loadOutput); }, [loadOutput]);
