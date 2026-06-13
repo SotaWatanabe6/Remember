@@ -762,15 +762,39 @@ function buildPhotoCatalogEntry(photo, contributors, themes, memorial) {
   }
 }
 
+function buildOrganizerCoverPhotoCatalogEntry(memorial, subjectName) {
+  if (!memorial?.cover_photo_url) return null
+
+  return {
+    photo_id: `organizer_cover_${memorial.id || 'photo'}`,
+    storage_path: memorial.cover_photo_url,
+    contributor_name: 'Organizer',
+    relationship_type: '',
+    theme_label: null,
+    scene: 'Organizer-selected memorial photo',
+    vision_description: `Organizer-selected memorial photo for ${subjectName}.`,
+    visual_mood: '',
+    life_moment_type: 'memorial_cover',
+    tags: ['organizer selected', 'memorial cover'],
+    subject_in_photo: null,
+    subject_apparent_age: null,
+    subject_life_stage: 'unknown',
+    subject_life_stage_label: null,
+    chronological_sort_key: 0,
+    photo_year: null,
+    photo_era_label: null,
+    taken_at: null,
+  }
+}
+
 function buildStorySlideFromCatalog(photo, index) {
-  const description = photo.vision_description || photo.scene || ''
   return {
     order_index: index + 1,
     slide_type: 'photo',
     photo_id: photo.photo_id,
     photo_url: photo.storage_path,
-    quote: description,
-    photo_description: description,
+    quote: '',
+    photo_description: '',
     narration: null,
     matched_quote: null,
     contributor_name: photo.contributor_name,
@@ -799,14 +823,18 @@ function stripStorySlideDisplayFields(slide) {
 function finalizePhotoStorySlides(slides = []) {
   return slides
     .filter((slide) => slide?.slide_type === 'photo' && slide?.photo_id && slide?.photo_url)
-    .map((slide, index) =>
-      stripStorySlideDisplayFields({
+    .map((slide, index) => {
+      const storyText = slide.photo_description || slide.narration || ''
+
+      return stripStorySlideDisplayFields({
         ...slide,
         slide_type: 'photo',
+        quote: storyText,
+        photo_description: storyText,
         narration: null,
         order_index: index + 1,
-      }),
-    )
+      })
+    })
 }
 
 function enrichStorySlide(slide, photoById, memorial, index) {
@@ -815,8 +843,7 @@ function enrichStorySlide(slide, photoById, memorial, index) {
   const description =
     slide.photo_description ||
     slide.quote ||
-    photo.vision_description ||
-    photo.scene ||
+    slide.narration ||
     ''
 
   return {
@@ -824,9 +851,9 @@ function enrichStorySlide(slide, photoById, memorial, index) {
     slide_type: slideType,
     order_index: Number.isFinite(Number(slide.order_index)) ? Number(slide.order_index) : index + 1,
     photo_url: slide.photo_url || photo.storage_path || null,
-    quote: slide.quote || [description, slide.narration].filter(Boolean).join('\n\n') || description,
+    quote: description,
     photo_description: description,
-    narration: slide.narration || null,
+    narration: description === slide.narration ? null : slide.narration || null,
     matched_quote: slide.matched_quote || null,
     chapter_title: slide.chapter_title || slide.theme_label || null,
     perspective_label: slide.perspective_label || null,
@@ -870,6 +897,19 @@ function finalizeStorySlides(slides, photoCatalog, memorial) {
     .map((slide, index) => ({ ...slide, order_index: index + 1 }))
 }
 
+function sortSlidesByPhotoCatalogOrder(slides = [], photoCatalog = []) {
+  const photoOrder = new Map(photoCatalog.map((photo, index) => [photo.photo_id, index]))
+
+  return [...slides]
+    .sort((a, b) => {
+      const orderA = photoOrder.has(a.photo_id) ? photoOrder.get(a.photo_id) : Number.MAX_SAFE_INTEGER
+      const orderB = photoOrder.has(b.photo_id) ? photoOrder.get(b.photo_id) : Number.MAX_SAFE_INTEGER
+      if (orderA !== orderB) return orderA - orderB
+      return (a.order_index ?? 0) - (b.order_index ?? 0)
+    })
+    .map((slide, index) => ({ ...slide, order_index: index + 1 }))
+}
+
 async function composeStorySlideshow({
   subjectName,
   memorial,
@@ -884,14 +924,23 @@ async function composeStorySlideshow({
     ? new Date(memorial.date_of_passing).getFullYear()
     : null
 
-  const photoCatalog = selectStoryPhotoCatalog(
+  const selectedPhotoCatalog = selectStoryPhotoCatalog(
     sortPhotosChronologically(analyzedPhotos, memorial).map((p) =>
       buildPhotoCatalogEntry(p, contributors, themes, memorial),
     ),
   )
+  const organizerCoverPhoto = buildOrganizerCoverPhotoCatalogEntry(memorial, subjectName)
+  const photoCatalog = organizerCoverPhoto
+    ? [
+        organizerCoverPhoto,
+        ...selectedPhotoCatalog.filter((p) => p.storage_path !== organizerCoverPhoto.storage_path),
+      ].slice(0, MAX_STORY_SLIDES)
+    : selectedPhotoCatalog
 
   const buildFallbackSlideshow = () =>
-    finalizePhotoStorySlides(finalizeStorySlides([], photoCatalog, memorial))
+    finalizePhotoStorySlides(
+      sortSlidesByPhotoCatalogOrder(finalizeStorySlides([], photoCatalog, memorial), photoCatalog),
+    )
 
   if (!photoCatalog.length) {
     return []
@@ -904,10 +953,10 @@ async function composeStorySlideshow({
   try {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
-      max_tokens: 8000,
+      max_tokens: 12000,
       messages: [{
         role: 'user',
-        content: `Write biographical captions for ${subjectName}'s memorial photo slideshow.
+        content: `Write Story slideshow descriptions for ${subjectName}'s memorial photo slideshow.
 
 LIFE SPAN: ${birthYear ? `Born ${birthYear}` : 'Birth year unknown'}${passingYear ? `, passed ${passingYear}` : ''}.
 
@@ -915,19 +964,30 @@ OUTPUT RULES (critical):
 - Return EXACTLY ${photoCatalog.length} slides — one per photo in the catalog below.
 - Every slide MUST have slide_type "photo" and a photo_id from the catalog.
 - Do NOT create intro, chapter, perspective, closing, voice, or text-only slides.
-- Do NOT describe what is visible in the photo: no clothing, setting, poses, objects, or phrases like "in this photo".
-- photo_description (required): 2–4 warm, third-person sentences about ${subjectName} from questionnaire memories and organizer biography. Use each photo's life stage only to choose which memories fit — never describe the image literally.
+- Use photo analysis only for broad tone, era, and sequencing. Do not state or imply that a questionnaire memory happened in, is shown by, or is directly connected to a specific photo unless the source data explicitly says so.
+- The description should feel appropriate beside the photo, but it must stand on its own as remembrance language. Avoid phrases like "in this photo", "this moment shows", "here we see", or "surrounded by family" unless those facts are explicitly supported.
+- photo_description (required): 2–4 warm, specific, conversational third-person sentences about ${subjectName}. It should feel like a close friend giving a memorial toast: human, grounded, undecorated, and never AI-written.
+- The first slide should use the organizer-selected memorial photo and function as the opening: include birth/passing context when available and quickly ground the viewer in who ${subjectName} was — their personality, what they loved, or the kind of presence they had.
+- Middle slides should move through ${subjectName}'s life organically. Tell the ${subjectName}'s life by drawing specific stories from the questionnaire responses. Cover their life stories based on the following examples but is not limited to - character, quirks, relationships, roles, significant moments, accomplishments, and repeated details contributors mentioned - without forcing a fixed order.
+- The final slide should function as the closing: honor ${subjectName} with a sincere remembrance, legacy reflection, or natural final words that do not feel abrupt.
 - narration: leave null. All story text belongs in photo_description.
 - matched_quote: optional contributor phrase, max 22 words, copied verbatim or minimally trimmed from the questionnaire text when it clearly fits the slide.
 - If no contributor phrase clearly fits a slide, set matched_quote to null. Do not invent, paraphrase, or polish a quote into something the contributor did not say.
 - If matched_quote is present, contributor_name and relationship_type must identify the contributor who wrote that phrase.
-- Synthesize all contributors into one cohesive voice across the slideshow. Third person only. No greeting-card clichés, jargon, or fluffy language.
+- Synthesize all contributors into one cohesive voice across the slideshow. Third person only.
+- Prefer specific details over general statements. If multiple contributors said something similar, surface that convergence directly.
+- Do not fabricate details, repeat the same descriptive language across slides, overwrite grief, manufacture emotion, or use sympathy-card filler such as "a life well-lived", "touched many hearts", or "left a lasting impression".
+- Do not include specific timelines or ages about the ${subjectName} in the description.
+- Don't assume relationships of anyone in the photo regardless of the contributor relationship type.
 
-Photos (LOCKED order — youngest to oldest; use photo_id exactly):
+Photos (LOCKED order — first photo is organizer-selected when present, then youngest to oldest; use photo_id exactly):
 ${JSON.stringify(photoCatalog.map((p) => ({
   photo_id: p.photo_id,
   subject_life_stage_label: p.subject_life_stage_label,
   life_moment_type: p.life_moment_type,
+  vision_description: p.vision_description,
+  visual_mood: p.visual_mood,
+  tags: p.tags,
   contributor_name: p.contributor_name,
   relationship_type: p.relationship_type,
 })), null, 2)}
@@ -935,7 +995,7 @@ ${JSON.stringify(photoCatalog.map((p) => ({
 Questionnaire memories (primary source — do not invent facts):
 ${memories}
 
-Discovery themes (which memories fit which life stage):
+Discovery themes (use as broad story context, not as proof that a memory belongs to a specific photo):
 ${JSON.stringify((themes || []).map((t) => ({ label: t.label, summary: t.summary })), null, 2)}
 
 Return JSON only:
@@ -970,7 +1030,9 @@ Return JSON only:
         slide_type: 'photo',
       }))
 
-    return finalizePhotoStorySlides(finalizeStorySlides(aiSlides, photoCatalog, memorial))
+    return finalizePhotoStorySlides(
+      sortSlidesByPhotoCatalogOrder(finalizeStorySlides(aiSlides, photoCatalog, memorial), photoCatalog),
+    )
   } catch (err) {
     console.error('[StoryCompose] error:', err.message)
     return buildFallbackSlideshow()
