@@ -13,7 +13,7 @@ export const CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS = [
   {
     id: "relationship_and_unknown_detail",
     prompt:
-      "How did you know this person? And what is something about them that other people may not have known?",
+      "How did you know this person and what kind of memories did you share together? What kind of person were they from your eyes and what would you want the world to remember about this person?",
     helperText:
       "This could be a side of them you saw through your relationship, work, family, or friendship.",
   },
