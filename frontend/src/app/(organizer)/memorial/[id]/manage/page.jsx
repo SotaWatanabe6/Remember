@@ -392,6 +392,86 @@ function Lightbox({ photo, onClose, onPrev, onNext }) {
     </div>
   );
 }
+// ─── All Photos Section ───────────────────────────────────────────────────────
+
+function ConstellationSection({output, memorial,contributors, onGenerate, generating, canGenerate }) {
+  const [page, setPage] = useState(1);
+  const totalPages = 2;
+  return (
+    <div>      
+      <div className="rounded-2xl border border-neutral-100 bg-r-bg py-6">
+        <div className="mb-6 flex items-center justify-between gap-4">
+          {/* <select
+            value={tab}
+            onChange={handleChange}
+            className="border border-gray-300 bg-white px-4 py-2 text-sm shadow-sm outline-none"
+          >
+            <option value="Themes">
+              Constellation : Themes
+            </option>
+
+            <option value="Relationships">
+              Constellation : Relationships
+            </option>
+          </select> */}
+          <h2 className="text-[36px] mt-6 font-medium italic text-neutral-950" style={{ fontFamily: 'var(--font-boska, serif)' }}>
+            Constellation
+          </h2>        
+          <div className="flex items-center gap-4">
+            <button
+              onClick={onGenerate}
+              disabled={!canGenerate || generating}
+              className="rounded-full px-6 py-[14px] text-base text-neutral-950 transition-opacity hover:opacity-80 disabled:opacity-45 disabled:cursor-not-allowed border-none"
+              style={{ backgroundColor: 'var(--color-r-btn)' }}
+            >
+              {generating ? 'Generating…' : 'Generate'}
+            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="transition-opacity hover:opacity-70 disabled:opacity-30"
+                aria-label="Previous page"
+              >
+                <svg width="25" height="50" viewBox="0 0 25 50" fill="none">
+                  <path fillRule="evenodd" clipRule="evenodd"
+                    d="M3.83906 26.4813L15.6245 38.2667L18.5703 35.3208L8.25781 25.0083L18.5703 14.6958L15.6245 11.75L3.83906 23.5354C3.4485 23.9261 3.22909 24.4559 3.22909 25.0083C3.22909 25.5608 3.4485 26.0906 3.83906 26.4813Z"
+                    fill="#423F39"/>
+                </svg>
+              </button>
+              <span className="text-2xl font-medium text-neutral-950 min-w-[48px] text-center"
+                style={{ fontFamily: 'var(--font-boska, serif)' }}>
+                {page} {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="transition-opacity hover:opacity-70 disabled:opacity-30"
+                aria-label="Next page"
+              >
+                <svg width="25" height="50" viewBox="0 0 25 50" fill="none">
+                  <path fillRule="evenodd" clipRule="evenodd"
+                    d="M21.1609 26.4813L9.37552 38.2667L6.42969 35.3208L16.7422 25.0083L6.42969 14.6958L9.37552 11.75L21.1609 23.5354C21.5515 23.9261 21.7709 24.4559 21.7709 25.0083C21.7709 25.5608 21.5515 26.0906 21.1609 26.4813Z"
+                    fill="#423F39"/>
+                </svg>
+              </button>
+            </div>
+          </div>            
+        </div>       
+      </div>
+      <ConstellationGraph
+        ai_output={output}
+        memorial={memorial}
+        contributor={contributors}
+        page={page}
+        width={800}
+        height={800}
+      />
+    </div>
+  );
+}
+
+
 
 // ─── All Photos Section ───────────────────────────────────────────────────────
 
@@ -648,15 +728,14 @@ function OutputsTab({memorial, contributors, canGenerate, disabledMessage, gener
         <StorySlideshow output={output} story={output?.story} />
       </CollapsibleSection>
       <CollapsibleSection title="Constellation">
-        <div className="rounded-2xl border border-neutral-100 bg-r-bg py-6 flex items-center justify-center">
-          <ConstellationGraph
-            ai_output={output}
-            memorial={memorial}
-            contributor={contributors}
-            width={800}
-            height={800}
-          />
-        </div>
+        <ConstellationSection  
+          output={output}
+          memorial={memorial}
+          contributors={contributors}
+          onGenerate={onGenerate}
+          generating={generating}
+          canGenerate={canGenerate}        
+        />
       </CollapsibleSection>
       <CollapsibleSection title="Voices">
         <VoicesTab output={output} voices={output?.voices} />

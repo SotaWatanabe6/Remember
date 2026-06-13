@@ -6,20 +6,13 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
+import Image from "next/image";
+
 import { usePathname } from "next/navigation";
 import { getContributorsPhotos } from "@/lib/api"
 function capitalizeFirstLetter(str) {
   if (!str || str === 'null') return str;
   return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-
-function placeholderProminence(index) {
-  return 0.3 + ((index * 37) % 40) / 100;
-}
-
-function placeholderCoordinate(index, limit) {
-  return ((index * 149) % limit) + 20;
 }
 
 // CSS animations for constellation graph
@@ -74,64 +67,17 @@ if (typeof window !== 'undefined') {
 }
 
 
-// Pulsing placeholder for constellation loading state
-function PulsingPlaceholder() {
-  const placeholderNodes = [...Array(8)].map((_, i) => ({
-    id: `placeholder-${i}`,
-    x: 100 + (i % 3) * 200,
-    y: 150 + Math.floor(i / 3) * 150,
-    prominence: placeholderProminence(i),
-  }));
-
-  const placeholderLinks = placeholderNodes.slice(0, -1).map((node, i) => ({
-    source: node,
-    target: placeholderNodes[i + 1],
-  }));
-
-  return (
-    <svg width="100%" height="400" viewBox="0 0 800 400" className="border border-neutral-200 rounded-2xl bg-neutral-50">
-      {/* Placeholder edges */}
-      {placeholderLinks.map((link, i) => (
-        <line
-          key={`link-${i}`}
-          x1={link.source.x}
-          y1={link.source.y}
-          x2={link.target.x}
-          y2={link.target.y}
-          stroke="#e5e7eb"
-          strokeWidth="1"
-          className="pulse-node"
-        />
-      ))}
-      
-      {/* Placeholder nodes */}
-      {placeholderNodes.map((node) => (
-        <circle
-          key={node.id}
-          cx={node.x}
-          cy={node.y}
-          r={node.prominence * 40 + 20}
-          fill="#f3f4f6"
-          stroke="#d1d5db"
-          strokeWidth="2"
-          className="pulse-node"
-        />
-      ))}
-    </svg>
-  );
-}
 
 const familyRelationship = [
   "Parent",
   "Child",
   "Sibling",
-  "Partner",
-  "Spouse",
+  "Partner / Spouse",
   "Aunt",
   "Uncle",
   "Grandparent",
   "Grandchild",
-  "Extended"
+  "Extended family"
 ]
 const otherRelationship = [
   "Other",
@@ -139,7 +85,7 @@ const otherRelationship = [
   "Colleague",
   "Classmate",
   "Neighbor",
-  "Community"
+  "Community member"
 ]
 
 
@@ -170,7 +116,7 @@ function buildRelationshipGraph(contributors, centerId, centerName, relationship
       prominence: 0.7,
       summary: relData.summary || '',
       photos: relData.photos || [],
-      photo_urls: relData.photos || [],
+      photo_urls: relData.photo_urls || [],
       quotes: relData.quote ? [{ text: relData.quote, contributor_name: c.name }] : [],
       contributions: 1,
     };
@@ -204,38 +150,51 @@ export default function ConstellationGraph({
   memorial,
   contributor = [],
   relationships = [],
+  page = 1,
   width,
   height,
 }) {
   const ref = useRef(null);
   const pathname = usePathname();  
-  const [constellationLoading, setConstellationLoading] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
   const [themes,setThemes] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
-  const [photoCarroussel, setPhotoCarroussel] = useState([]);
-  const [tab, setTab] = useState("Themes");
+  const [photoCarroussel, setPhotoCarroussel] = useState([
+    {
+      photo_url : memorial?.cover_photo_url
+    }
+  ]);
+  const [sortOrder, setSortOrder] = useState('newest');
+  const [tab, setTab] = useState(page==1 ? "Themes":"Relationships");
   const [hiddenContributors, setHiddenContributors] = useState({});
-  const [hiddenRelationshipType, setHiddenRelationshipType] = useState({});
+  const [hiddenRelationshipType, setHiddenRelationshipType] = useState({
+    ...Object.fromEntries(otherRelationship.map(key => [key, false])),
+    ...Object.fromEntries(familyRelationship.map(key => [key, false])),
+  });
   const [hiddenThemes, setHiddenThemes] = useState({});
   const [currentPage, setCurrentPage] = useState("Viewer");
   useEffect(() => {
-    console.log(pathname);
+    setTab(page==1 ? "Themes":"Relationships")  
+  }, [page]);
+
+  useEffect(() => {
     if (pathname.includes("output")){
       setCurrentPage("Viewer");
-      loadPhotoContributor();
+      if (tab=="Relationships") {
+        loadPhotoContributor();
+      }
     }
     else {
       setCurrentPage("Organizer");
     }
     async function loadPhotoContributor() {
       if (selectedNode) {      
-        console.log("This is node ",selectedNode);
         const photos = await getContributorsPhotos(selectedNode.id);
-        console.log("This is photo ",photos.photos);
-        setPhotoCarroussel(photos.photos);
+        const finalphotos = photos.photos.map(user => user.photo_url); 
+        setPhotoCarroussel(finalphotos);
       }
     }
-  },[currentPage, pathname,selectedNode]);
+  },[currentPage, pathname,selectedNode,tab]);
 
   const handleThemesChange = (nodeId) => {
     setHiddenThemes((prev) => ({
@@ -249,7 +208,17 @@ export default function ConstellationGraph({
       ...prev,
       [nodeId]: !prev[nodeId],
     }));
+  };  
+  const hideAllFamilyRelationship = () => {
+    familyRelationship.map((item)=>{
+        handleRelationshipTypesChange(item);
+      }
+    );
     
+    // setHiddenRelationshipType((prev) => ({
+    //   ...prev,
+    //   [nodeId]: !prev[nodeId],
+    // }));
   };  
   
   const toggleEye = (id) => {
@@ -257,28 +226,37 @@ export default function ConstellationGraph({
       ...prev,
       [id]: !prev[id],
     }));
-
   };  
   const {familyCounts , otherRelatedCounts} = buildRelationshipCounts(contributor || []);
-
-  const [nodes, setNodes] = useState(
-      ai_output?.constellation?.nodes?.map(t => ({
+  const finalnodes = ai_output?.constellation?.nodes?.map(t => ({
         id: t.id,
         name: t.label,
         group: capitalizeFirstLetter(t.category),
         prominence: t.prominence_score,
         summary: t.summary,
         photo_urls: t.photo_urls || [],
-        photos: t.photo_urls || t.photo_ids || [],
+        photos: t.photos || t.photo_ids || [],
         quotes: t.quotes || [],
         contributions: (t.photo_urls || []).length,
       })) || []
-);
-
+  const [nodes, setNodes] = useState(
+    [...finalnodes, 
+        {
+          id: memorial?.id || 'memorial-center',
+          name: memorial?.subject_name || memorial?.deceased_name || 'Memorial',
+          relationship_type: 'Memorial',
+          prominence: 1,
+          summary: '',
+          photos: [],
+          quotes: [],
+          contributions: 0,
+        },    
+      ]
+  );
   const [links, setLinks] = useState(
-    ai_output?.constellation?.edges?.map(d => ({
-      source: d.source,
-      target: d.target,
+    ai_output?.constellation?.nodes?.map(d => ({
+      source: memorial?.id || 'memorial-center',
+      target: d.id,
       type: capitalizeFirstLetter(d.relationship_type),
       weight: d.weight
     })) || []
@@ -295,12 +273,12 @@ export default function ConstellationGraph({
   }, [photoCarroussel]);
 
   const categoriesColor = {
-    "Partner": "#c65def",        
+    "Partner / Spouse": "#c65def",        
     "Spouse": "#f6c4e5",       
     "Uncle": "#A98F7A",        
     "Grandparent": "#94de9b",  
     "Grandchild": "#ffac6d",   
-    "Extended": "#C7B9A3",     
+    "Extended family": "#C7B9A3",     
     "Other": "#A7B0B7",        
     "Classmate": "#7FA8C9",    
     "Neighbor": "#7a9cea",      
@@ -308,7 +286,7 @@ export default function ConstellationGraph({
     "Friend": "#D97B6C" ,
     "Colleague": "#8FAF82" ,
     "Others": "#818b92",
-    "Community": "#C9A08F",
+    "Community member": "#C9A08F",
     "Parent": "#75d270",
     "Child": "#5961d3",
     "Sibling": "#b0819a",
@@ -316,18 +294,6 @@ export default function ConstellationGraph({
     "Aunt": "#e79947",
     "Grandchildren": "#5cd6c6"
   };
-  // Generate placeholder nodes for loading state
-  const placeholderNodes = [...Array(8)].map((_, i) => ({
-    id: `placeholder-${i}`,
-    name: `Node ${i + 1}`,
-    group: 'placeholder',
-    prominence: placeholderProminence(i),
-    summary: '',
-    photos: [],
-    quotes: [],
-    x: placeholderCoordinate(i, 600),
-    y: placeholderCoordinate(i + 3, 400),
-  }));
 
   const relationshipGraph = useMemo(
     () => buildRelationshipGraph(
@@ -342,29 +308,16 @@ export default function ConstellationGraph({
   const graphNodes = tab === "Relationships" ? relationshipGraph.nodes : nodes;
   const graphLinks = tab === "Relationships" ? relationshipGraph.links : links;
 
-  
-  const handleChange = (e) => {
-      setTab(e.target.value);
-      if (e.target.value === "Themes") {
-
-        setNodes(ai_output?.constellation?.nodes?.map(t => ({
-          id: t.id,
-          name: t.label,
-          group: t.category,
-          prominence: t.prominence_score,
-          summary: t.summary,
-          photo_urls: t.photo_urls || [],
-          photos: t.photo_urls || t.photo_ids || [],
-          quotes: t.quotes || [],
-          contributions: (t.photo_urls || []).length,
-        })) || []);
-        setLinks(ai_output?.constellation?.edges?.map(d => ({
-          source: d.source,
-          target: d.target,
-          type: capitalizeFirstLetter(d.relationship_type),
-          weight: d.weight
-        })) || []);
-    }
+  const sortPhotoTheme = (value) => {
+    console.log("Normal ",selectedNode.photo_urls);
+    const reversedPhotoUrl= selectedNode.photo_urls.reverse();
+    const reversedPhoto= selectedNode.photos.reverse();
+    setSelectedNode((prev) => ({
+      ...prev,
+      photo_urls: reversedPhotoUrl,
+      photos: reversedPhoto,
+    }));          
+    console.log("Reversed ",selectedNode.photo_urls);
   }
 
   useEffect(() => {
@@ -448,18 +401,21 @@ export default function ConstellationGraph({
       .attr("stroke-width", d => d.weight || 1)
       .attr("stroke-dasharray", d => edgeStyle(d.type));
 
-      
-    svg.append("defs")
-    .append("pattern")
-    .attr("id", "img-pattern")
-    .attr("width", 1)
-    .attr("height", 1)
-    .attr("patternContentUnits", "objectBoundingBox")
-    .append("image")
-    .attr("xlink:href", memorial?.cover_photo_url)
-    .attr("width", 1)
-    .attr("height", 1)
-    .attr("preserveAspectRatio", "xMidYMid slice");
+    let memorial_fill = "#fff9c5";
+    if (memorial?.cover_photo_url){
+      svg.append("defs")
+      .append("pattern")
+      .attr("id", "img-pattern")
+      .attr("width", 1)
+      .attr("height", 1)
+      .attr("patternContentUnits", "objectBoundingBox")
+      .append("image")
+      .attr("xlink:href", memorial?.cover_photo_url)
+      .attr("width", 1)
+      .attr("height", 1)
+      .attr("preserveAspectRatio", "xMidYMid slice");
+      memorial_fill = "url(#img-pattern)";
+    }
 
     const node = svg
     .append("g")
@@ -470,7 +426,7 @@ export default function ConstellationGraph({
     .attr("r", d=> d.prominence * 80 + 5) // size based on prominence
     .attr("cx", 100)
     .attr("cy", 100)
-    .attr("fill", d => d.relationship_type==="Memorial" ? "url(#img-pattern)" : categoriesColor[d.relationship_type] || "#b1bc93")
+    .attr("fill", d => d.relationship_type==="Memorial" ? memorial_fill : categoriesColor[d.relationship_type] || "#b1bc93")
     // .attr("stroke", d => categoriesColor[d.relationship_type] || "#b1bc93")
     .call(
       d3.drag()
@@ -482,7 +438,8 @@ export default function ConstellationGraph({
     console.log(currentPage);
     if (currentPage=="Viewer"){
       node.on("click", (_, d) => {
-          setSelectedNode(d);                   
+          setSelectedNode(d);    
+          setPhotoCarroussel(d.photo_urls);               
       });
     }
     function truncate(text, maxLength = 10) {
@@ -490,17 +447,17 @@ export default function ConstellationGraph({
         ? text.slice(0, maxLength) + "..."
         : text;
     }
-    const label = svg
+    let label = svg
     .append("g")
     .selectAll("text")
     .data(displayNode)
     .enter()
     .append("text")
-    .filter(d => d.relationship_type !== "Memorial")
+    .filter(d => d.relationship_type !== "Memorial" || memorial_fill!="url(#img-pattern)")
     .text((d) =>truncate(d.name, 12) || " No theme ")
     .attr("font-size", 14)
-    .style("font-family", "Arial")
-    .style("font-weight", "bold")
+    .style("font-family", "var(--font-family-body)")
+    .style("font-weight", "var(--font-weight-regular)")
     .attr("x", d => d.x)
     .attr("y", d => d.y)
     .attr("text-anchor", "middle")   
@@ -550,47 +507,52 @@ export default function ConstellationGraph({
   return (
     <div>
       {
-        currentPage === "Organizer" ? (
-          <div className="mb-6">
-            <select
-              value={tab}
-              onChange={handleChange}
-              className="border border-gray-300 bg-white px-4 py-2 text-sm shadow-sm outline-none"
-            >
-              <option value="Themes">
-                Constellation : Themes
-              </option>
-
-              <option value="Relationships">
-                Constellation : Relationships
-              </option>
-            </select>
-
-            <h2 className="mt-8 mb-4 text-2xl font-serif italic">
-              Constellation
-            </h2>        
-          </div> 
-        ) : (
+        currentPage === "Viewer" && (
         <div>
           <div className="flex justify-between items-center px-15 pt-8">
             <div className="flex gap-10 cursor-pointer text-lg">
               <button className={tab==="Themes" ? "text-[#3c3c3c] border-[#3c3c3c] border-b pb-2" : "text-[#8a8a8a] border-[#8a8a8a] border-b pb-2"}
-                onClick={() => setTab("Themes")}
+                onClick={() => {
+                  setThemes(null);
+                  setSelectedNode(null); 
+                  setTab("Themes"); 
+                }
+              }
               >
                 Themes
               </button>
 
               <button className={tab==="Relationships" ? "text-[#3c3c3c] border-[#3c3c3c] border-b pb-2" : "text-[#8a8a8a] border-[#8a8a8a] border-b pb-2"}
-                onClick={() => setTab("Relationships")}
+                onClick={() => {
+                  setThemes(null);
+                  setSelectedNode(null);
+                  setTab("Relationships")
+                }
+              }
               >
                 Relationships
               </button>
             </div>
-            <select className="border border-[#c8beb0] bg-[#faf7f2] rounded-md px-4 py-2">
-              <option>Sort</option>
-              <option>Name</option>
-              <option>Date</option>
-            </select>
+            {
+              (selectedNode && tab==="Themes" && themes) && (                
+              <div className="relative w-[207px]">
+                <select
+                  // onChange={(e) => { setSortOrder(e.target.value); }}
+                  onChange={(e) => {sortPhotoTheme(e.target.value);}}
+                  className="w-full appearance-none rounded-[12.7px] border border-gray-400 px-5 py-4 pr-12 text-xl font-medium text-neutral-950 bg-transparent focus:outline-none cursor-pointer"
+                  style={{ fontFamily: 'var(--font-boska, serif)' }}
+                >
+                  <option value="newest">Newest first</option>
+                  <option value="oldest">Oldest first</option>
+                </select>
+                <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2">
+                  <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+                    <path d="M15 30L2.00962 7.5L27.9904 7.5L15 30Z" fill="#423F39" />
+                  </svg>
+                </span>
+              </div>
+              )
+            }            
           </div>
 
         </div>
@@ -618,25 +580,28 @@ export default function ConstellationGraph({
 
                 {/* Content Panel */}
                 <section>
-                    <div className="bg-[#f8f4ef] border border-[#c8beb0] w-[640px] rounded-lg p-6 overflow-y-auto">
+                    <div className="bg-[#f8f4ef] border border-[#c8beb0] w-[640px] h-[640px] rounded-lg p-6 overflow-y-auto">
                       <div className="space-y-4 pr-2">
-                        {(selectedNode?.photo_urls?.length ? selectedNode.photo_urls : []).slice(0, 4).map((photoUrl, photoIndex) => (
-                          <div key={`${selectedNode.id}-photo-${photoIndex}`} className="h-[160px] overflow-hidden rounded bg-[#dddddd]">
+                        {(selectedNode?.photo_urls?.length ? selectedNode.photo_urls : []).map((photoUrl, photoIndex) => (
+
+                          <div key={`${selectedNode.id}-photo-${photoIndex}`} className="h-[240px] overflow-hidden rounded bg-[#dddddd]">
                             {photoUrl ? (
-                              <img
+                              <Image
+                                key={photoIndex}
                                 src={photoUrl}
-                                alt=""
-                                className="h-full w-full object-cover"
+                                alt="full"
+                                width={200}
+                                height={200}
+                                className="h-full w-full object-cover cursor-pointer"  
+                                onClick={() => setSelectedImage(photoUrl)}
                               />
                             ) : null}
                           </div>
                         ))}
                         {!selectedNode?.photo_urls?.length ? (
-                            <div className="bg-[#f8f4ef] p-6">
-                              <div className="bg-[#cdbfae] h-40 rounded-sm mb-4"></div>
-                              <div className="bg-[#cdbfae] h-72 rounded-sm"></div>
-                            </div>
+                          <p className="text-[11px] text-gray-500 py-8 text-center">No photos matched this theme yet.</p>
                         ) : null}
+
                       </div>
                     </div>
                 </section>
@@ -655,26 +620,19 @@ export default function ConstellationGraph({
                     <div className="w-[140px] h-[2px] bg-[#75835F]" />
                     <div className="w-[260px] h-[260px] rounded-full border border-[#75835F] overflow-hidden bg-gray-100 flex items-center justify-center">
                       <div
-                        className="flex transition-transform duration-500"
+                        className="flex transition-transform duration-100"
                         style={{ transform: `translateX(-${indexPhoto*100}%)` }}
                       >
                         {photoCarroussel.map((src, i) => (
-                          <img
+                          <Image
                             key={i}
-                            src={src.photo_url}
+                            src={src}
                             alt={`slide-${i}`}
+                            width={200}
+                            height={200}                           
                             className="w-full flex-shrink-0 object-cover"
                           />
                         ))}                        
-                        {/* {
-                          photoCarroussel.length!=0 && (
-                            <img
-                              key={indexPhoto}
-                              src={photoCarroussel[indexPhoto].photo_url}
-                              className="w-full flex-shrink-0 object-cover"
-                            />
-                          )
-                        } */}
                       </div>
                     </div>
                   </div>
@@ -770,7 +728,7 @@ export default function ConstellationGraph({
             </h2>        
             <div className="bg-[#f4f0ea] p-4">
                 <div className="space-y-4">
-                  {nodes.map((item, index) => (
+                  {nodes.filter(m=> m.relationship_type!="Memorial").map((item, index) => (
                     <div
                       key={index}
                       className="h-[400px] border border-gray-300 rounded-md p-4 flex gap-6 relative"
@@ -802,15 +760,19 @@ export default function ConstellationGraph({
                           {(item?.photo_urls?.length ?? item?.contributions ?? 0)} tagged photo{(item?.photo_urls?.length ?? item?.contributions ?? 0) === 1 ? '' : 's'}
                         </p>
                       </div>
-                      <div className="flex-1 w-[240px] h-full rounded-sm lg:w-[430px]">
+                      <div className="flex-1 w-[240px] h-full rounded-sm lg:w-[430px] overflow-y-auto ">
                         <div className="space-y-4 pr-2">
-                          {(item?.photo_urls?.length ? item.photo_urls : []).slice(0, 4).map((photoUrl, photoIndex) => (
-                            <div key={`${item.id}-photo-${photoIndex}`} className="h-[160px] overflow-y-auto rounded bg-[#dddddd]">
+                          {(item?.photo_urls?.length ? item.photo_urls : []).map((photoUrl, photoIndex) => (
+                            <div key={`${item.id}-photo-${photoIndex}`} className="h-[160px] overflow-hidden rounded bg-[#dddddd]">
                               {photoUrl ? (
-                                <img
+                                <Image
+                                  key={photoIndex}
                                   src={photoUrl}
-                                  alt=""
-                                  className="h-full w-full object-cover"
+                                  alt="full"
+                                  width={200}
+                                  height={200}
+                                  className="h-full w-full object-cover cursor-pointer"
+                                  onClick={() => setSelectedImage(photoUrl)}
                                 />
                               ) : null}
                             </div>
@@ -843,6 +805,7 @@ export default function ConstellationGraph({
                           <input
                             type="checkbox"
                             defaultChecked
+                            onChange={() => hideAllFamilyRelationship()}                        
                             className="h-4 w-4 accent-gray-700"
                           />
                           <span className="text-sm">
@@ -859,7 +822,7 @@ export default function ConstellationGraph({
                             >
                               <input
                                 type="checkbox"
-                                defaultChecked
+                                checked={!hiddenRelationshipType[item.relationship_type]} 
                                 onChange={() => handleRelationshipTypesChange(item.relationship_type)}                        
                                 className="h-4 w-4 accent-gray-700"
                               />
@@ -870,7 +833,7 @@ export default function ConstellationGraph({
                       </div>
 
                       {/* Other Categories */}
-                      {otherRelatedCounts.slice(1).map((item,index) => (
+                      {otherRelatedCounts.map((item,index) => (
                         <div key={index}>
                           <label className="flex items-center gap-2 text-gray-700">
                             <input
@@ -893,6 +856,20 @@ export default function ConstellationGraph({
         </div>
         )
       }
+      {selectedImage && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
+          onClick={() => setSelectedImage(null)}
+        >
+          <Image
+            src={selectedImage}
+            alt="full image"
+            width={1000}
+            height={1000}
+            className="max-h-[90vh] w-auto rounded"
+          />
+        </div>
+      )}      
     </div>
   ) ;
 }

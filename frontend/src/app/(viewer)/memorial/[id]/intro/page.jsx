@@ -35,11 +35,8 @@ export default function RememberPage() {
       className="min-h-screen p-(--page-pad-x) flex flex-col"
     >
       <LandingNav />
-      {/* Main content */}
       <main className="flex-1 flex flex-col items-center justify-center px-6 pb-16">
         <div className="flex flex-col items-center gap-5 max-w-sm w-full text-center">
-
-          {/* Profile image */}
           <div
             className="w-44 h-44 rounded-full overflow-hidden flex-shrink-0"
             style={{
