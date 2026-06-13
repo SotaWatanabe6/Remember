@@ -11,7 +11,7 @@ import {
 } from "@/lib/api.js";
 import {
   CONTRIBUTOR_RELATIONSHIP_OPTIONS,
-  CONTRIBUTOR_RELATIONSHIP_OTHER,
+  CONTRIBUTOR_RELATIONSHIP_TYPES_REQUIRING_LABEL,
 } from "@/lib/contribute/relationshipOptions.js";
 import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS } from "@/lib/contribute/questionnaireQuestions.js";
 
@@ -312,7 +312,7 @@ function hasCompletedRelationship(session) {
     return false;
   }
 
-  if (session.relationship_type === CONTRIBUTOR_RELATIONSHIP_OTHER) {
+  if (CONTRIBUTOR_RELATIONSHIP_TYPES_REQUIRING_LABEL.has(session.relationship_type)) {
     return Boolean(session.relationship_custom_label);
   }
 
@@ -362,17 +362,21 @@ export async function getContributorRelationshipDraft(inviteToken) {
 
 export async function saveContributorRelationship(
   inviteToken,
-  { relationshipType, relationshipCustomLabel = "" },
+  { relationshipType, relationshipLabel = "" },
 ) {
   const trimmedRelationshipType = relationshipType.trim();
-  const trimmedCustomLabel = relationshipCustomLabel.trim();
+  const trimmedLabel = relationshipLabel.trim();
 
   if (!CONTRIBUTOR_RELATIONSHIP_OPTIONS.includes(trimmedRelationshipType)) {
     throw new Error("Please choose a relationship.");
   }
 
-  if (trimmedRelationshipType === CONTRIBUTOR_RELATIONSHIP_OTHER && !trimmedCustomLabel) {
-    throw new Error("Please describe your relationship.");
+  if (CONTRIBUTOR_RELATIONSHIP_TYPES_REQUIRING_LABEL.has(trimmedRelationshipType) && !trimmedLabel) {
+    throw new Error(
+      trimmedRelationshipType === "Family"
+        ? "Please choose how you're related."
+        : "Please describe your relationship.",
+    );
   }
 
   const draft = await getContributorRelationshipDraft(inviteToken);
@@ -381,8 +385,7 @@ export async function saveContributorRelationship(
     throw new Error("Your contribution could not be found.");
   }
 
-  const relationship_custom_label =
-    trimmedRelationshipType === CONTRIBUTOR_RELATIONSHIP_OTHER ? trimmedCustomLabel : null;
+  const relationship_label = trimmedLabel || null;
 
   let savedRelationship;
 
@@ -390,7 +393,7 @@ export async function saveContributorRelationship(
     savedRelationship = await saveRelationship(inviteToken, {
       contributor_token: draft.session.contributorToken,
       relationship_type: trimmedRelationshipType,
-      relationship_label: relationship_custom_label,
+      relationship_label,
     });
   } catch (error) {
     console.error("Failed to save contributor relationship.", error);
@@ -400,8 +403,8 @@ export async function saveContributorRelationship(
   const updatedSession = {
     ...draft.session,
     relationship_type: savedRelationship?.contributor?.relationship_type ?? trimmedRelationshipType,
-    relationship_custom_label,
-    relationship_label: relationship_custom_label,
+    relationship_custom_label: relationship_label,
+    relationship_label,
     updatedAt: new Date().toISOString(),
   };
 

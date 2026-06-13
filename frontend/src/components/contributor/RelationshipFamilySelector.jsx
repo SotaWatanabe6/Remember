@@ -1,6 +1,5 @@
 'use client';
-
-// frontend/src/components/contributor/RelationshipSelector.jsx
+// frontend/src/components/contributor/RelationshipFamilySelector.jsx
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -10,9 +9,8 @@ import {
   saveContributorRelationship,
 } from "@/services/contributorService.js";
 import {
-  CONTRIBUTOR_RELATIONSHIP_OPTIONS,
   CONTRIBUTOR_RELATIONSHIP_FAMILY,
-  CONTRIBUTOR_RELATIONSHIP_OTHER,
+  CONTRIBUTOR_FAMILY_RELATIONSHIP_OPTIONS,
 } from "@/lib/contribute/relationshipOptions.js";
 
 const RELATIONSHIP_DRAFT_PREFIX = "remember_relationship_draft";
@@ -34,29 +32,6 @@ function writeRelationshipDraft(inviteToken, draft) {
     localStorage.setItem(getDraftKey(inviteToken), JSON.stringify(draft));
   } catch {}
 }
-
-const relationshipErrorCopy = {
-  invalid: {
-    title: "This invitation link is not available",
-    body: "Please check the link or ask the memorial organizer to send a new invitation.",
-  },
-  expired: {
-    title: "This invitation has expired",
-    body: "The contribution window for this link has passed. The organizer can share a new link if they are still collecting memories.",
-  },
-  closed: {
-    title: "Contributions are closed",
-    body: "This memorial is not accepting new contributions right now. Thank you for wanting to share a memory.",
-  },
-  error: {
-    title: "We could not open your contribution",
-    body: "Please return to the invitation page and try again.",
-  },
-  missing: {
-    title: "We could not find your contribution draft",
-    body: "Please return to the invitation page and enter your name before choosing your relationship.",
-  },
-};
 
 function ContributorNav({ backHref }) {
   return (
@@ -86,35 +61,9 @@ function LoadingState() {
   );
 }
 
-function RelationshipErrorState({ status, inviteToken }) {
-  const copy = relationshipErrorCopy[status] ?? relationshipErrorCopy.invalid;
-
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-r-bg text-r-text px-6 py-10 sm:px-[50px]">
-      <section className="flex w-full max-w-[560px] flex-col items-center gap-5 text-center">
-        <div className="flex size-16 items-center justify-center rounded-full bg-r-card text-2xl font-medium text-r-secondary">
-          R
-        </div>
-        <div className="flex flex-col gap-3">
-          <h1 className="text-h1 text-r-text">{copy.title}</h1>
-          <p className="text-body-2 text-r-secondary">{copy.body}</p>
-        </div>
-        {status === "missing" ? (
-          <Link
-            href={`/contribute/${inviteToken}`}
-            className="mt-2 flex h-[56px] items-center justify-center rounded-full px-8 text-body-2 font-medium transition-opacity hover:opacity-80 bg-r-btn text-r-btn-text border-none"
-          >
-            Return to invitation
-          </Link>
-        ) : null}
-      </section>
-    </main>
-  );
-}
-
-export default function RelationshipSelector({ inviteToken }) {
+export default function RelationshipFamilySelector({ inviteToken }) {
   const router = useRouter();
-  const [draft, setDraft] = useState(null);
+  const [subjectName, setSubjectName] = useState("them");
   const [selected, setSelected] = useState("");
   const [error, setError] = useState("");
   const [submitError, setSubmitError] = useState("");
@@ -126,27 +75,31 @@ export default function RelationshipSelector({ inviteToken }) {
 
     async function load() {
       setIsLoading(true);
-      let relationshipDraft;
-
       try {
-        relationshipDraft = await getContributorRelationshipDraft(inviteToken);
+        const relationshipDraft = await getContributorRelationshipDraft(inviteToken);
+        if (!isMounted) return;
+        if (relationshipDraft?.invite?.deceased?.name) {
+          setSubjectName(relationshipDraft.invite.deceased.name);
+        }
       } catch (err) {
         console.error("Failed to load contributor relationship draft.", err);
-        relationshipDraft = { status: "error", invite: null, session: null };
       }
 
-      if (!isMounted) return;
-
-      setDraft(relationshipDraft);
-
       const localDraft = readRelationshipDraft(inviteToken);
-      setSelected(localDraft.relationship_type || relationshipDraft?.relationship_type || "");
-      setIsLoading(false);
+      if (localDraft.relationship_type !== CONTRIBUTOR_RELATIONSHIP_FAMILY) {
+        // No family selection in progress — send back to the main page.
+        router.replace(`/contribute/${inviteToken}/relationship`);
+        return;
+      }
+      if (isMounted) {
+        setSelected(localDraft.relationship_label || "");
+        setIsLoading(false);
+      }
     }
 
     load();
     return () => { isMounted = false; };
-  }, [inviteToken]);
+  }, [inviteToken, router]);
 
   function handleSelect(option) {
     setSelected(option);
@@ -156,30 +109,17 @@ export default function RelationshipSelector({ inviteToken }) {
 
   async function handleContinue() {
     if (!selected) {
-      setError("Please choose the relationship that fits best.");
+      setError("Please choose how you're related.");
       return;
     }
 
-    if (selected === CONTRIBUTOR_RELATIONSHIP_FAMILY) {
-      writeRelationshipDraft(inviteToken, { relationship_type: CONTRIBUTOR_RELATIONSHIP_FAMILY });
-      router.push(`/contribute/${inviteToken}/relationship/family`);
-      return;
-    }
-
-    if (selected === CONTRIBUTOR_RELATIONSHIP_OTHER) {
-      writeRelationshipDraft(inviteToken, { relationship_type: CONTRIBUTOR_RELATIONSHIP_OTHER });
-      router.push(`/contribute/${inviteToken}/relationship/other`);
-      return;
-    }
-
-    // Friend or Colleague — no sub-page, save directly and continue.
     setIsSaving(true);
     setSubmitError("");
 
     try {
       await saveContributorRelationship(inviteToken, {
-        relationshipType: selected,
-        relationshipLabel: "",
+        relationshipType: CONTRIBUTOR_RELATIONSHIP_FAMILY,
+        relationshipLabel: selected,
       });
       writeRelationshipDraft(inviteToken, {});
       router.push(`/contribute/${inviteToken}/questions`);
@@ -195,26 +135,20 @@ export default function RelationshipSelector({ inviteToken }) {
     return <LoadingState />;
   }
 
-  if (!draft || draft.status !== "ready") {
-    return <RelationshipErrorState status={draft?.status ?? "invalid"} inviteToken={inviteToken} />;
-  }
-
-  const subjectName = draft.invite?.deceased?.name || "them";
-
   return (
     <main className="min-h-screen bg-r-bg text-r-text flex flex-col">
-      <ContributorNav backHref={`/contribute/${inviteToken}/privacy`} />
+      <ContributorNav backHref={`/contribute/${inviteToken}/relationship`} />
 
       <div className="flex-1 px-6 sm:px-[50px] pt-6 pb-16">
         <div className="page-shell">
 
           <div className="text-center">
             <h1 className="text-h1 text-r-text">Who were you to {subjectName}?</h1>
-            <p className="mt-2 text-body-2 text-r-text">Select your connection to {subjectName} below.</p>
+            <p className="mt-2 text-body-2 text-r-secondary">Select your connection to {subjectName} below.</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4" role="radiogroup" aria-label="Your relationship">
-            {CONTRIBUTOR_RELATIONSHIP_OPTIONS.map((option) => {
+          <div className="grid grid-cols-2 gap-4" role="radiogroup" aria-label="Family relationship">
+            {CONTRIBUTOR_FAMILY_RELATIONSHIP_OPTIONS.map((option) => {
               const isSelected = selected === option;
               return (
                 <button
@@ -244,14 +178,22 @@ export default function RelationshipSelector({ inviteToken }) {
             <p className="text-center text-caption text-r-danger" role="alert">{submitError}</p>
           ) : null}
 
-          <button
-            type="button"
-            onClick={handleContinue}
-            disabled={isSaving}
-            className="mx-auto w-full max-w-[400px] rounded-full py-4 text-body-2 font-medium tracking-wide transition-opacity hover:opacity-80 active:opacity-70 disabled:cursor-not-allowed disabled:opacity-55 bg-r-btn text-r-btn-text border-none"
-          >
-            {isSaving ? "Saving..." : "Continue"}
-          </button>
+          <div className="grid grid-cols-2 gap-4">
+            <Link
+              href={`/contribute/${inviteToken}/relationship`}
+              className="flex h-[56px] items-center justify-center rounded-full text-body-2 font-medium transition-opacity hover:opacity-80 bg-r-btn text-r-btn-text border-none"
+            >
+              Return to relationship types
+            </Link>
+            <button
+              type="button"
+              onClick={handleContinue}
+              disabled={isSaving}
+              className="flex h-[56px] items-center justify-center rounded-full text-body-2 font-medium tracking-wide transition-opacity hover:opacity-80 active:opacity-70 disabled:cursor-not-allowed disabled:opacity-55 bg-r-btn text-r-btn-text border-none"
+            >
+              {isSaving ? "Saving..." : "Continue"}
+            </button>
+          </div>
 
         </div>
       </div>
