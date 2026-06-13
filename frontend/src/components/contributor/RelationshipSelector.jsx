@@ -11,29 +11,12 @@ import {
 } from "@/services/contributorService.js";
 import {
   CONTRIBUTOR_RELATIONSHIP_OPTIONS,
+  CONTRIBUTOR_FAMILY_RELATIONSHIP_OPTIONS,
   CONTRIBUTOR_RELATIONSHIP_FAMILY,
+  CONTRIBUTOR_RELATIONSHIP_FRIEND,
+  CONTRIBUTOR_RELATIONSHIP_COLLEAGUE,
   CONTRIBUTOR_RELATIONSHIP_OTHER,
 } from "@/lib/contribute/relationshipOptions.js";
-
-const RELATIONSHIP_DRAFT_PREFIX = "remember_relationship_draft";
-
-function getDraftKey(inviteToken) {
-  return `${RELATIONSHIP_DRAFT_PREFIX}:${inviteToken}`;
-}
-
-function readRelationshipDraft(inviteToken) {
-  try {
-    return JSON.parse(localStorage.getItem(getDraftKey(inviteToken)) || "{}");
-  } catch {
-    return {};
-  }
-}
-
-function writeRelationshipDraft(inviteToken, draft) {
-  try {
-    localStorage.setItem(getDraftKey(inviteToken), JSON.stringify(draft));
-  } catch {}
-}
 
 const relationshipErrorCopy = {
   invalid: {
@@ -112,10 +95,38 @@ function RelationshipErrorState({ status, inviteToken }) {
   );
 }
 
+function OptionCard({ label, isSelected, onSelect }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={isSelected}
+      onClick={() => onSelect(label)}
+      className={`flex h-[115px] w-full items-center justify-center rounded-[20px] border px-6 text-center [font-family:var(--font-family-display)] text-2xl font-medium leading-[31px] transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-r-border-focus ${
+        isSelected
+          ? "border-[#97877B] bg-r-card text-r-text"
+          : "border-[#97877B] bg-transparent text-r-text hover:bg-r-card/45"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function getInitialSelection(relationshipType) {
+  if (relationshipType === CONTRIBUTOR_RELATIONSHIP_FAMILY) return CONTRIBUTOR_RELATIONSHIP_FAMILY;
+  if (relationshipType === CONTRIBUTOR_RELATIONSHIP_OTHER) return CONTRIBUTOR_RELATIONSHIP_OTHER;
+  if (relationshipType === CONTRIBUTOR_RELATIONSHIP_FRIEND) return CONTRIBUTOR_RELATIONSHIP_FRIEND;
+  if (relationshipType === CONTRIBUTOR_RELATIONSHIP_COLLEAGUE) return CONTRIBUTOR_RELATIONSHIP_COLLEAGUE;
+  return "";
+}
+
 export default function RelationshipSelector({ inviteToken }) {
   const router = useRouter();
   const [draft, setDraft] = useState(null);
-  const [selected, setSelected] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [familySubtype, setFamilySubtype] = useState("");
+  const [otherLabel, setOtherLabel] = useState("");
   const [error, setError] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -139,8 +150,17 @@ export default function RelationshipSelector({ inviteToken }) {
 
       setDraft(relationshipDraft);
 
-      const localDraft = readRelationshipDraft(inviteToken);
-      setSelected(localDraft.relationship_type || relationshipDraft?.relationship_type || "");
+      const relationshipType = relationshipDraft?.relationship_type ?? "";
+      const relationshipLabel = relationshipDraft?.relationship_custom_label ?? "";
+
+      setSelectedCategory(getInitialSelection(relationshipType));
+      if (relationshipType === CONTRIBUTOR_RELATIONSHIP_FAMILY) {
+        setFamilySubtype(relationshipLabel);
+      }
+      if (relationshipType === CONTRIBUTOR_RELATIONSHIP_OTHER) {
+        setOtherLabel(relationshipLabel);
+      }
+
       setIsLoading(false);
     }
 
@@ -148,40 +168,64 @@ export default function RelationshipSelector({ inviteToken }) {
     return () => { isMounted = false; };
   }, [inviteToken]);
 
-  function handleSelect(option) {
-    setSelected(option);
+  const isFamilyOpen = selectedCategory === CONTRIBUTOR_RELATIONSHIP_FAMILY;
+  const isOtherOpen = selectedCategory === CONTRIBUTOR_RELATIONSHIP_OTHER;
+  const isSubPanelOpen = isFamilyOpen || isOtherOpen;
+
+  function handleTopLevelSelect(option) {
+    setSelectedCategory(option);
+    setError("");
+    setSubmitError("");
+  }
+
+  function handleFamilySelect(subtype) {
+    setFamilySubtype(subtype);
+    setError("");
+    setSubmitError("");
+  }
+
+  function handleOtherLabelChange(event) {
+    setOtherLabel(event.target.value);
+    setError("");
+    setSubmitError("");
+  }
+
+  function handleReturnToTypes() {
+    setSelectedCategory("");
     setError("");
     setSubmitError("");
   }
 
   async function handleContinue() {
-    if (!selected) {
+    if (!selectedCategory) {
       setError("Please choose the relationship that fits best.");
       return;
     }
 
-    if (selected === CONTRIBUTOR_RELATIONSHIP_FAMILY) {
-      writeRelationshipDraft(inviteToken, { relationship_type: CONTRIBUTOR_RELATIONSHIP_FAMILY });
-      router.push(`/contribute/${inviteToken}/relationship/family`);
+    if (isFamilyOpen && !familySubtype) {
+      setError("Please choose how you're related.");
       return;
     }
 
-    if (selected === CONTRIBUTOR_RELATIONSHIP_OTHER) {
-      writeRelationshipDraft(inviteToken, { relationship_type: CONTRIBUTOR_RELATIONSHIP_OTHER });
-      router.push(`/contribute/${inviteToken}/relationship/other`);
+    if (isOtherOpen && !otherLabel.trim()) {
+      setError("Please describe your relationship.");
       return;
     }
 
-    // Friend or Colleague — no sub-page, save directly and continue.
+    const relationshipLabel = isFamilyOpen
+      ? familySubtype
+      : isOtherOpen
+        ? otherLabel.trim()
+        : "";
+
     setIsSaving(true);
     setSubmitError("");
 
     try {
       await saveContributorRelationship(inviteToken, {
-        relationshipType: selected,
-        relationshipLabel: "",
+        relationshipType: selectedCategory,
+        relationshipLabel,
       });
-      writeRelationshipDraft(inviteToken, {});
       router.push(`/contribute/${inviteToken}/questions`);
     } catch (err) {
       setSubmitError(
@@ -206,52 +250,101 @@ export default function RelationshipSelector({ inviteToken }) {
       <ContributorNav backHref={`/contribute/${inviteToken}/privacy`} />
 
       <div className="flex-1 px-6 sm:px-[50px] pt-6 pb-16">
-        <div className="page-shell">
+        <div className="mx-auto flex w-full max-w-[886px] flex-col items-center pt-[101px] max-sm:pt-16">
 
-          <div className="text-center">
-            <h1 className="text-h1 text-r-text">Who were you to {subjectName}?</h1>
-            <p className="mt-2 text-body-2 text-r-text">Select your connection to {subjectName} below.</p>
+          <div className="flex max-w-[507px] flex-col items-center gap-5 text-center mx-auto">
+            <h1 className="[font-family:var(--font-family-display)] text-[40px] font-bold leading-[52px] text-r-text">
+              Who were you to {subjectName}?
+            </h1>
+            <p className="text-xl leading-[26px] text-r-secondary">
+              Select your connection to {subjectName} below.
+            </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4" role="radiogroup" aria-label="Your relationship">
-            {CONTRIBUTOR_RELATIONSHIP_OPTIONS.map((option) => {
-              const isSelected = selected === option;
-              return (
-                <button
+          {!isSubPanelOpen ? (
+            <div className="mt-[93px] grid w-full grid-cols-1 gap-x-5 gap-y-[10px] sm:grid-cols-2" role="radiogroup" aria-label="Your relationship">
+              {CONTRIBUTOR_RELATIONSHIP_OPTIONS.map((option) => (
+                <OptionCard
                   key={option}
-                  type="button"
-                  role="radio"
-                  aria-checked={isSelected}
-                  onClick={() => handleSelect(option)}
-                  className="flex h-[100px] items-center justify-center rounded-2xl text-xl font-display font-normal transition-colors sm:h-[120px]"
-                  style={{
-                    border: isSelected ? '2px solid var(--color-r-text)' : '1px solid var(--color-r-border)',
-                    backgroundColor: isSelected ? 'var(--color-r-card)' : 'transparent',
-                    color: 'var(--color-r-text)',
-                  }}
-                >
-                  {option}
-                </button>
-              );
-            })}
-          </div>
+                  label={option}
+                  isSelected={selectedCategory === option}
+                  onSelect={handleTopLevelSelect}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          {isFamilyOpen ? (
+            <div className="mt-[93px] grid w-full grid-cols-1 gap-x-5 gap-y-[10px] sm:grid-cols-2" role="radiogroup" aria-label="Family relationship">
+              {CONTRIBUTOR_FAMILY_RELATIONSHIP_OPTIONS.map((option) => (
+                <OptionCard
+                  key={option}
+                  label={option}
+                  isSelected={familySubtype === option}
+                  onSelect={handleFamilySelect}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          {isOtherOpen ? (
+            <div className="mx-auto mt-[93px] flex w-full max-w-[434px] flex-col">
+              <label
+                htmlFor="relationship-other-label"
+                className="[font-family:var(--font-family-display)] text-2xl font-medium leading-[31px] text-r-text"
+              >
+                Relationship type
+              </label>
+              <input
+                id="relationship-other-label"
+                type="text"
+                autoFocus
+                value={otherLabel}
+                onChange={handleOtherLabelChange}
+                onKeyDown={(e) => e.key === 'Enter' && handleContinue()}
+                placeholder="Type answer"
+                aria-invalid={Boolean(error)}
+                className={`mt-[10px] h-16 w-full rounded-[13px] border bg-transparent px-5 text-xl leading-[26px] text-r-text outline-none transition placeholder:text-r-secondary focus:border-r-border-focus ${
+                  error ? "border-r-danger" : "border-[#97877B]"
+                }`}
+              />
+            </div>
+          ) : null}
 
           {error ? (
-            <p className="text-center text-caption text-r-danger" role="alert">{error}</p>
+            <p className="mt-4 text-center text-sm leading-5 text-r-danger" role="alert">{error}</p>
           ) : null}
 
           {submitError ? (
-            <p className="text-center text-caption text-r-danger" role="alert">{submitError}</p>
+            <p className="mt-4 text-center text-sm leading-5 text-r-danger" role="alert">{submitError}</p>
           ) : null}
 
-          <button
-            type="button"
-            onClick={handleContinue}
-            disabled={isSaving}
-            className="mx-auto w-full max-w-[400px] rounded-full py-4 text-body-2 font-medium tracking-wide transition-opacity hover:opacity-80 active:opacity-70 disabled:cursor-not-allowed disabled:opacity-55 bg-r-btn text-r-btn-text border-none"
+          <div
+            className={`mx-auto grid w-full max-w-[886px] grid-cols-1 gap-5 sm:grid-cols-2 mt-[100px] ${
+              !isSubPanelOpen ? "sm:flex sm:justify-center" : ""
+            }`}
           >
-            {isSaving ? "Saving..." : "Continue"}
-          </button>
+            {isSubPanelOpen ? (
+              <button
+                type="button"
+                onClick={handleReturnToTypes}
+                disabled={isSaving}
+                className="flex h-[62px] w-full max-w-[434px] items-center justify-center rounded-full bg-r-btn px-8 text-xl leading-[26px] text-r-btn-text transition hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-r-border-focus disabled:cursor-not-allowed disabled:opacity-55"
+              >
+                Return to relationship types
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={handleContinue}
+              disabled={isSaving}
+              className={`flex h-[62px] w-full max-w-[434px] items-center justify-center rounded-full bg-r-btn px-8 text-xl leading-[26px] text-r-btn-text transition hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-r-border-focus disabled:cursor-not-allowed disabled:opacity-55 ${
+                !isSubPanelOpen ? "sm:col-span-2" : ""
+              }`}
+            >
+              {isSaving ? "Saving..." : "Continue"}
+            </button>
+          </div>
 
         </div>
       </div>

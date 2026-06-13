@@ -101,7 +101,7 @@ function ContributorBrand() {
   return (
     <Link href="/" className="flex items-center gap-5 text-r-text" aria-label="Remember home">
       <Image
-        src="/images/remember-logo.png"
+        src="/Logo.svg"
         alt=""
         width={34}
         height={36}

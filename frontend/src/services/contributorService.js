@@ -255,6 +255,11 @@ export async function beginContributorDraft(inviteToken, contributorName) {
       inviteToken,
       memorialId: invite.memorialId,
       contributorName: trimmedContributorName,
+      // Backfill the deceased's name/photo onto the session so the
+      // questionnaire's localStorage-only fast path (getContributorQuestionnaireDraft)
+      // can resolve invite.deceased.name without a network call.
+      deceasedName: invite.deceased.name || storedSession.deceasedName || "",
+      deceasedPhotoUrl: invite.deceased.photoUrl ?? storedSession.deceasedPhotoUrl ?? null,
       updatedAt: now,
     };
 
@@ -289,6 +294,11 @@ export async function beginContributorDraft(inviteToken, contributorName) {
     contributorToken: contribution.contributorToken,
     contributorName: contribution.contributorName,
     status: contribution.status,
+    // Persist the deceased's name/photo so the questionnaire's localStorage-only
+    // fast path (getContributorQuestionnaireDraft) can resolve invite.deceased.name
+    // without a network call.
+    deceasedName: invite.deceased.name || "",
+    deceasedPhotoUrl: invite.deceased.photoUrl ?? null,
     createdAt: now,
     updatedAt: now,
   };

@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import QuestionCard from "@/components/contributor/QuestionCard.jsx";
 import MemoryOrb from "@/components/contributor/MemoryOrb.jsx";
-import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS } from "@/lib/contribute/questionnaireQuestions.js";
+import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS, formatQuestionPrompt } from "@/lib/contribute/questionnaireQuestions.js";
 import {
   getContributorQuestionnaireDraft,
   getQuestionnaireResponses,
@@ -45,8 +45,8 @@ function ContributorNav({ onBack }) {
   return (
     <nav className="w-full flex items-center justify-between px-6 sm:px-[50px] py-6">
       <div className="flex items-center gap-2">
-        <img src="/logo.svg" alt="" width={36} height={36} aria-hidden="true" />
-        <span className="text-r-text text-2xl leading-8 font-display">Remember</span>
+        <img src="/Logo.svg" alt="" width={36} height={36} aria-hidden="true" />
+        <span className="text-r-text text-2xl leading-8 [font-family:var(--font-family-display)]">Remember</span>
       </div>
       <button type="button" onClick={onBack} className="flex items-center gap-2 text-r-text transition-opacity hover:opacity-70">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -582,6 +582,10 @@ export default function QuestionnaireFlow({ inviteToken }) {
   }
 
   const subjectName = draft.invite?.deceased?.name || "them";
+  const personalizedQuestion = {
+    ...currentQuestion,
+    prompt: formatQuestionPrompt(currentQuestion.prompt, draft.invite?.deceased?.name),
+  };
 
   return (
     <main className="min-h-screen bg-r-bg text-r-text flex flex-col">
@@ -612,7 +616,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
           ) : (
             <div className="flex w-full flex-col items-center gap-8">
               <QuestionCard
-                question={currentQuestion}
+                question={personalizedQuestion}
                 answerText={currentAnswer.answer_text}
                 inputMode={currentAnswer.input_mode}
                 autosaveStatus={autosaveStatus}
