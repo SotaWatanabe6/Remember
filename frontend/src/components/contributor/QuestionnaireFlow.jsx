@@ -1,10 +1,13 @@
 "use client";
 
+// frontend/src/components/contributor/QuestionnaireFlow.jsx
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import QuestionCard from "@/components/contributor/QuestionCard.jsx";
-import QuestionProgress from "@/components/contributor/QuestionProgress.jsx";
-import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS } from "@/lib/contribute/questionnaireQuestions.js";
+import MemoryOrb from "@/components/contributor/MemoryOrb.jsx";
+import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS, formatQuestionPrompt } from "@/lib/contribute/questionnaireQuestions.js";
 import {
   getContributorQuestionnaireDraft,
   getQuestionnaireResponses,
@@ -38,12 +41,29 @@ const questionnaireErrorCopy = {
   },
 };
 
+function ContributorNav({ onBack }) {
+  return (
+    <nav className="w-full flex items-center justify-between px-6 sm:px-[50px] py-6">
+      <div className="flex items-center gap-2">
+        <img src="/Logo.svg" alt="" width={36} height={36} aria-hidden="true" />
+        <span className="text-r-text text-2xl leading-8 [font-family:var(--font-family-display)]">Remember</span>
+      </div>
+      <button type="button" onClick={onBack} className="flex items-center gap-2 text-r-text transition-opacity hover:opacity-70">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M7.82484 13L12.7248 17.9C12.9248 18.1 13.0208 18.3334 13.0128 18.6C13.0048 18.8667 12.9005 19.1 12.6998 19.3C12.4998 19.4834 12.2665 19.5794 11.9998 19.588C11.7332 19.5967 11.4998 19.5007 11.2998 19.3L4.69984 12.7C4.59984 12.6 4.52884 12.4917 4.48684 12.375C4.44484 12.2584 4.42451 12.1334 4.42584 12C4.42718 11.8667 4.44818 11.7417 4.48884 11.625C4.52951 11.5084 4.60018 11.4 4.70084 11.3L11.3008 4.70005C11.4842 4.51672 11.7135 4.42505 11.9888 4.42505C12.2642 4.42505 12.5015 4.51672 12.7008 4.70005C12.9008 4.90005 13.0008 5.13772 13.0008 5.41305C13.0008 5.68838 12.9008 5.92572 12.7008 6.12505L7.82484 11H18.9998C19.2832 11 19.5208 11.096 19.7128 11.288C19.9048 11.48 20.0005 11.7174 19.9998 12C19.9992 12.2827 19.9032 12.5204 19.7118 12.713C19.5205 12.9057 19.2832 13.0014 18.9998 13H7.82484Z" fill="currentColor"/>
+        </svg>
+        <span className="text-base font-normal">Back</span>
+      </button>
+    </nav>
+  );
+}
+
 function LoadingState() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-r-bg px-6 py-10 text-neutral-950 sm:px-[50px]">
+    <main className="flex min-h-screen items-center justify-center bg-r-bg text-r-text px-6 py-10 sm:px-[50px]">
       <section className="flex flex-col items-center gap-4 text-center" aria-live="polite">
-        <div className="size-12 rounded-full border-2 border-slate-200 border-t-neutral-950" />
-        <p className="text-base leading-6 text-slate-600">Opening your questions...</p>
+        <div className="size-12 rounded-full border-2 animate-spin" style={{ borderColor: 'var(--color-r-border)', borderTopColor: 'var(--color-r-text)' }} />
+        <p className="text-body-2 text-r-secondary">Opening your questions...</p>
       </section>
     </main>
   );
@@ -58,24 +78,22 @@ function QuestionnaireErrorState({ status, inviteToken }) {
   const linkText = status === "relationship_missing" ? "Choose relationship" : "Return to invitation";
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-r-bg px-6 py-10 text-neutral-950 sm:px-[50px]">
+    <main className="flex min-h-screen items-center justify-center bg-r-bg text-r-text px-6 py-10 sm:px-[50px]">
       <section className="flex w-full max-w-[560px] flex-col items-center gap-5 text-center">
-        <div className="flex size-16 items-center justify-center rounded-full bg-slate-100 text-2xl font-medium text-slate-600">
+        <div className="flex size-16 items-center justify-center rounded-full bg-r-card text-2xl font-medium text-r-secondary">
           R
         </div>
         <div className="flex flex-col gap-3">
-          <h1 className="text-[32px] font-medium leading-[38px] text-neutral-950 sm:text-[40px] sm:leading-[48px]">
-            {copy.title}
-          </h1>
-          <p className="text-base leading-7 text-slate-600 sm:text-lg">{copy.body}</p>
+          <h1 className="text-h1 text-r-text">{copy.title}</h1>
+          <p className="text-body-2 text-r-secondary">{copy.body}</p>
         </div>
         {status === "missing" || status === "relationship_missing" ? (
-          <a
+          <Link
             href={href}
-            className="mt-2 flex h-[52px] items-center justify-center rounded-full bg-neutral-950 px-8 text-base font-bold leading-6 text-white transition hover:bg-neutral-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-500"
+            className="mt-2 flex h-[56px] items-center justify-center rounded-full px-8 text-body-2 font-medium transition-opacity hover:opacity-80 bg-r-btn text-r-btn-text border-none"
           >
             {linkText}
-          </a>
+          </Link>
         ) : null}
       </section>
     </main>
@@ -128,9 +146,14 @@ function getResumeQuestionIndex(answersByQuestion) {
   return firstUnansweredIndex === -1 ? CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.length : firstUnansweredIndex;
 }
 
+function hasAnyAnswer(answersByQuestion) {
+  return Object.values(answersByQuestion).some((answer) => (answer.answer_text ?? "").trim());
+}
+
 export default function QuestionnaireFlow({ inviteToken }) {
   const router = useRouter();
   const [draft, setDraft] = useState(null);
+  const [step, setStep] = useState("intro"); // "intro" | "question"
   const [answers, setAnswers] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [autosaveStatus, setAutosaveStatus] = useState("idle");
@@ -152,8 +175,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
   const recognitionRef = useRef(null);
 
   const currentQuestion = CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS[currentIndex];
-  const currentAnswer = answers[currentQuestion.id] ?? createEmptyAnswer();
-  const isFirstQuestion = currentIndex === 0;
+  const currentAnswer = answers[currentQuestion?.id] ?? createEmptyAnswer();
   const isLastQuestion = currentIndex === CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.length - 1;
 
   useEffect(() => {
@@ -222,6 +244,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
         }
 
         setCurrentIndex(resumeIndex);
+        setStep(hasAnyAnswer(restoredAnswers) ? "question" : "intro");
 
         const currentSavedAnswer =
           lastSavedAnswersRef.current[CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS[resumeIndex].id];
@@ -337,7 +360,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
         }
       }
     },
-    [draft, inviteToken],
+    [inviteToken],
   );
 
   const queueSave = useCallback(
@@ -463,7 +486,12 @@ export default function QuestionnaireFlow({ inviteToken }) {
   };
 
   const moveToQuestion = async (nextIndex) => {
-    if (nextIndex < 0 || nextIndex >= CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.length) {
+    if (nextIndex < 0) {
+      setStep("intro");
+      return;
+    }
+
+    if (nextIndex >= CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.length) {
       return;
     }
 
@@ -484,25 +512,39 @@ export default function QuestionnaireFlow({ inviteToken }) {
   };
 
   const handleContinue = async () => {
-  if (!isLastQuestion) {
-    await moveToQuestion(currentIndex + 1);
-    return;
-  }
+    if (!isLastQuestion) {
+      await moveToQuestion(currentIndex + 1);
+      return;
+    }
 
-  setIsNavigating(true);
-  stopListening();
-  window.clearTimeout(saveTimerRef.current);
-  const didSave = await saveAnswer(
-    currentQuestion.id,
-    answersRef.current[currentQuestion.id] ?? createEmptyAnswer(),
-    { force: true },
-  );
-  if (!didSave) {
-    setIsNavigating(false);
-    return;
-  }
-  router.push(`/contribute/${inviteToken}/questions-review`);
- };
+    setIsNavigating(true);
+    stopListening();
+    window.clearTimeout(saveTimerRef.current);
+    const didSave = await saveAnswer(
+      currentQuestion.id,
+      answersRef.current[currentQuestion.id] ?? createEmptyAnswer(),
+      { force: true },
+    );
+    if (!didSave) {
+      setIsNavigating(false);
+      return;
+    }
+    router.push(`/contribute/${inviteToken}/questions-review`);
+  };
+
+  const handleBack = () => {
+    if (step === "intro") {
+      router.push(`/contribute/${inviteToken}/relationship`);
+      return;
+    }
+
+    if (currentIndex === 0) {
+      setStep("intro");
+      return;
+    }
+
+    moveToQuestion(currentIndex - 1);
+  };
 
   useEffect(() => {
     const flushCurrentAnswer = () => {
@@ -539,54 +581,64 @@ export default function QuestionnaireFlow({ inviteToken }) {
     return <QuestionnaireErrorState status={draft?.status ?? "invalid"} inviteToken={inviteToken} />;
   }
 
+  const subjectName = draft.invite?.deceased?.name || "them";
+  const personalizedQuestion = {
+    ...currentQuestion,
+    prompt: formatQuestionPrompt(currentQuestion.prompt, draft.invite?.deceased?.name),
+  };
+
   return (
-    <main className="min-h-screen bg-r-bg px-6 py-8 text-neutral-950 sm:px-[50px] sm:py-[50px]">
-      <div className="mx-auto flex min-h-[calc(100vh-64px)] w-full max-w-[760px] flex-col justify-center gap-7 sm:min-h-[calc(100vh-100px)]">
-        <section className="flex flex-col gap-4 text-center">
-          <p className="text-sm font-medium uppercase leading-5 text-slate-500">
-            Contribution for {draft.invite.deceased.name}
-          </p>
-          <p className="mx-auto max-w-[560px] text-base leading-7 text-slate-600 sm:text-lg">
-            Share what you remember in whatever shape it comes. You can skip a question and come
-            back as you go.
-          </p>
-        </section>
+    <main className="min-h-screen bg-r-bg text-r-text flex flex-col">
+      <ContributorNav onBack={handleBack} />
 
-        <QuestionProgress
-          currentIndex={currentIndex}
-          totalQuestions={CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.length}
-        />
+      <div className="flex-1 px-6 sm:px-[50px] pt-6 pb-16">
+        <div className="page-shell-wide flex min-h-[calc(100vh-200px)] flex-col items-center justify-center gap-10">
 
-        <QuestionCard
-          question={currentQuestion}
-          answerText={currentAnswer.answer_text}
-          inputMode={currentAnswer.input_mode}
-          autosaveStatus={autosaveStatus}
-          isListening={isListening}
-          speechSupported={speechSupported}
-          onAnswerChange={handleAnswerChange}
-          onAnswerBlur={handleAnswerBlur}
-          onModeChange={handleModeChange}
-          onToggleListening={handleToggleListening}
-        />
+          {step === "intro" ? (
+            <section className="flex flex-col items-center gap-8 text-center">
+              <div className="max-w-[640px]">
+                <h1 className="text-h1 text-r-text">Who is {subjectName} to you?</h1>
+                <p className="mt-2 text-body-2 text-r-secondary">
+                  Answer the following questions to help us know who {subjectName} was as a person from your eyes.
+                </p>
+              </div>
 
-        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
-          <button
-            type="button"
-            onClick={() => moveToQuestion(currentIndex - 1)}
-            disabled={isFirstQuestion || isNavigating}
-            className="flex h-[56px] items-center justify-center rounded-full border border-slate-300 bg-white px-8 text-base font-bold leading-6 text-neutral-950 transition hover:border-slate-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            onClick={handleContinue}
-            disabled={isNavigating}
-            className="flex h-[56px] items-center justify-center rounded-full bg-neutral-950 px-10 text-base font-bold leading-6 text-white transition hover:bg-neutral-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-500 disabled:cursor-not-allowed disabled:bg-neutral-400"
-          >
-            {isNavigating ? "Saving..." : isLastQuestion ? "Continue" : "Next"}
-          </button>
+              <MemoryOrb className="h-44 w-44 sm:h-56 sm:w-56" />
+
+              <button
+                type="button"
+                onClick={() => setStep("question")}
+                className="mx-auto w-full max-w-[400px] rounded-full py-4 text-body-2 font-medium tracking-wide transition-opacity hover:opacity-80 active:opacity-70 bg-r-btn text-r-btn-text border-none"
+              >
+                Continue
+              </button>
+            </section>
+          ) : (
+            <div className="flex w-full flex-col items-center gap-8">
+              <QuestionCard
+                question={personalizedQuestion}
+                answerText={currentAnswer.answer_text}
+                inputMode={currentAnswer.input_mode}
+                autosaveStatus={autosaveStatus}
+                isListening={isListening}
+                speechSupported={speechSupported}
+                onAnswerChange={handleAnswerChange}
+                onAnswerBlur={handleAnswerBlur}
+                onModeChange={handleModeChange}
+                onToggleListening={handleToggleListening}
+              />
+
+              <button
+                type="button"
+                onClick={handleContinue}
+                disabled={isNavigating}
+                className="mx-auto w-full max-w-[400px] rounded-full py-4 text-body-2 font-medium tracking-wide transition-opacity hover:opacity-80 active:opacity-70 disabled:cursor-not-allowed disabled:opacity-55 bg-r-btn text-r-btn-text border-none"
+              >
+                {isNavigating ? "Saving..." : "Continue"}
+              </button>
+            </div>
+          )}
+
         </div>
       </div>
     </main>
