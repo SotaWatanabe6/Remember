@@ -349,11 +349,11 @@ async function extractThemes(responses, contributors, subjectName, memorial) {
         role: 'user',
         content: `You are helping family discover ${subjectName} through their own words.
 
-Read the questionnaire responses below. Extract 4–6 DISCOVERY themes — each should feel like opening a door to something specific you can learn about ${subjectName}, e.g. "How she spent her mornings" or "What made her laugh at the dinner table". Aim for at least 4 themes when enough source material exists (there are 8 contributor questions).
+Read the questionnaire responses below. Extract 4–6 DISCOVERY themes — each should feel like opening a door to something specific you can learn about ${subjectName}. Aim for at least 4 themes when enough source material exists (there are 6 contributor questions).
 
 STRICT RULES:
 - Only use details explicitly stated in the text. Do NOT infer personality traits, values, or feelings that are not directly said.
-- Labels: plain, specific, 3–7 words — like a chapter title in a biography, not poetry
+- Labels: plain, specific, 3–5 words — like a chapter title in a biography, not poetry
 - Summary: 2–3 sentences in clear, neutral prose. State what contributors actually mentioned. Use "contributors said" / "one person recalled" when helpful.
 - matching_keywords: exact words or short phrases from the source text (5–10)
 - memory_anchors: 1–3 short factual anchors from the text (habits, places, objects, routines mentioned)
@@ -966,7 +966,7 @@ OUTPUT RULES (critical):
 - Do NOT create intro, chapter, perspective, closing, voice, or text-only slides.
 - Use photo analysis only for broad tone, era, and sequencing. Do not state or imply that a questionnaire memory happened in, is shown by, or is directly connected to a specific photo unless the source data explicitly says so.
 - The description should feel appropriate beside the photo, but it must stand on its own as remembrance language. Avoid phrases like "in this photo", "this moment shows", "here we see", or "surrounded by family" unless those facts are explicitly supported.
-- photo_description (required): 2–4 warm, specific, conversational third-person sentences about ${subjectName}. It should feel like a close friend giving a memorial toast: human, grounded, undecorated, and never AI-written.
+- photo_description: 2–4 warm, specific, conversational third-person sentences about ${subjectName} when there is enough questionnaire or organizer biography detail to ground the description. Anchor descriptions in concrete source details when available: habits, sayings, quirks, routines, places, roles, accomplishments, repeated memories, or small human details. It should feel like a close friend giving a memorial toast: human, grounded, undecorated, and never AI-written.
 - The first slide should use the organizer-selected memorial photo and function as the opening: include birth/passing context when available and quickly ground the viewer in who ${subjectName} was — their personality, what they loved, or the kind of presence they had.
 - Middle slides should move through ${subjectName}'s life organically. Tell the ${subjectName}'s life by drawing specific stories from the questionnaire responses. Cover their life stories based on the following examples but is not limited to - character, quirks, relationships, roles, significant moments, accomplishments, and repeated details contributors mentioned - without forcing a fixed order.
 - The final slide should function as the closing: honor ${subjectName} with a sincere remembrance, legacy reflection, or natural final words that do not feel abrupt.
@@ -975,10 +975,12 @@ OUTPUT RULES (critical):
 - If no contributor phrase clearly fits a slide, set matched_quote to null. Do not invent, paraphrase, or polish a quote into something the contributor did not say.
 - If matched_quote is present, contributor_name and relationship_type must identify the contributor who wrote that phrase.
 - Synthesize all contributors into one cohesive voice across the slideshow. Third person only.
-- Prefer specific details over general statements. If multiple contributors said something similar, surface that convergence directly.
+- Prefer specific details over general statements. Avoid broad claims like "they were kind" or "they loved family" unless paired with a concrete example from the responses. If multiple contributors said something similar, surface that convergence directly.
 - Do not fabricate details, repeat the same descriptive language across slides, overwrite grief, manufacture emotion, or use sympathy-card filler such as "a life well-lived", "touched many hearts", or "left a lasting impression".
 - Do not include specific timelines or ages about the ${subjectName} in the description.
 - Don't assume relationships of anyone in the photo regardless of the contributor relationship type.
+- Do not include descriptions for the sake of having them. If there are not enough questionnaire responses to give every photo a distinct grounded description, associate multiple adjacent photos with one grounded description by reusing the same photo_description where appropriate.
+- If a photo cannot be associated with a grounded description without inventing or overgeneralizing, set photo_description to an empty string, matched_quote to null, contributor_name to null, and relationship_type to null.
 
 Photos (LOCKED order — first photo is organizer-selected when present, then youngest to oldest; use photo_id exactly):
 ${JSON.stringify(photoCatalog.map((p) => ({
@@ -1005,7 +1007,7 @@ Return JSON only:
       "order_index": 1,
       "slide_type": "photo",
       "photo_id": "uuid from catalog",
-      "photo_description": "biographical caption from memories",
+      "photo_description": "grounded biographical caption, repeated grouped caption, or empty string",
       "narration": null,
       "matched_quote": "contributor phrase or null",
       "contributor_name": "string or null",
