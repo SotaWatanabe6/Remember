@@ -563,7 +563,7 @@ export default function ConstellationGraph({
         <div className="bg-[#F2EEE8] relative h-full w-full pt-10">
           { themes ? 
             (
-              <div className="flex items-center justify-center px-10 py-8 gap-20">
+              <div className="flex items-center justify-center px-10 py-8 gap-50">
                 {/* Sidebar */}
                 <aside className="w-48 pt-28">
                   <h1 className="text-5xl font-serif font-semibold mb-8">
@@ -584,7 +584,7 @@ export default function ConstellationGraph({
                       <div className="space-y-4 pr-2">
                         {(selectedNode?.photo_urls?.length ? selectedNode.photo_urls : []).map((photoUrl, photoIndex) => (
 
-                          <div key={`${selectedNode.id}-photo-${photoIndex}`} className="h-[240px] overflow-hidden rounded bg-[#dddddd]">
+                          <div key={`${selectedNode.id}-photo-${photoIndex}`} className="h-[240px] overflow-hidden mb-6 rounded bg-[#dddddd]">
                             {photoUrl ? (
                               <Image
                                 key={photoIndex}
