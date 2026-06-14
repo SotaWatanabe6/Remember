@@ -339,7 +339,7 @@ export default function SharePage() {
                   contributor={contributors}
                 />
               )}
-              {activeTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} />}
+              {activeTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} variant="viewer" />}
               {activeTab === 'All Photos' && <AllPhotosTab albums={normalizePhotos(output?.photos)} />}
             </div>
           </>

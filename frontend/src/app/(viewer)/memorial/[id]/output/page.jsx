@@ -2,7 +2,7 @@
 
 // frontend/src/app/(viewer)/memorial/[id]/output/page.jsx
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getMemorialOutput, getMemorialById, createInviteLink, createShareLink, getAuthToken } from '@/lib/api';
@@ -15,6 +15,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { mockMemorials } from '@/data/mockMemorials.js';
 import StorySlideshow from '@/components/output/StorySlideshow';
 import MemorialCoverImage from '@/components/memorial/MemorialCoverImage.jsx';
+import VoicesTab from '@/components/output/VoicesTab';
 
 // ─── Relationship color ───────────────────────────────────────────────────────
 
@@ -94,95 +95,6 @@ function ConstellationsSection({ output, memorial, contributor }) {
   );
 }
 
-// ─── Waveform Player ──────────────────────────────────────────────────────────
-
-function WaveformPlayer({ audioUrl, color }) {
-  const containerRef = useRef(null);
-  const wavesurferRef = useRef(null);
-  const [playing, setPlaying] = useState(false);
-  const [ready, setReady] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    let mounted = true;
-
-    import('wavesurfer.js').then((WaveSurfer) => {
-      if (!mounted) return;
-      if (wavesurferRef.current) wavesurferRef.current.destroy();
-      const ws = WaveSurfer.default.create({
-        container: containerRef.current,
-        waveColor: color || 'var(--color-r-colleague)',
-        progressColor: 'var(--color-r-text)',
-        cursorColor: 'transparent',
-        barWidth: 3, barGap: 2, barRadius: 3, height: 48,
-        normalize: true, interact: true, backend: 'WebAudio',
-      });
-      if (audioUrl) {
-        ws.load(audioUrl);
-        ws.on('ready', () => { setReady(true); setDuration(ws.getDuration()); });
-        ws.on('timeupdate', (time) => setCurrentTime(time));
-        ws.on('finish', () => setPlaying(false));
-      } else { setReady(false); }
-      wavesurferRef.current = ws;
-    }).catch(() => { if (mounted) setReady(false); });
-
-    return () => {
-      mounted = false;
-      if (wavesurferRef.current) {
-        try {
-          wavesurferRef.current.destroy();
-        } catch {
-          // AbortError expected when component unmounts during audio load
-        }
-        wavesurferRef.current = null;
-      }
-    };
-  }, [audioUrl, color]);
-
-  function togglePlay() {
-    if (!wavesurferRef.current || !ready) return;
-    wavesurferRef.current.playPause();
-    setPlaying(!playing);
-  }
-
-  function formatTime(secs) {
-    if (!secs || isNaN(secs)) return '0:00';
-    return `${Math.floor(secs / 60)}:${Math.floor(secs % 60).toString().padStart(2, '0')}`;
-  }
-
-  return (
-    <div className="flex items-center gap-3">
-      <button onClick={togglePlay}
-        className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 transition-opacity hover:opacity-80"
-        style={{ backgroundColor: 'var(--color-r-colleague)' }} aria-label={playing ? 'Pause' : 'Play'}>
-        {playing
-          ? <svg width="16" height="16" fill="white" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
-          : <svg width="16" height="16" fill="white" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>}
-      </button>
-      <div className="flex-1 flex flex-col gap-1">
-        {audioUrl ? (
-          <div ref={containerRef} className="w-full" />
-        ) : (
-          <div className="flex items-center gap-0.5 h-12">
-            {[...Array(50)].map((_, i) => (
-              <div key={i} className="flex-1 rounded-full transition-all"
-                style={{ backgroundColor: 'var(--color-r-colleague)', opacity: playing ? 0.8 : 0.4, height: `${16 + Math.sin(i * 0.6) * 12 + Math.cos(i * 1.2) * 8}px` }} />
-            ))}
-          </div>
-        )}
-        {(ready || audioUrl) && (
-          <div className="flex justify-between text-caption text-r-muted">
-            <span>{formatTime(currentTime)}</span>
-            <span>{formatTime(duration)}</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ─── Contributions section ────────────────────────────────────────────────────
 
 function ContributionsSection({ contributorslist }) {
@@ -211,78 +123,6 @@ function ContributionsSection({ contributorslist }) {
         )}
       </div>
       {value === "contributors" ? <MemorialContributionsPage contributors={contributorslist} /> : value === "awaiting" ? <MemorialContributionApproval contributors={current} /> : null}
-    </div>
-  );
-}
-
-// ─── Voices section ───────────────────────────────────────────────────────────
-
-function VoicesSection({ voices }) {
-  const [selected, setSelected] = useState(0);
-  const current = voices?.[selected];
-
-  if (!voices || voices.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-32 text-center">
-        <p className="text-body-2 font-medium text-r-text">No voice recordings were submitted for this memorial</p>
-        <p className="mt-1 text-body-2 text-r-muted">Voice recordings will appear here once contributors have submitted.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-2 pt-2">
-      <h2 className="text-h1 text-r-text mb-6">Voices</h2>
-      <div className="flex gap-8">
-        <div className="w-48 shrink-0 flex flex-col gap-0">
-          <div className="flex items-center gap-2 mb-4">
-            <select className="text-caption bg-transparent appearance-none rounded-lg px-3 py-1.5 pr-8 cursor-pointer focus:outline-none text-r-text"
-              style={{ border: '1px solid var(--color-r-border)' }}>
-              <option>Sort</option>
-              <option>By date</option>
-              <option>By name</option>
-            </select>
-          </div>
-          {voices.map((v, i) => (
-            <button key={v.id} onClick={() => setSelected(i)} className="text-left py-3 transition-colors text-h4"
-              style={{
-                fontWeight: i === selected ? 500 : 400,
-                color: i === selected ? 'var(--color-r-text)' : 'var(--color-r-muted)',
-                borderBottom: `1px solid ${i === selected ? 'var(--color-r-text)' : 'var(--color-r-border)'}`,
-              }}>
-              {v.contributor_title}
-            </button>
-          ))}
-        </div>
-        <div className="flex-1 flex flex-col gap-4">
-          {current && <WaveformPlayer key={current.id} audioUrl={current.audio_url || null} color="var(--color-r-colleague)" />}
-          {(current?.key_quote || current?.transcript_text) && (
-            <p className="text-body-2 text-r-muted" style={{ fontStyle: 'italic', lineHeight: 1.6 }}>
-              &quot;{current.key_quote || current.transcript_text}&quot;
-            </p>
-          )}
-          {current?.ai_category && (
-            <span className="inline-block self-start rounded-full px-4 py-1.5 text-body-2 text-r-muted" style={{ border: '1px solid var(--color-r-border)' }}>
-              {current.ai_category}
-            </span>
-          )}
-          {current && (
-          <div className="flex flex-col gap-0.5">
-            <p className="text-body-2 font-medium text-r-text">
-              {current.contributor_name ? `Submitted by ${current.contributor_name}` : 'Voice recording'}
-            </p>
-            {current.relationship_type && (
-              <p className="text-caption text-r-muted">{current.relationship_type}</p>
-            )}
-            {current.created_at || current.submitted_date ? (
-              <p className="text-caption text-r-muted">
-                {new Date(current.created_at || current.submitted_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-              </p>
-            ) : null}
-          </div>
-        )}
-        </div>
-      </div>
     </div>
   );
 }
@@ -915,7 +755,7 @@ export default function MemorialOutputPage() {
             <MemorialHeader memorial={memorial} onShare={() => setShowShare(true)} />
             {activeTab === 'Slideshow' && <SlideshowSection output={output} />}
             {activeTab === 'Constellations' && <ConstellationsSection output={output} memorial={memorial} contributor={contributors} />}
-            {activeTab === 'Voices' && <VoicesSection voices={output?.voices} />}
+            {activeTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} variant="viewer" />}
             {activeTab === 'Contributions' && <ContributionsSection contributorslist={contributors} />}
             {activeTab === 'Photo Archive' && <PhotoArchiveSection output={output} contributors={contributors} />}
           </>
