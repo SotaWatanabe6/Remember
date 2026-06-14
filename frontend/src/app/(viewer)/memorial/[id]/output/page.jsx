@@ -61,8 +61,8 @@ function SlideshowSection({ output }) {
     );
   }
   return (
-    <div className="mx-auto max-w-[960px]">
-      <StorySlideshow output={output} story={output?.story} />
+    <div className="mx-auto w-full max-w-[1281px]">
+      <StorySlideshow output={output} story={output?.story} framed={false} />
     </div>
   );
 }
@@ -829,7 +829,7 @@ function OutputError({ onRetry }) {
 
 export default function MemorialOutputPage() {
   const { id } = useParams();
-  const [activeTab, setActiveTab] = useState('Photo Archive');
+  const [activeTab, setActiveTab] = useState('Slideshow');
   const [output, setOutput] = useState(null);
   const [memorial, setMemorial] = useState(null);
   const [loading, setLoading] = useState(true);

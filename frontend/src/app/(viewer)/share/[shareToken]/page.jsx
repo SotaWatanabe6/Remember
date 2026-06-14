@@ -331,7 +331,7 @@ export default function SharePage() {
             <MemorialHeader memorial={memorial} />
             <TabBar active={activeTab} onChange={setActiveTab} />
             <div>
-              {activeTab === 'Story' && <StorySlideshow output={output} story={output?.story} />}
+              {activeTab === 'Story' && <StorySlideshow output={output} story={output?.story} framed={false} />}
               {activeTab === 'Constellation' && (
                 <ConstellationTab
                   data={output}

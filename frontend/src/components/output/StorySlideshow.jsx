@@ -170,28 +170,39 @@ function ChevronRightIcon() {
   );
 }
 
+function getSlideQuote(slide) {
+  let quote = String(
+    slide.narration ||
+    slide.photoDescription ||
+    slide.matchedQuote ||
+    'This story will appear here once the memorial output is ready.'
+  ).trim();
+
+  quote = quote.replace(/^[\s"'`]+|[\s"'`]+$/g, '');
+  if (quote.startsWith('\u201c') || quote.startsWith('\u201d')) quote = quote.slice(1).trimStart();
+  if (quote.endsWith('\u201c') || quote.endsWith('\u201d')) quote = quote.slice(0, -1).trimEnd();
+
+  return quote;
+}
+
 function EmptyStoryState() {
   return (
-    <div className="flex min-h-[420px] flex-col items-center justify-center rounded-[18px] border border-[#e2e8f0] bg-white px-6 text-center shadow-auth">
-      <div className="mb-4 grid size-14 place-items-center rounded-full bg-[#eff6ff] text-[#45556c]">
+    <div className="flex min-h-[420px] flex-col items-center justify-center rounded-[10px] border border-r-muted bg-r-modal px-6 text-center">
+      <div className="mb-4 grid size-14 place-items-center rounded-full bg-[#e3e0dd] text-r-secondary">
         <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h16M4 19h16M7 5v14M17 5v14" />
         </svg>
       </div>
-      <p className="text-base font-medium text-neutral-950">No story slides are available yet.</p>
+      <p className="text-body-2 font-medium text-r-text">No story slides are available yet.</p>
     </div>
   );
 }
 
 function StoryLoadingState() {
   return (
-    <div className="h-[calc(100vh-220px)] min-h-[520px] max-h-[760px] overflow-hidden rounded-[18px] border border-[#e2e8f0] bg-white shadow-auth">
+    <div className="aspect-[4/3] min-h-[420px] overflow-hidden rounded-[10px] border border-r-muted bg-r-modal p-5 sm:p-[50px]">
       <div className="h-full animate-pulse">
-        <div className="h-[calc(100%-88px)] bg-[#cad5e2]" />
-        <div className="flex h-[88px] items-center justify-between px-5 sm:px-7">
-          <div className="h-5 w-24 rounded-full bg-neutral-100" />
-          <div className="h-2 w-20 rounded-full bg-neutral-100" />
-        </div>
+        <div className="h-full rounded-sm bg-[#d0bfaa]" />
       </div>
     </div>
   );
@@ -199,14 +210,20 @@ function StoryLoadingState() {
 
 function StoryErrorState({ message }) {
   return (
-    <div className="flex min-h-[420px] flex-col items-center justify-center rounded-[18px] border border-[#e2e8f0] bg-white px-6 text-center shadow-auth">
-      <p className="text-base font-medium text-neutral-950">Story is unavailable right now.</p>
-      {message ? <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">{message}</p> : null}
+    <div className="flex min-h-[420px] flex-col items-center justify-center rounded-[10px] border border-r-muted bg-r-modal px-6 text-center">
+      <p className="text-body-2 font-medium text-r-text">Story is unavailable right now.</p>
+      {message ? <p className="mt-2 max-w-sm text-sm leading-6 text-r-muted">{message}</p> : null}
     </div>
   );
 }
 
-export default function StorySlideshow({ output, story, loading = false, error = null }) {
+export default function StorySlideshow({
+  output,
+  story,
+  loading = false,
+  error = null,
+  framed = true,
+}) {
   const slides = useMemo(() => normalizeStorySlides(output, story), [output, story]);
   const [requestedIndex, setRequestedIndex] = useState(0);
   const shouldReduceMotion = useReducedMotion();
@@ -239,22 +256,25 @@ export default function StorySlideshow({ output, story, loading = false, error =
   const slide = slides[currentIndex];
   const isFirst = currentIndex === 0;
   const isLast = currentIndex === slides.length - 1;
-  const progress = ((currentIndex + 1) / slides.length) * 100;
   const altText = slide.photoDescription
     ? `Story photo: ${slide.photoDescription}`
     : `Story photo contributed by ${slide.contributorName}`;
   const slideTransition = shouldReduceMotion ? { duration: 0 } : { duration: 0.35, ease: 'easeInOut' };
+  const quote = getSlideQuote(slide);
+  const aiTag = slide.themeLabel || 'AI tag';
+  const containerClassName = framed
+    ? 'rounded-[10px] border border-r-muted bg-transparent p-5 sm:p-[50px]'
+    : 'bg-transparent';
+  const slideClassName = framed
+    ? 'relative aspect-[4/3] min-h-[420px] overflow-hidden bg-[#d0bfaa] sm:min-h-0'
+    : 'relative aspect-[4/3] min-h-[420px] overflow-hidden bg-[#d0bfaa] sm:min-h-0';
 
   return (
     <section
-      className="overflow-hidden rounded-[18px] border border-[#e2e8f0] bg-white shadow-auth"
+      className={containerClassName}
       aria-label="Story slideshow"
     >
-      <div className="relative h-[calc(100vh-220px)] min-h-[520px] max-h-[760px] bg-[#cad5e2]">
-        <div className="absolute left-0 top-0 z-20 h-1 w-full bg-white/25" aria-hidden="true">
-          <div className="h-full rounded-r-full bg-white transition-all duration-300" style={{ width: `${progress}%` }} />
-        </div>
-
+      <div className={slideClassName}>
         <AnimatePresence initial={false}>
           <motion.div
             key={slide.id ?? currentIndex}
@@ -277,31 +297,19 @@ export default function StorySlideshow({ output, story, loading = false, error =
               </div>
             )}
 
-            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-black/10" aria-hidden="true" />
+            <div
+              className="absolute inset-x-0 bottom-0 h-[43%] bg-gradient-to-t from-[#6c7c5b] via-[#6c7c5b]/60 to-transparent"
+              aria-hidden="true"
+            />
 
-            <div className="absolute inset-x-0 bottom-0 z-10 px-5 pb-7 pt-24 sm:px-8 sm:pb-9">
-              {slide.photoDescription ? (
-                <p className="max-w-3xl text-lg font-normal leading-relaxed text-white/95 sm:text-xl">
-                  {slide.photoDescription}
+            <div className="absolute inset-x-0 bottom-0 z-10 px-6 pb-7 pt-20 sm:px-[37px] sm:pb-[37px]">
+              <div className="flex max-w-[433px] flex-col items-start gap-[30px]">
+                <p className="font-display text-[22px] font-medium italic leading-[1.08] text-r-text sm:text-[24px]">
+                  &ldquo;{quote}&rdquo;
                 </p>
-              ) : null}
-              {slide.narration ? (
-                <p className="mt-3 max-w-3xl text-base leading-relaxed text-white/80 sm:text-lg">
-                  {slide.narration}
-                </p>
-              ) : null}
-              {slide.matchedQuote ? (
-                <p className="mt-3 max-w-2xl text-sm italic text-white/60 sm:text-base">
-                  &ldquo;{slide.matchedQuote}&rdquo;
-                </p>
-              ) : null}
-              <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-[#cad5e2] sm:text-base">
-                <span>{slide.contributorName}</span>
-                {slide.relationshipLabel ? (
-                  <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm sm:text-sm">
-                    {slide.relationshipLabel}
-                  </span>
-                ) : null}
+                <span className="inline-flex h-[50px] min-w-[128px] items-center justify-center rounded-[14px] bg-[#e3e0dd] px-8 text-center text-[12px] font-normal leading-none text-r-secondary">
+                  {aiTag}
+                </span>
               </div>
             </div>
           </motion.div>
@@ -312,7 +320,7 @@ export default function StorySlideshow({ output, story, loading = false, error =
           onClick={() => setRequestedIndex(Math.max(currentIndex - 1, 0))}
           disabled={isFirst}
           aria-label="Previous story slide"
-          className="absolute left-3 top-1/2 z-20 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-white/20 text-white backdrop-blur-sm transition hover:bg-white/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-35 sm:left-5 sm:size-14"
+          className="absolute left-3 top-1/2 z-20 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-white/20 text-white transition hover:bg-white/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-35 sm:left-5 sm:size-14"
         >
           <ChevronLeftIcon />
         </button>
@@ -322,12 +330,11 @@ export default function StorySlideshow({ output, story, loading = false, error =
           onClick={() => setRequestedIndex(Math.min(currentIndex + 1, slides.length - 1))}
           disabled={isLast}
           aria-label="Next story slide"
-          className="absolute right-3 top-1/2 z-20 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-white/20 text-white backdrop-blur-sm transition hover:bg-white/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-35 sm:right-5 sm:size-14"
+          className="absolute right-3 top-1/2 z-20 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-white/20 text-white transition hover:bg-white/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-35 sm:right-5 sm:size-14"
         >
           <ChevronRightIcon />
         </button>
       </div>
-
     </section>
   );
 }
