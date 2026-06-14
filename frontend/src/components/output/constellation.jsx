@@ -6,131 +6,39 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
+import Image from "next/image";
+
+import { usePathname } from "next/navigation";
+import { getContributorsPhotos,getContributorsResponse } from "@/lib/api"
 function capitalizeFirstLetter(str) {
   if (!str || str === 'null') return str;
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-function contributorToGraphNode(contributor) {
-  return {
-    id: contributor.id,
-    name: contributor.name || 'Contributor',
-    relationship_type: capitalizeFirstLetter(contributor.relationship_type) || 'Other',
-    prominence: 0.7,
-    summary: '',
-    photos: [],
-    photo_urls: [],
-    quotes: [],
-    contributions: 1,
-  };
-}
+const familyRelationship = [
+  "Family",
+  "Parent",
+  "Child",
+  "Sibling",
+  "Partner / Spouse",
+  "Aunt",
+  "Uncle",
+  "Cousin",
+  "Grandparent",
+  "Grandchild",
+  "Grandchildren",
+  "Extended family"
+]
+const otherRelationship = [
+  "Other",
+  "Others",
+  "Friend",
+  "Colleague",
+  "Classmate",
+  "Neighbor",
+  "Community member"
+]
 
-function placeholderProminence(index) {
-  return 0.3 + ((index * 37) % 40) / 100;
-}
-
-function placeholderCoordinate(index, limit) {
-  return ((index * 149) % limit) + 20;
-}
-
-// CSS animations for constellation graph
-const styles = `
-  @keyframes fadeInScale {
-    from {
-      opacity: 0;
-      transform: scale(0.95);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-  
-  @keyframes fadeOut {
-    from {
-      opacity: 1;
-    }
-    to {
-      opacity: 0;
-    }
-  }
-  
-  @keyframes pulse {
-    0%, 100% {
-      opacity: 0.6;
-    }
-    50% {
-      opacity: 1;
-    }
-  }
-  
-  .modal-enter {
-    animation: fadeInScale 300ms ease-out;
-  }
-  
-  .node-highlight {
-    transition: r 300ms ease-out, fill 200ms ease-out;
-  }
-  
-  .pulse-node {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-`;
-
-// Inject styles on component mount
-if (typeof window !== 'undefined') {
-  const styleSheet = document.createElement('style');
-  styleSheet.textContent = styles;
-  document.head.appendChild(styleSheet);
-}
-
-
-// Pulsing placeholder for constellation loading state
-function PulsingPlaceholder() {
-  const placeholderNodes = [...Array(8)].map((_, i) => ({
-    id: `placeholder-${i}`,
-    x: 100 + (i % 3) * 200,
-    y: 150 + Math.floor(i / 3) * 150,
-    prominence: placeholderProminence(i),
-  }));
-
-  const placeholderLinks = placeholderNodes.slice(0, -1).map((node, i) => ({
-    source: node,
-    target: placeholderNodes[i + 1],
-  }));
-
-  return (
-    <svg width="100%" height="400" viewBox="0 0 800 400" className="border border-neutral-200 rounded-2xl bg-neutral-50">
-      {/* Placeholder edges */}
-      {placeholderLinks.map((link, i) => (
-        <line
-          key={`link-${i}`}
-          x1={link.source.x}
-          y1={link.source.y}
-          x2={link.target.x}
-          y2={link.target.y}
-          stroke="#e5e7eb"
-          strokeWidth="1"
-          className="pulse-node"
-        />
-      ))}
-      
-      {/* Placeholder nodes */}
-      {placeholderNodes.map((node) => (
-        <circle
-          key={node.id}
-          cx={node.x}
-          cy={node.y}
-          r={node.prominence * 40 + 20}
-          fill="#f3f4f6"
-          stroke="#d1d5db"
-          strokeWidth="2"
-          className="pulse-node"
-        />
-      ))}
-    </svg>
-  );
-}
 
 function buildRelationshipCounts(contributors = []) {
   const counts = contributors.reduce((acc, contributor) => {
@@ -138,25 +46,29 @@ function buildRelationshipCounts(contributors = []) {
     acc[type] = (acc[type] || 0) + 1;
     return acc;
   }, {});
-  return Object.entries(counts).map(([relationship_type, count]) => ({
+  const realtionships =  Object.entries(counts).map(([relationship_type, count]) => ({
     relationship_type,
     count,
   }));
+  const familyCounts = realtionships.filter(item => familyRelationship.includes(item.relationship_type));
+  const otherRelatedCounts = realtionships.filter(item => otherRelationship.includes(item.relationship_type));
+  return {familyCounts , otherRelatedCounts}
 }
 
 // Replace the entire buildRelationshipGraph function:
 function buildRelationshipGraph(contributors, centerId, centerName, relationships = []) {
+  console.log(contributors);
   const contributorNodes = (contributors || []).map((c) => {
     const relType = (c.relationship_type || 'other').toLowerCase();
     const relData = relationships.find((r) => r.type === relType) || {};
     return {
       id: c.id,
       name: c.name || 'Contributor',
-      relationship_type: capitalizeFirstLetter(c.relationship_type) || 'Other',
+      relationship_type: c.relationship_label ? c.relationship_label : capitalizeFirstLetter(c.relationship_type) || 'Other',
       prominence: 0.7,
       summary: relData.summary || '',
       photos: relData.photos || [],
-      photo_urls: relData.photos || [],
+      photo_urls: relData.photo_urls || [],
       quotes: relData.quote ? [{ text: relData.quote, contributor_name: c.name }] : [],
       contributions: 1,
     };
@@ -190,16 +102,60 @@ export default function ConstellationGraph({
   memorial,
   contributor = [],
   relationships = [],
+  page = 1,
   width,
   height,
 }) {
   const ref = useRef(null);
-  const [constellationLoading, setConstellationLoading] = useState(false);
+  const pathname = usePathname();  
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [themes,setThemes] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
-  const [tab, setTab] = useState("Themes");
+  const [photoCarroussel, setPhotoCarroussel] = useState([
+    {
+      photo_url : memorial?.cover_photo_url
+    }
+  ]);
+  const [quoteNode, setQuoteNode] = useState('No quote available for this contributor.');
+  
+  const [tab, setTab] = useState(page==1 ? "Themes":"Relationships");
   const [hiddenContributors, setHiddenContributors] = useState({});
-  const [hiddenRelationshipType, setHiddenRelationshipType] = useState({});
+  const [hiddenRelationshipType, setHiddenRelationshipType] = useState({
+    ...Object.fromEntries(otherRelationship.map(key => [key, false])),
+    ...Object.fromEntries(familyRelationship.map(key => [key, false])),
+  });
   const [hiddenThemes, setHiddenThemes] = useState({});
+  const [currentPage, setCurrentPage] = useState("Viewer");
+  useEffect(() => {
+    setTab(page==1 ? "Themes":"Relationships")  
+  }, [page]);
+
+  useEffect(() => {
+    if (pathname.includes("output")){
+      setCurrentPage("Viewer");
+      if (tab=="Relationships") {
+        loadPhotoContributor();
+      }
+    }
+    else {
+      setCurrentPage("Organizer");
+    }
+    async function loadPhotoContributor() {
+      if (selectedNode) {      
+        const photos = await getContributorsPhotos(selectedNode.id);
+        const finalphotos = photos.photos.map(user => user.photo_url); 
+        if(finalphotos){
+          setPhotoCarroussel(finalphotos);
+        }
+        const { data } = await getContributorsResponse(selectedNode.id);
+        const quotes = data.find(item => item.order_index === 3 && item.response_text!="" );
+        if (quotes){
+          setQuoteNode(quotes.response_text);
+        }
+      }
+    }
+  },[currentPage, pathname,selectedNode,tab]);
+
   const handleThemesChange = (nodeId) => {
     setHiddenThemes((prev) => ({
       ...prev,
@@ -212,7 +168,17 @@ export default function ConstellationGraph({
       ...prev,
       [nodeId]: !prev[nodeId],
     }));
+  };  
+  const hideAllFamilyRelationship = () => {
+    familyRelationship.map((item)=>{
+        handleRelationshipTypesChange(item);
+      }
+    );
     
+    // setHiddenRelationshipType((prev) => ({
+    //   ...prev,
+    //   [nodeId]: !prev[nodeId],
+    // }));
   };  
   
   const toggleEye = (id) => {
@@ -220,46 +186,72 @@ export default function ConstellationGraph({
       ...prev,
       [id]: !prev[id],
     }));
-
   };  
-  const relationshipCounts = buildRelationshipCounts(contributor || []);
-
-  const [nodes, setNodes] = useState(
-      ai_output?.constellation?.nodes?.map(t => ({
+  const finalnodes = ai_output?.constellation?.nodes?.map(t => ({
         id: t.id,
         name: t.label,
         group: capitalizeFirstLetter(t.category),
         prominence: t.prominence_score,
         summary: t.summary,
         photo_urls: t.photo_urls || [],
-        photos: t.photo_urls || t.photo_ids || [],
+        photos: t.photos || t.photo_ids || [],
         quotes: t.quotes || [],
         contributions: (t.photo_urls || []).length,
       })) || []
-);
-
+  const [nodes, setNodes] = useState(
+    [...finalnodes, 
+        {
+          id: memorial?.id || 'memorial-center',
+          name: memorial?.subject_name || memorial?.deceased_name || 'Memorial',
+          relationship_type: 'Memorial',
+          prominence: 1,
+          summary: '',
+          photos: [],
+          quotes: [],
+          contributions: 0,
+        },    
+      ]
+  );
   const [links, setLinks] = useState(
-    ai_output?.constellation?.edges?.map(d => ({
-      source: d.source,
-      target: d.target,
+    ai_output?.constellation?.nodes?.map(d => ({
+      source: memorial?.id || 'memorial-center',
+      target: d.id,
       type: capitalizeFirstLetter(d.relationship_type),
       weight: d.weight
     })) || []
   );
   
-  
-  // Generate placeholder nodes for loading state
-  const placeholderNodes = [...Array(8)].map((_, i) => ({
-    id: `placeholder-${i}`,
-    name: `Node ${i + 1}`,
-    group: 'placeholder',
-    prominence: placeholderProminence(i),
-    summary: '',
-    photos: [],
-    quotes: [],
-    x: placeholderCoordinate(i, 600),
-    y: placeholderCoordinate(i + 3, 400),
-  }));
+  const [indexPhoto, setIndexPhoto] = useState(0);
+  useEffect(() => {
+    if(photoCarroussel.length!=0){
+      const interval = setInterval(() => {
+        setIndexPhoto((prev) => (prev + 1) % photoCarroussel.length);
+      }, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [photoCarroussel]);
+
+  const categoriesColor = {
+    "Partner / Spouse": "#c65def",        
+    "Uncle": "#A98F7A",        
+    "Grandparent": "#94de9b",  
+    "Grandchild": "#ffac6d",   
+    "Extended family": "#C7B9A3",     
+    "Other": "#A7B0B7",        
+    "Classmate": "#7FA8C9",    
+    "Neighbor": "#7a9cea",      
+    "Family": "#C8A99A" ,
+    "Friend": "#D97B6C" ,
+    "Colleague": "#8FAF82" ,
+    "Others": "#818b92",
+    "Community member": "#C9A08F",
+    "Parent": "#75d270",
+    "Child": "#5961d3",
+    "Sibling": "#b0819a",
+    "Cousin": "#f6e54a",
+    "Aunt": "#e79947",
+    "Grandchildren": "#5cd6c6"
+  };
 
   const relationshipGraph = useMemo(
     () => buildRelationshipGraph(
@@ -270,37 +262,24 @@ export default function ConstellationGraph({
     ),
     [contributor, memorial?.id, memorial?.subject_name, memorial?.deceased_name, relationships],
   );
-
+  const {familyCounts , otherRelatedCounts} = buildRelationshipCounts(relationshipGraph.nodes || []);
   const graphNodes = tab === "Relationships" ? relationshipGraph.nodes : nodes;
   const graphLinks = tab === "Relationships" ? relationshipGraph.links : links;
 
-  
-  const handleChange = (e) => {
-      setTab(e.target.value);
-      if (e.target.value === "Themes") {
-
-        setNodes(ai_output?.constellation?.nodes?.map(t => ({
-          id: t.id,
-          name: t.label,
-          group: t.category,
-          prominence: t.prominence_score,
-          summary: t.summary,
-          photo_urls: t.photo_urls || [],
-          photos: t.photo_urls || t.photo_ids || [],
-          quotes: t.quotes || [],
-          contributions: (t.photo_urls || []).length,
-        })) || []);
-        setLinks(ai_output?.constellation?.edges?.map(d => ({
-          source: d.source,
-          target: d.target,
-          type: capitalizeFirstLetter(d.relationship_type),
-          weight: d.weight
-        })) || []);
-    }
+  const sortPhotoTheme = (value) => {
+    console.log("Normal ",selectedNode.photo_urls);
+    const reversedPhotoUrl= selectedNode.photo_urls.reverse();
+    const reversedPhoto= selectedNode.photos.reverse();
+    setSelectedNode((prev) => ({
+      ...prev,
+      photo_urls: reversedPhotoUrl,
+      photos: reversedPhoto,
+    }));          
+    console.log("Reversed ",selectedNode.photo_urls);
   }
 
   useEffect(() => {
-    if (!graphNodes || graphNodes.length === 0) return;
+    if (!graphNodes) return;
     if (!graphLinks) return;
     if (!tab) return;
     if (!hiddenRelationshipType) return;
@@ -364,7 +343,7 @@ export default function ConstellationGraph({
       .forceSimulation(displayNode)
       .force(
         "link",
-        d3.forceLink(displayLink).id((d) => d.id).distance(150)
+        d3.forceLink(displayLink).id((d) => d.id).distance(250)
       )
       .force("charge", d3.forceManyBody().strength(-800))
       .force("center", d3.forceCenter(width / 2, height / 2))
@@ -380,40 +359,65 @@ export default function ConstellationGraph({
       .attr("stroke-width", d => d.weight || 1)
       .attr("stroke-dasharray", d => edgeStyle(d.type));
 
+    let memorial_fill = "#fff9c5";
+    if (memorial?.cover_photo_url){
+      svg.append("defs")
+      .append("pattern")
+      .attr("id", "img-pattern")
+      .attr("width", 1)
+      .attr("height", 1)
+      .attr("patternContentUnits", "objectBoundingBox")
+      .append("image")
+      .attr("xlink:href", memorial?.cover_photo_url)
+      .attr("width", 1)
+      .attr("height", 1)
+      .attr("preserveAspectRatio", "xMidYMid slice");
+      memorial_fill = "url(#img-pattern)";
+    }
+
     const node = svg
-      .append("g")
-      .selectAll("circle")
-      .data(displayNode)
-      .enter()
-      .append("circle")
-      .attr("r", d=> d.prominence * 80 + 5) // size based on prominence
-      .attr("fill", "#ffffff")
-      .attr("stroke", "#1a1a1a")
-      .call(
-        d3.drag()
-          .on("start", dragStarted)
-          .on("drag", dragged)
-          .on("end", dragEnded)
-      )
-      .style("cursor", "pointer")
-      .on("click", (_, d) => {
-        setSelectedNode(d);
+    .append("g")
+    .selectAll("circle")
+    .data(displayNode)
+    .enter()
+    .append("circle")
+    .attr("r", d=> d.prominence * 80 + 5) // size based on prominence
+    .attr("cx", 100)
+    .attr("cy", 100)
+    .attr("fill", d => d.relationship_type==="Memorial" ? memorial_fill : categoriesColor[d.relationship_type] || "#b1bc93")
+    // .attr("stroke", d => categoriesColor[d.relationship_type] || "#b1bc93")
+    .call(
+      d3.drag()
+        .on("start", dragStarted)
+        .on("drag", dragged)
+        .on("end", dragEnded)
+    )
+    .style("cursor", "pointer");
+    console.log(currentPage);
+    if (currentPage=="Viewer"){
+      node.on("click", (_, d) => {
+          if (d.relationship_type!="Memorial"){
+            setSelectedNode(d);    
+            setPhotoCarroussel(d.photo_urls);               
+          }
       });
+    }
     function truncate(text, maxLength = 10) {
       return text.length > maxLength
         ? text.slice(0, maxLength) + "..."
         : text;
     }
-    const label = svg
+    let label = svg
     .append("g")
     .selectAll("text")
     .data(displayNode)
     .enter()
     .append("text")
+    .filter(d => d.relationship_type !== "Memorial" || memorial_fill!="url(#img-pattern)")
     .text((d) =>truncate(d.name, 12) || " No theme ")
     .attr("font-size", 14)
-    .style("font-family", "Arial")
-    .style("font-weight", "bold")
+    .style("font-family", "var(--font-family-body)")
+    .style("font-weight", "var(--font-weight-regular)")
     .attr("x", d => d.x)
     .attr("y", d => d.y)
     .attr("text-anchor", "middle")   
@@ -458,292 +462,373 @@ export default function ConstellationGraph({
     }
 
     return () => simulation.stop();
-  }, [graphNodes, graphLinks, hiddenRelationshipType, hiddenContributors, hiddenThemes, tab, width, height, memorial?.id]);
+  }, [graphNodes, graphLinks, hiddenRelationshipType, hiddenContributors, hiddenThemes, tab, currentPage,selectedNode]);
 
   return (
     <div>
-      <div className="mb-6">
-        <select
-          value={tab}
-          onChange={handleChange}
-          className="border border-gray-300 bg-white px-4 py-2 text-sm shadow-sm outline-none"
-        >
-          <option value="Themes">
-            Constellation : Themes
-          </option>
-
-          <option value="Relationships">
-            Constellation : Relationships
-          </option>
-        </select>
-
-        <h2 className="mt-8 mb-4 text-2xl font-serif italic">
-          Constellation
-        </h2>        
-      </div>  
-      <div className="relative h-full w-full rounded-sm bg-[#d9d9d9] p-10">        
-        {constellationLoading ? (
-          <PulsingPlaceholder />
-        ) : (
-          <svg ref={ref} ></svg>
-        )}
-        {tab === "Relationships" &&  (
-        <div className="absolute bottom-4 left-4 w-36 rounded bg-[#767676] p-3 text-white shadow-md">
-            <p className="mb-3 text-sm">Legend</p>
-
-            <div className="space-y-2 text-xs">
-                {
-                  relationshipCounts.map((item, index) => {
-                  return (
-                    <div key={index} className="flex items-center gap-2">
-                      <div className="h-3 w-3 rounded-sm bg-white" />
-                      <span>{item.relationship_type == "null" || item.relationship_type == undefined ? "No relationship type" : item.relationship_type}</span>
-                    </div>
-                  );
-                }
-              )}
-            </div>
-        </div>)}
-      </div>
-      {tab === "Themes" &&  (
-      <div>
-        <h2 className="mt-8 mb-4 text-2xl font-serif italic">
-          Themes
-        </h2>        
-        <div className="bg-white p-4">
-            <div className="space-y-4">
-              {nodes.map((item, index) => (
-                <div
-                  key={index}
-                  className="h-[400px] border rounded-md p-4 flex gap-6 relative"
-                >
-                  {/* Checkbox */}
-                  <label className="pt-1">
-                    <input
-                      type="checkbox"
-                      defaultChecked
-                      onChange={() => handleThemesChange(item.id)}                            
-                      className="
-                        h-4
-                        w-4
-                        cursor-pointer
-                        accent-black
-                      "
-                    />
-                  </label>
-
-                  {/* Left Content */}
-                  <div className="flex-1">
-                    <h2 className="font-semibold text-sm mb-2">{item.name ||  "No theme provided"}</h2>
-
-                    <p className="text-[11px] text-gray-700 max-w-[320px] leading-4">
-                        {item.summary || "No summary available for this theme."}
-                    </p>
-
-                    <p className="text-[10px] mt-3 font-medium text-gray-800">
-                      {(item?.photo_urls?.length ?? item?.contributions ?? 0)} tagged photo{(item?.photo_urls?.length ?? item?.contributions ?? 0) === 1 ? '' : 's'}
-                    </p>
-                  </div>
-                  <div className="w-[240px] h-full overflow-y-auto rounded-sm bg-transparent lg:w-[430px]">
-                    <div className="space-y-4 pr-2">
-                      {(item?.photo_urls?.length ? item.photo_urls : []).slice(0, 4).map((photoUrl, photoIndex) => (
-                        <div key={`${item.id}-photo-${photoIndex}`} className="h-[160px] overflow-hidden rounded bg-[#dddddd]">
-                          {photoUrl ? (
-                            <img
-                              src={photoUrl}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : null}
-                        </div>
-                      ))}
-                      {!item?.photo_urls?.length ? (
-                        <p className="text-[11px] text-gray-500 py-8 text-center">No photos matched this theme yet.</p>
-                      ) : null}
-                    </div>
-                  </div>
-
-                </div>
-              ))}
-            </div>
-          </div>      
-        </div>      
-      )}  
-      {tab === "Relationships" &&  (  
+      {
+        currentPage === "Viewer" && (
         <div>
-          <h2 className="mt-8 mb-4 text-2xl font-serif italic">
-            Relationships
-          </h2>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-[220px_1fr]">
-            {/* Filter */}
-            <div className="rounded border border-gray-300 bg-white p-4">
-              <p className="mb-4 text-sm">Filter</p>
-
-              <div className="space-y-4 text-sm">
-              {
-                relationshipCounts.map((item, index) => {
-                  return (
-                  <label key={index} className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      defaultChecked                      
-                      onChange={() => handleRelationshipTypesChange(item.relationship_type)}                        
-                      className="
-                        h-4
-                        w-4
-                        cursor-pointer
-                        accent-black
-                      "
-                    />
-                    <span>{item.count} {item.relationship_type == "null" || item.relationship_type==undefined ? "No relationship type" : item.relationship_type}</span>
-                  </label>
-                  );
+          <div className="flex justify-between items-center px-15 pt-8">
+            <div className="flex gap-10 cursor-pointer text-lg">
+              <button className={tab==="Themes" ? "text-[#3c3c3c] border-[#3c3c3c] border-b pb-2" : "text-[#8a8a8a] border-[#8a8a8a] border-b pb-2"}
+                onClick={() => {
+                  setThemes(null);
+                  setSelectedNode(null); 
+                  setTab("Themes"); 
                 }
-                )
-              }                
-              </div>
+              }
+              >
+                Themes
+              </button>
+
+              <button className={tab==="Relationships" ? "text-[#3c3c3c] border-[#3c3c3c] border-b pb-2" : "text-[#8a8a8a] border-[#8a8a8a] border-b pb-2"}
+                onClick={() => {
+                  setThemes(null);
+                  setSelectedNode(null);
+                  setTab("Relationships")
+                }
+              }
+              >
+                Relationships
+              </button>
             </div>
+            {
+              (selectedNode && tab==="Themes" && themes) && (                
+              <div className="relative w-[207px]">
+                <select
+                  onChange={(e) => {sortPhotoTheme(e.target.value);}}
+                  className="w-full appearance-none rounded-[12.7px] border border-gray-400 px-5 py-4 pr-12 text-xl font-medium text-neutral-950 bg-transparent focus:outline-none cursor-pointer"
+                  style={{ fontFamily: 'var(--font-boska, serif)' }}
+                >
+                  <option value="newest">Newest first</option>
+                  <option value="oldest">Oldest first</option>
+                </select>
+                <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2">
+                  <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+                    <path d="M15 30L2.00962 7.5L27.9904 7.5L15 30Z" fill="#423F39" />
+                  </svg>
+                </span>
+              </div>
+              )
+            }            
+          </div>
 
-            {/* Relationship Cards — one node per contributor */}
-            <div className="space-y-4">
-              {!contributor?.length ? (
-                <div className="rounded border border-gray-300 bg-white px-6 py-8 text-center text-sm text-gray-600">
-                  No contributors yet. Each person who completes the invite link will appear here
-                  with the relationship they selected in the questionnaire.
-                </div>
-              ) : (
-                contributor.map((item) => {
-                  const isHidden = hiddenContributors[item.id];
-                  const relationshipLabel =
-                    item.relationship_type == null || item.relationship_type === undefined
-                      ? 'No relationship type'
-                      : capitalizeFirstLetter(item.relationship_type);
+        </div>
+        )
+      }
+      { 
+        selectedNode!=null ? (
+        <div className="bg-[#F2EEE8] relative h-full w-full pt-10">
+          { themes ? 
+            (
+              <div className="flex items-center justify-center px-10 py-8 gap-50">
+                {/* Sidebar */}
+                <aside className="w-48 pt-28">
+                  <h1 className="text-5xl font-serif font-semibold mb-8">
+                    {selectedNode.name || selectedNode.label}
+                  </h1>
 
-                  return (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between rounded border border-gray-300 bg-white px-6 py-5"
-                    >
-                      <div className="flex items-center gap-6">
-                        <button type="button" className="cursor-pointer" onClick={() => toggleEye(item.id)}>
-                          {isHidden ? <EyeOff size={20} /> : <Eye size={20} />}
-                        </button>
-                        <div className="h-20 w-20 rounded-full bg-[#d9d9d9]" />
+                  <button 
+                    className="bg-[#cbbca8] hover:bg-[#bca992] transition px-6 py-3 rounded-full text-sm"
+                    onClick={() => { setThemes(null)}}
+                  >
+                    Back to themes
+                  </button>
+                </aside>
 
-                        <div className="min-w-0 flex-1">
-                          <h3 className="font-serif text-lg italic">{item.name || 'Contributor'}</h3>
+                {/* Content Panel */}
+                <section>
+                    <div className="bg-[#f8f4ef] border border-[#c8beb0] w-[640px] h-[640px] rounded-lg p-6 overflow-y-auto">
+                      <div className="space-y-4 pr-2">
+                        {(selectedNode?.photo_urls?.length ? selectedNode.photo_urls : []).map((photoUrl, photoIndex) => (
 
-                          <p className="text-xs text-gray-500">
-                            {item.status === 'submitted' ? 'Submitted' : 'In progress'}
-                          </p>
+                          <div key={`${selectedNode.id}-photo-${photoIndex}`} className="h-[240px] overflow-hidden mb-6 rounded bg-[#dddddd]">
+                            {photoUrl ? (
+                              <Image
+                                key={photoIndex}
+                                src={photoUrl}
+                                alt="full"
+                                width={200}
+                                height={200}
+                                className="h-full w-full object-cover cursor-pointer"  
+                                onClick={() => setSelectedImage(photoUrl)}
+                              />
+                            ) : null}
+                          </div>
+                        ))}
+                        {!selectedNode?.photo_urls?.length ? (
+                          <p className="text-[11px] text-gray-500 py-8 text-center">No photos matched this theme yet.</p>
+                        ) : null}
 
-                          <button type="button" className="mt-3 rounded bg-[#d9d9d9] px-6 py-1 text-xs">
-                            {relationshipLabel}
-                          </button>
-                        </div>
                       </div>
                     </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
+                </section>
+              </div>              
+            ) : (
+            <section className="relative max-w-7xl mx-auto px-8 py-16">
+              <button 
+                className="absolute top-8 right-8 text-4xl text-[#4A443E] cursor-pointer"
+                onClick={() => setSelectedNode(null)}
+              >
+                x
+              </button>
+
+              <div className="flex flex-col lg:flex-row items-center gap-8 ml-[80px]">
+                  <div className="relative flex items-center">
+                    <div className="w-[140px] h-[2px] bg-[#75835F]" />
+                    <div className="w-[260px] h-[260px] rounded-full border border-[#75835F] overflow-hidden bg-gray-100 flex items-center justify-center">
+                      <div
+                        className="flex transition-transform duration-100"
+                        style={{ transform: `translateX(-${indexPhoto*100}%)` }}
+                      >
+                        {photoCarroussel.map((src, i) => (
+                          <Image
+                            key={i}
+                            src={src}
+                            alt={`slide-${i}`}
+                            width={200}
+                            height={200}                           
+                            className="w-full flex-shrink-0 object-cover"
+                          />
+                        ))}                        
+                      </div>
+                    </div>
+                  </div>
+                  {
+                    tab === "Themes" ? (
+                      <div className="max-w-md">
+                        <h1 className="text-5xl font-serif text-[#4A443E] mb-6">
+                          {selectedNode.name || selectedNode.label}
+                        </h1>
+                        <p className="text-[#6B655F] leading-relaxed mb-12">
+                          {selectedNode.summary || "No summary available for this theme."}
+                        </p>
+                        <button 
+                          className="bg-[#D2C2AA] hover:bg-[#C7B499] transition-colors px-10 py-4 rounded-full text-[#4A443E]"
+                          onClick={() => {
+                            setThemes(selectedNode.id);
+                          }}
+                        >
+                          View all
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="max-w-md">
+                        <h1 className="font-serif text-3xl font-semibold text-stone-800 mb-5 tracking-tight">
+                          {selectedNode.name || selectedNode.label}
+                        </h1>                  
+                        <p className="font-serif text-xl italic text-stone-700 leading-snug mb-5">
+                          &ldquo;{ quoteNode }.&rdquo;
+                        </p>
+                        <p className="text-sm text-stone-600 leading-relaxed mb-7 font-sans">
+                          {selectedNode.summary || "No summary available for now."}
+                        </p>
+                        <button 
+                          className="transition-colors px-10 py-4 rounded-full text-[#4A443E]"
+                          style={{ backgroundColor: categoriesColor[selectedNode.relationship_type] || "#b1bc93" }}
+                        >
+                          {selectedNode.relationship_type}
+                        </button>
+                      </div>                        
+                    )
+                  }
+              </div>
+            </section>
+            )
+          }            
+        </div>     
+      ) : (
+        <div className={`relative h-full w-full rounded-sm p-10 ${currentPage === "Organizer" ? "bg-white border border-gray-300" : ""}`}>
+
+          <svg ref={ref} ></svg>
+          {tab === "Relationships" &&  (
+          <div className="absolute bottom-4 left-4 inline-flex flex-col gap-3 rounded-2xl border border-gray-300 bg-white px-6 py-5 shadow-sm">
+              <h3 className="font-semibold text-[#5C4A3A] tracking-wide text-sm uppercase mb-1">Legend</h3>
+              <ul className="flex flex-col gap-2.5">
+                  {
+                    familyCounts.map((item, index) => {
+                      return (
+                        <li key={index} className="flex items-center gap-3">
+                          <span
+                            className={"w-6 h-6 rounded-md flex-shrink-0 "}
+                            style={{ backgroundColor: categoriesColor[item.relationship_type] }}
+                          />
+                          <span className="text-sm text-[#6B5748] font-medium">{item.relationship_type == "null" ? "No relationship type" : item.relationship_type}</span>
+                        </li>                      
+                      );
+                    })
+                  }
+                  {
+                    otherRelatedCounts.map((item, index) => {
+                      return (
+                        <li key={index} className="flex items-center gap-3">
+                          <span
+                            className={"w-6 h-6 rounded-md flex-shrink-0 "}
+                            style={{ backgroundColor: categoriesColor[item.relationship_type] }}
+                          />
+                          <span className="text-sm text-[#6B5748] font-medium">{item.relationship_type == "null" ? "No relationship type" : item.relationship_type}</span>
+                        </li>                      
+                      );
+                    }
+                )}
+              </ul>
+          </div>)}
         </div>
-        )}
+      )
+    }      
+      {
+        currentPage === "Organizer" && (
+        <div>
+          {tab === "Themes" &&  (
+          <div>
+            <h2 className="mt-8 mb-4 text-2xl font-serif italic">
+              Themes
+            </h2>        
+            <div className="bg-[#f4f0ea] p-4">
+                <div className="space-y-4">
+                  {nodes.filter(m=> m.relationship_type!="Memorial").map((item, index) => (
+                    <div
+                      key={index}
+                      className="h-[400px] border border-gray-300 rounded-md p-4 flex gap-6 relative"
+                    >
+                      {/* Checkbox */}
+                      <label className="pt-1">
+                        <input
+                          type="checkbox"
+                          defaultChecked
+                          onChange={() => handleThemesChange(item.id)}                            
+                          className="
+                            h-4
+                            w-4
+                            cursor-pointer
+                            accent-black
+                          "
+                        />
+                      </label>
 
-        {selectedNode && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-            <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl overflow-hidden modal-enter">
-              <div className="flex items-center justify-between border-b px-6 py-4">
-                <div>
-                  <h2 className="text-3xl font-bold capitalize text-gray-900">
-                    {selectedNode.name || selectedNode.label}
-                  </h2>
-                  {selectedNode.relationship_type && selectedNode.relationship_type !== 'Memorial' ? (
-                    <p className="mt-1 text-sm text-gray-500 capitalize">
-                      {selectedNode.relationship_type}
-                    </p>
-                  ) : null}
-                </div>
+                      {/* Left Content */}
+                      <div className="flex-1">
+                        <h2 className="font-semibold text-sm mb-2">{item.name ||  "No theme provided"}</h2>
 
-                <button
-                  type="button"
-                  onClick={() => setSelectedNode(null)}
-                  className="rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium hover:bg-gray-200"
-                >
-                  Close
-                </button>
-              </div>
+                        <p className="text-[11px] text-gray-700 max-w-[320px] leading-4">
+                            {item.summary || "No summary available for this theme."}
+                        </p>
 
-              <div className="max-h-[75vh] overflow-y-auto p-6">
-                {(selectedNode.photo_urls?.length || selectedNode.photos?.length) ? (
-                  <div className="mb-8">
-                    <h3 className="mb-4 text-lg font-semibold text-gray-900">
-                      {tab === 'Relationships'
-                        ? `Photos with ${selectedNode.name || 'them'}`
-                        : 'Photos in this theme'}
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      {(selectedNode.photo_urls || selectedNode.photos || []).map((photoUrl, index) => (
-                        <div
-                          key={`${selectedNode.id}-modal-photo-${index}`}
-                          className="aspect-square overflow-hidden rounded-lg bg-gray-100"
-                        >
-                          {photoUrl ? (
-                            <img
-                              src={photoUrl}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                {selectedNode.summary ? (
-                  <div className="mb-8">
-                    <h3 className="mb-3 text-lg font-semibold text-gray-900">Summary</h3>
-                    <div className="rounded-xl bg-gray-50 p-4 text-gray-700 leading-relaxed">
-                      {selectedNode.summary}
-                    </div>
-                  </div>
-                ) : null}
-
-                {selectedNode?.quotes?.length > 0 ? (
-                  <div>
-                    <h3 className="mb-4 text-lg font-semibold text-gray-900">Quotes &amp; memories</h3>
-                    <div className="space-y-4">
-                      {selectedNode.quotes.map((quote, index) => (
-                        <div
-                          key={index}
-                          className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
-                        >
-                          <p className="text-gray-800 italic leading-relaxed">{quote.text}</p>
-                          {quote.relationship_type ? (
-                            <div className="mt-4">
-                              <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium capitalize text-indigo-700">
-                                {quote.relationship_type}
-                              </span>
+                        <p className="text-[10px] mt-3 font-medium text-gray-800">
+                          {(item?.photo_urls?.length ?? item?.contributions ?? 0)} tagged photo{(item?.photo_urls?.length ?? item?.contributions ?? 0) === 1 ? '' : 's'}
+                        </p>
+                      </div>
+                      <div className="flex-1 w-[240px] h-full rounded-sm lg:w-[430px] overflow-y-auto ">
+                        <div className="space-y-4 pr-2">
+                          {(item?.photo_urls?.length ? item.photo_urls : []).map((photoUrl, photoIndex) => (
+                            <div key={`${item.id}-photo-${photoIndex}`} className="h-full overflow-hidden rounded bg-[#dddddd]">
+                              {photoUrl ? (
+                                <Image
+                                  key={photoIndex}
+                                  src={photoUrl}
+                                  alt="full"
+                                  width={200}
+                                  height={200}
+                                  className="h-full w-full object-cover cursor-pointer"
+                                  onClick={() => setSelectedImage(photoUrl)}
+                                />
+                              ) : null}
                             </div>
+                          ))}
+                          {!item?.photo_urls?.length ? (
+                            <p className="text-[11px] text-gray-500 py-8 text-center">No photos matched this theme yet.</p>
                           ) : null}
+                        </div>
+                      </div>
+
+                    </div>
+                  ))}
+                </div>
+              </div>      
+            </div>      
+          )}  
+          {tab === "Relationships" &&  (  
+              <div className="max-w-5xl">
+                  <h1 className="mb-6 mt-6 text-3xl italic font-serif text-gray-700">
+                    Relationships
+                  </h1>
+
+                  <div className="rounded border border-gray-300 bg-[#f4f0ea] p-5">
+                    <p className="mb-4 text-sm text-gray-600">Filter</p>
+
+                    <div className="grid grid-cols-4 gap-10">
+                      {/* Family Column */}
+                      <div>
+                        <label className="flex items-center gap-2 text-gray-700">
+                          <input
+                            type="checkbox"
+                            defaultChecked
+                            onChange={() => hideAllFamilyRelationship()}                        
+                            className="h-4 w-4 accent-gray-700"
+                          />
+                          <span className="text-sm">
+                            <span className="mr-1 text-gray-500">{familyCounts.reduce((sum, item) => sum + item.count, 0)}</span>
+                            Family
+                          </span>
+                        </label>
+
+                        <div className="mt-4 ml-6 space-y-3">
+                          {familyCounts.map((item,index) => (
+                            <label
+                              key={index}
+                              className="flex items-center gap-2 text-sm text-gray-600"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={!hiddenRelationshipType[item.relationship_type]} 
+                                onChange={() => handleRelationshipTypesChange(item.relationship_type)}                        
+                                className="h-4 w-4 accent-gray-700"
+                              />
+                              {item.count} {item.relationship_type}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Other Categories */}
+                      {otherRelatedCounts.map((item,index) => (
+                        <div key={index}>
+                          <label className="flex items-center gap-2 text-gray-700">
+                            <input
+                              type="checkbox"
+                              defaultChecked
+                              onChange={() => handleRelationshipTypesChange(item.relationship_type)}                        
+                              className="h-4 w-4 accent-gray-700"
+                            />
+                            <span className="text-sm">
+                              <span className="mr-1 text-gray-500">{item.count}</span>
+                              {item.relationship_type == "null" ? "No relationship type" : item.relationship_type}
+                            </span>
+                          </label>
                         </div>
                       ))}
                     </div>
                   </div>
-                ) : null}
-
-                {!selectedNode?.quotes?.length &&
-                !(selectedNode.photo_urls?.length || selectedNode.photos?.length) ? (
-                  <div className="rounded-xl bg-gray-50 p-6 text-center text-gray-500">
-                    No photos or memories for this node yet.
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </div>
-      )}    
+                </div>
+            )}
+        </div>
+        )
+      }
+      {selectedImage && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
+          onClick={() => setSelectedImage(null)}
+        >
+          <Image
+            src={selectedImage}
+            alt="full image"
+            width={1000}
+            height={1000}
+            className="max-h-[90vh] w-auto rounded"
+          />
+        </div>
+      )}      
     </div>
   ) ;
 }
