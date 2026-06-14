@@ -52,7 +52,39 @@ function BottomNav({ active, onChange }) {
 
 // ─── Slideshow ────────────────────────────────────────────────────────────────
 
-function SlideshowSection({ output }) {
+function formatMemorialYear(value) {
+  if (!value) return '';
+
+  const date = new Date(value);
+  if (!Number.isNaN(date.getTime())) return String(date.getFullYear());
+
+  const yearMatch = String(value).match(/\b\d{4}\b/);
+  return yearMatch?.[0] || '';
+}
+
+function getMemorialYears(memorial) {
+  const birthYear = formatMemorialYear(memorial?.date_of_birth || memorial?.birth_date);
+  const passingYear = formatMemorialYear(memorial?.date_of_passing || memorial?.death_date);
+
+  if (birthYear && passingYear) return `${birthYear} - ${passingYear}`;
+  return birthYear || passingYear;
+}
+
+function StoryMemorialSummary({ memorial }) {
+  const name = memorial?.subject_name || memorial?.deceased_name || '';
+  const years = getMemorialYears(memorial);
+
+  if (!name && !years) return null;
+
+  return (
+    <header className="w-full text-center">
+      {name ? <h1 className="font-display text-[40px] font-bold leading-none text-r-text sm:text-[48px]">{name}</h1> : null}
+      {years ? <p className="mt-3 text-body-1 text-r-muted">{years}</p> : null}
+    </header>
+  );
+}
+
+function SlideshowSection({ output, memorial }) {
   if (!output?.story || output.story.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
@@ -62,7 +94,8 @@ function SlideshowSection({ output }) {
     );
   }
   return (
-    <div className="mx-auto w-full max-w-[1281px]">
+    <div className="mx-auto flex w-full max-w-[1281px] flex-col gap-8">
+      <StoryMemorialSummary memorial={memorial} />
       <StorySlideshow output={output} story={output?.story} framed={false} />
     </div>
   );
@@ -753,7 +786,7 @@ export default function MemorialOutputPage() {
         ) : (
           <>
             {/* <MemorialHeader memorial={memorial} onShare={() => setShowShare(true)} /> */}
-            {activeTab === 'Slideshow' && <SlideshowSection output={output} />}
+            {activeTab === 'Slideshow' && <SlideshowSection output={output} memorial={memorial} />}
             {activeTab === 'Constellations' && <ConstellationsSection output={output} memorial={memorial} contributor={contributors} />}
             {activeTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} variant="viewer" />}
             {activeTab === 'Contributions' && <ContributionsSection contributorslist={contributors} />}
