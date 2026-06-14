@@ -751,4 +751,41 @@ router.get('/:contributorid/photoUrls', async (req, res) => {
   }
 })
 
+router.get('/questionnaire-responses/:contributorid', async (req, res) => {
+  try {
+    const contributorId  = req.params.contributorid;
+
+    if (!contributorId) {
+      return res.status(400).json({
+        error: 'contributorId are required',
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('questionnaire_responses')
+      .select('*')
+      .eq('contributor_id', contributorId)
+
+    if (error) {
+      console.error('Supabase error:', error);
+
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve questionnaire responses',
+        error: error.message,
+      });
+    }
+
+    return res.status(200).json({
+      data
+    });
+  } catch (err) {
+    console.error('Server error:', err);
+
+    return res.status(500).json({
+      error: 'Internal server error',
+    });
+  }
+});
+
 module.exports = router

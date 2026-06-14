@@ -9,78 +9,29 @@ import {
 import Image from "next/image";
 
 import { usePathname } from "next/navigation";
-import { getContributorsPhotos } from "@/lib/api"
+import { getContributorsPhotos,getContributorsResponse } from "@/lib/api"
 function capitalizeFirstLetter(str) {
   if (!str || str === 'null') return str;
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-// CSS animations for constellation graph
-const styles = `
-  @keyframes fadeInScale {
-    from {
-      opacity: 0;
-      transform: scale(0.95);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-  
-  @keyframes fadeOut {
-    from {
-      opacity: 1;
-    }
-    to {
-      opacity: 0;
-    }
-  }
-  
-  @keyframes pulse {
-    0%, 100% {
-      opacity: 0.6;
-    }
-    50% {
-      opacity: 1;
-    }
-  }
-  
-  .modal-enter {
-    animation: fadeInScale 300ms ease-out;
-  }
-  
-  .node-highlight {
-    transition: r 300ms ease-out, fill 200ms ease-out;
-  }
-  
-  .pulse-node {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-`;
-
-// Inject styles on component mount
-if (typeof window !== 'undefined') {
-  const styleSheet = document.createElement('style');
-  styleSheet.textContent = styles;
-  document.head.appendChild(styleSheet);
-}
-
-
-
 const familyRelationship = [
+  "Family",
   "Parent",
   "Child",
   "Sibling",
   "Partner / Spouse",
   "Aunt",
   "Uncle",
+  "Cousin",
   "Grandparent",
   "Grandchild",
+  "Grandchildren",
   "Extended family"
 ]
 const otherRelationship = [
   "Other",
+  "Others",
   "Friend",
   "Colleague",
   "Classmate",
@@ -106,13 +57,14 @@ function buildRelationshipCounts(contributors = []) {
 
 // Replace the entire buildRelationshipGraph function:
 function buildRelationshipGraph(contributors, centerId, centerName, relationships = []) {
+  console.log(contributors);
   const contributorNodes = (contributors || []).map((c) => {
     const relType = (c.relationship_type || 'other').toLowerCase();
     const relData = relationships.find((r) => r.type === relType) || {};
     return {
       id: c.id,
       name: c.name || 'Contributor',
-      relationship_type: capitalizeFirstLetter(c.relationship_type) || 'Other',
+      relationship_type: c.relationship_label ? c.relationship_label : capitalizeFirstLetter(c.relationship_type) || 'Other',
       prominence: 0.7,
       summary: relData.summary || '',
       photos: relData.photos || [],
@@ -164,7 +116,8 @@ export default function ConstellationGraph({
       photo_url : memorial?.cover_photo_url
     }
   ]);
-  const [sortOrder, setSortOrder] = useState('newest');
+  const [quoteNode, setQuoteNode] = useState('No quote available for this contributor.');
+  
   const [tab, setTab] = useState(page==1 ? "Themes":"Relationships");
   const [hiddenContributors, setHiddenContributors] = useState({});
   const [hiddenRelationshipType, setHiddenRelationshipType] = useState({
@@ -191,7 +144,14 @@ export default function ConstellationGraph({
       if (selectedNode) {      
         const photos = await getContributorsPhotos(selectedNode.id);
         const finalphotos = photos.photos.map(user => user.photo_url); 
-        setPhotoCarroussel(finalphotos);
+        if(finalphotos){
+          setPhotoCarroussel(finalphotos);
+        }
+        const { data } = await getContributorsResponse(selectedNode.id);
+        const quotes = data.find(item => item.order_index === 3 && item.response_text!="" );
+        if (quotes){
+          setQuoteNode(quotes.response_text);
+        }
       }
     }
   },[currentPage, pathname,selectedNode,tab]);
@@ -227,7 +187,6 @@ export default function ConstellationGraph({
       [id]: !prev[id],
     }));
   };  
-  const {familyCounts , otherRelatedCounts} = buildRelationshipCounts(contributor || []);
   const finalnodes = ai_output?.constellation?.nodes?.map(t => ({
         id: t.id,
         name: t.label,
@@ -274,7 +233,6 @@ export default function ConstellationGraph({
 
   const categoriesColor = {
     "Partner / Spouse": "#c65def",        
-    "Spouse": "#f6c4e5",       
     "Uncle": "#A98F7A",        
     "Grandparent": "#94de9b",  
     "Grandchild": "#ffac6d",   
@@ -304,7 +262,7 @@ export default function ConstellationGraph({
     ),
     [contributor, memorial?.id, memorial?.subject_name, memorial?.deceased_name, relationships],
   );
-
+  const {familyCounts , otherRelatedCounts} = buildRelationshipCounts(relationshipGraph.nodes || []);
   const graphNodes = tab === "Relationships" ? relationshipGraph.nodes : nodes;
   const graphLinks = tab === "Relationships" ? relationshipGraph.links : links;
 
@@ -385,7 +343,7 @@ export default function ConstellationGraph({
       .forceSimulation(displayNode)
       .force(
         "link",
-        d3.forceLink(displayLink).id((d) => d.id).distance(150)
+        d3.forceLink(displayLink).id((d) => d.id).distance(250)
       )
       .force("charge", d3.forceManyBody().strength(-800))
       .force("center", d3.forceCenter(width / 2, height / 2))
@@ -438,8 +396,10 @@ export default function ConstellationGraph({
     console.log(currentPage);
     if (currentPage=="Viewer"){
       node.on("click", (_, d) => {
-          setSelectedNode(d);    
-          setPhotoCarroussel(d.photo_urls);               
+          if (d.relationship_type!="Memorial"){
+            setSelectedNode(d);    
+            setPhotoCarroussel(d.photo_urls);               
+          }
       });
     }
     function truncate(text, maxLength = 10) {
@@ -537,7 +497,6 @@ export default function ConstellationGraph({
               (selectedNode && tab==="Themes" && themes) && (                
               <div className="relative w-[207px]">
                 <select
-                  // onChange={(e) => { setSortOrder(e.target.value); }}
                   onChange={(e) => {sortPhotoTheme(e.target.value);}}
                   className="w-full appearance-none rounded-[12.7px] border border-gray-400 px-5 py-4 pr-12 text-xl font-medium text-neutral-950 bg-transparent focus:outline-none cursor-pointer"
                   style={{ fontFamily: 'var(--font-boska, serif)' }}
@@ -660,10 +619,10 @@ export default function ConstellationGraph({
                           {selectedNode.name || selectedNode.label}
                         </h1>                  
                         <p className="font-serif text-xl italic text-stone-700 leading-snug mb-5">
-                          &ldquo;{selectedNode.quote || "No quote available for this contributor."}.&rdquo;
+                          &ldquo;{ quoteNode }.&rdquo;
                         </p>
                         <p className="text-sm text-stone-600 leading-relaxed mb-7 font-sans">
-                          {selectedNode.summary || "No summary available for this contributor."}
+                          {selectedNode.summary || "No summary available for now."}
                         </p>
                         <button 
                           className="transition-colors px-10 py-4 rounded-full text-[#4A443E]"
@@ -763,7 +722,7 @@ export default function ConstellationGraph({
                       <div className="flex-1 w-[240px] h-full rounded-sm lg:w-[430px] overflow-y-auto ">
                         <div className="space-y-4 pr-2">
                           {(item?.photo_urls?.length ? item.photo_urls : []).map((photoUrl, photoIndex) => (
-                            <div key={`${item.id}-photo-${photoIndex}`} className="h-[160px] overflow-hidden rounded bg-[#dddddd]">
+                            <div key={`${item.id}-photo-${photoIndex}`} className="h-full overflow-hidden rounded bg-[#dddddd]">
                               {photoUrl ? (
                                 <Image
                                   key={photoIndex}
@@ -809,7 +768,7 @@ export default function ConstellationGraph({
                             className="h-4 w-4 accent-gray-700"
                           />
                           <span className="text-sm">
-                            <span className="mr-1 text-gray-500">{familyCounts.length}</span>
+                            <span className="mr-1 text-gray-500">{familyCounts.reduce((sum, item) => sum + item.count, 0)}</span>
                             Family
                           </span>
                         </label>
