@@ -174,7 +174,7 @@ export default function ReviewPage() {
 
   return (
     <main className="min-h-screen bg-r-bg text-r-text flex flex-col">
-      <ContributorNav backHref={`/contribute/${inviteToken}/voice`} />
+      <ContributorNav backHref={`/contribute/${inviteToken}/story`} />
 
       <div className="flex-1 px-6 sm:px-[50px] pt-6 pb-16">
         <div className="mx-auto flex w-full max-w-[680px] flex-col gap-6">
@@ -252,10 +252,7 @@ export default function ReviewPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <Link href={`/contribute/${inviteToken}/upload`}
-              className="flex h-[56px] items-center justify-center rounded-full text-body-2 font-medium transition-colors text-r-text bg-transparent"
-              style={{ border: '1px solid var(--color-r-border)' }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-r-card)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}>
+              className="flex h-[56px] items-center justify-center rounded-full text-body-2 font-medium transition-opacity hover:opacity-80 bg-r-btn text-r-btn-text border-none">
               Upload more
             </Link>
             <button onClick={handleSubmit} disabled={isSubmitting}

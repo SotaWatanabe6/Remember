@@ -705,4 +705,87 @@ router.post('/:token/voice', async (req, res) => {
   }
 })
 
+// GET /contribute/:contributorid/photoUrls — list saved contributor photos on a memorial
+router.get('/:contributorid/photoUrls', async (req, res) => {
+  try {
+    const contributor_id = req.params.contributorid
+    console.log(contributor_id);
+    if (!contributor_id) return res.status(400).json({ error: 'contributor id is required' })
+    const { data: contributor } = await supabase
+      .from('contributors')
+      .select('id, memorial_id')
+      .eq('id', contributor_id)
+      .single()
+
+    if (!contributor) return res.status(404).json({ error: 'Contributor not found' })
+
+    const { data: photos, error } = await supabase
+      .from('media_assets')
+      .select('id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption, created_at')
+      .eq('contributor_id', contributor.id)
+      .eq('memorial_id', contributor.memorial_id)
+      .order('created_at', { ascending: true })
+
+    if (error) return res.status(400).json({ error: error.message })
+
+    const photosWithUrls = await Promise.all((photos || []).map(async (photo) => {
+      const { data } = await supabase.storage
+        .from(photo.storage_bucket || PHOTO_STORAGE_BUCKET)
+        .createSignedUrl(photo.storage_path, 60 * 60)
+
+      return {
+        ...photo,
+        url: data?.signedUrl || null,
+        photo_url: data?.signedUrl || null
+      }
+    }))
+
+    res.json({
+      photos: photosWithUrls,
+      count: photosWithUrls.length,
+      max_photos: MAX_CONTRIBUTOR_PHOTOS,
+      remaining: Math.max(MAX_CONTRIBUTOR_PHOTOS - photosWithUrls.length, 0)
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.get('/questionnaire-responses/:contributorid', async (req, res) => {
+  try {
+    const contributorId  = req.params.contributorid;
+
+    if (!contributorId) {
+      return res.status(400).json({
+        error: 'contributorId are required',
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('questionnaire_responses')
+      .select('*')
+      .eq('contributor_id', contributorId)
+
+    if (error) {
+      console.error('Supabase error:', error);
+
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve questionnaire responses',
+        error: error.message,
+      });
+    }
+
+    return res.status(200).json({
+      data
+    });
+  } catch (err) {
+    console.error('Server error:', err);
+
+    return res.status(500).json({
+      error: 'Internal server error',
+    });
+  }
+});
+
 module.exports = router
