@@ -16,7 +16,7 @@ import StorySlideshow from "@/components/output/StorySlideshow";
 import VoicesTab from "@/components/output/VoicesTab";
 import ProcessingTextSequence from "@/components/dashboard/ProcessingTextSequence";
 import { getAuthToken } from "@/lib/api.js";
-import Header2 from "@/components/ui-components/navs/header2";
+import MemorialCoverImage from "@/components/memorial/MemorialCoverImage.jsx";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 // ─── Generation constants ─────────────────────────────────────────────────────
@@ -46,16 +46,7 @@ function isGeneratingMemorial(memorial) {
   return String(memorial?.status || "").toLowerCase() === "generating";
 }
 
-function getManageStatus(status) {
-  const key = String(status || "").toLowerCase();
-  if (key === "complete") return { label: "Memorial published", className: "bg-[#DCE3C6] text-[#5C6549]" };
-  if (key === "collecting" || key === "generating") return { label: "Collecting memories", className: "bg-[#CFE1EE] text-[#526776]" };
-  return { label: "Not started", className: "bg-[#EFCFC2] text-[#755A55]" };
-}
-
-function isDisplayImage(url) {
-  return typeof url === "string" && /^https?:\/\//i.test(url);
-}
+// ─── Pagination arrows (shared) ───────────────────────────────────────────────
 
 function PrevArrow({ onClick, disabled }) {
   return (
@@ -66,12 +57,9 @@ function PrevArrow({ onClick, disabled }) {
       aria-label="Previous page"
     >
       <svg width="25" height="50" viewBox="0 0 25 50" fill="none">
-        <path
-          fillRule="evenodd"
-          clipRule="evenodd"
+        <path fillRule="evenodd" clipRule="evenodd"
           d="M3.83906 26.4813L15.6245 38.2667L18.5703 35.3208L8.25781 25.0083L18.5703 14.6958L15.6245 11.75L3.83906 23.5354C3.4485 23.9261 3.22909 24.4559 3.22909 25.0083C3.22909 25.5608 3.4485 26.0906 3.83906 26.4813Z"
-          fill="#423F39"
-        />
+          fill="#423F39"/>
       </svg>
     </button>
   );
@@ -86,12 +74,9 @@ function NextArrow({ onClick, disabled }) {
       aria-label="Next page"
     >
       <svg width="25" height="50" viewBox="0 0 25 50" fill="none">
-        <path
-          fillRule="evenodd"
-          clipRule="evenodd"
+        <path fillRule="evenodd" clipRule="evenodd"
           d="M21.1609 26.4813L9.37552 38.2667L6.42969 35.3208L16.7422 25.0083L6.42969 14.6958L9.37552 11.75L21.1609 23.5354C21.5515 23.9261 21.7709 24.4559 21.7709 25.0083C21.7709 25.5608 21.5515 26.0906 21.1609 26.4813Z"
-          fill="#423F39"
-        />
+          fill="#423F39"/>
       </svg>
     </button>
   );
@@ -103,8 +88,8 @@ function FilterSelect({ value, onChange, children, className = "" }) {
       <select
         value={value}
         onChange={onChange}
-        className="w-full appearance-none rounded-[12.7px] border border-r-border bg-transparent px-5 py-4 pr-12 text-xl font-medium text-r-text focus:outline-none"
-        style={{ fontFamily: "var(--font-family-display)" }}
+        className="w-full appearance-none rounded-[12.7px] border border-r-border px-5 py-4 pr-12 text-xl font-medium text-r-text bg-transparent focus:outline-none cursor-pointer"
+        style={{ fontFamily: 'var(--font-family-display)' }}
       >
         {children}
       </select>
@@ -119,54 +104,75 @@ function FilterSelect({ value, onChange, children, className = "" }) {
 
 // ─── Memorial Header ──────────────────────────────────────────────────────────
 
-function MemorialHeader({ memorial, onShare }) {
-  const status = getManageStatus(memorial?.status);
-  const birthYear = memorial?.date_of_birth ? new Date(memorial.date_of_birth).getFullYear() : "";
-  const passingYear = memorial?.date_of_passing ? new Date(memorial.date_of_passing).getFullYear() : "";
-
+function MemorialHeader({ memorial, inviteToken, onShare }) {
   return (
-    <div className="grid gap-8 lg:grid-cols-[420px_1fr_260px] lg:items-center">
-      <div className="flex justify-center lg:justify-start">
-        <div className="size-[220px] overflow-hidden rounded-full bg-[#F3EBE3]">
-          {isDisplayImage(memorial?.cover_photo_url) ? (
-            <img
-              src={memorial.cover_photo_url}
-              alt={memorial?.subject_name || "Memorial portrait"}
-              className="h-full w-full object-cover"
-            />
-          ) : null}
-        </div>
+    <div className="flex items-start gap-8">
+      {/* Circular avatar — matches Figma design */}
+      <div className="relative h-[145px] w-[145px] shrink-0 overflow-hidden rounded-full border border-r-border">
+        <MemorialCoverImage
+          src={memorial?.cover_photo_url}
+          name={memorial?.subject_name}
+          fill
+          className="h-full w-full object-cover"
+        />
       </div>
-      <div className="min-w-0 text-center lg:text-left">
-        <h1 className="font-family-display text-[36px] font-medium italic leading-[36px] tracking-[0px] text-r-text">
+
+      {/* Info */}
+      <div className="flex-1 min-w-0 pt-2">
+        <h1
+          className="text-[32px] font-medium text-r-text leading-tight"
+          style={{ fontFamily: 'var(--font-family-display)', fontStyle: 'italic' }}
+        >
           {memorial?.subject_name || ''}
         </h1>
-        <p className="mt-4 font-family-body text-[16px] leading-[16px] tracking-[0px] text-[#5F5A52]">
-          {birthYear}
-          {birthYear && passingYear ? " - " : ""}
-          {passingYear}
+        <p className="mt-1 text-sm text-r-muted">
+          {memorial?.date_of_birth && new Date(memorial.date_of_birth).getFullYear()}
+          {memorial?.date_of_birth && memorial?.date_of_passing && ' - '}
+          {memorial?.date_of_passing && new Date(memorial.date_of_passing).getFullYear()}
         </p>
-        <p className="mt-6 max-w-[520px] font-family-body text-[20px] leading-[20px] tracking-[0px] text-[#5F5A52]">
+        <p className="mt-2 text-sm text-r-secondary leading-relaxed max-w-md">
           {memorial?.bio || ''}
         </p>
+        {memorial?.status && (
+          <span className="mt-3 inline-block rounded-full px-4 py-1.5 text-caption bg-r-shape"
+            style={{ color: '#FBF9F6' }}>
+            {memorial.status === 'collecting' ? 'Collecting memories'
+              : memorial.status === 'generating' ? 'Generating'
+              : memorial.status === 'complete' ? 'Complete'
+              : memorial.status}
+          </span>
+        )}
       </div>
-      <div className="flex flex-col gap-6">
-        <div className="flex flex-col gap-4">
-          <Link href={memorial?.id ? `/memorial/${memorial.id}/manage/contributions` : '#'}
-            className="rounded-full bg-r-btn px-6 py-5 text-center font-family-body text-[18px] leading-[20px] text-r-btn-text transition hover:brightness-95">
-            Upload Memories
-          </Link>
-          <Link href={memorial?.id ? `/memorial/${memorial.id}/output` : '#'}
-            className="rounded-full bg-r-btn px-6 py-5 text-center font-family-body text-[18px] leading-[20px] text-r-btn-text transition hover:brightness-95">
-            View Memorial
-          </Link>
-        </div>
-        <div className="flex items-center justify-center gap-10 text-r-text lg:justify-end">
-          <button type="button" onClick={onShare} className="transition hover:opacity-70" aria-label="Share memorial">
-            <svg width="42" height="42" viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77l-7.13-4.16a3.27 3.27 0 000-1.38l7.12-4.15A2.99 2.99 0 0018 7.91a3 3 0 10-2.83-4 3 3 0 00.12 1.49L8.17 9.56a3 3 0 100 4.88l7.12 4.16c-.08.23-.12.47-.12.72a3 3 0 103-3.24z"/></svg>
+
+      {/* Actions — matches Figma: two pill buttons + icon row */}
+      <div className="flex shrink-0 flex-col items-end gap-3 pt-2">
+        {/* Upload Memories: organizer goes through the same contributor flow as everyone else.
+            Links to /contribute/[inviteToken] once the token is loaded. */}
+        <Link
+          href={inviteToken ? `/contribute/${inviteToken}` : '#'}
+          className="w-44 py-2.5 rounded-full border border-r-border bg-r-btn text-r-btn-text text-sm text-center font-medium hover:opacity-85 transition-opacity"
+        >
+          Upload Memories
+        </Link>
+        <Link
+          href={memorial?.id ? `/memorial/${memorial.id}/output` : '#'}
+          className="w-44 py-2.5 rounded-full border border-r-border bg-r-btn text-r-btn-text text-sm text-center font-medium hover:opacity-85 transition-opacity"
+        >
+          View Memorial
+        </Link>
+        <div className="flex items-center gap-5 mt-1 pr-1">
+          <button
+            onClick={onShare}
+            aria-label="Share"
+            className="text-r-text hover:opacity-60 transition-opacity"
+          >
+            <Share2 size={20} />
           </button>
-          <button type="button" className="transition hover:opacity-70" aria-label="Memorial settings">
-            <svg width="46" height="46" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.6-.22l-2.39.96a7.03 7.03 0 00-1.63-.94l-.36-2.54a.49.49 0 00-.49-.42h-3.84a.49.49 0 00-.49.42l-.36 2.54c-.58.22-1.13.53-1.63.94l-2.39-.96a.5.5 0 00-.6.22L2.54 8.84a.5.5 0 00.12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32c.14.24.43.34.69.22l2.39-.96c.5.4 1.05.72 1.63.94l.36 2.54c.05.24.25.42.49.42h3.84c.24 0 .44-.18.49-.42l.36-2.54c.58-.22 1.13-.53 1.63-.94l2.39.96c.26.12.55.02.69-.22l1.92-3.32a.5.5 0 00-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1112 8a3.5 3.5 0 010 7.5z"/></svg>
+          <button
+            aria-label="Settings"
+            className="text-r-text hover:opacity-60 transition-opacity"
+          >
+            <Settings size={20} />
           </button>
         </div>
       </div>
@@ -180,15 +186,21 @@ const MAIN_TABS = ['Archive', 'Contributions', 'Outputs'];
 
 function TabBar({ active, onChange }) {
   return (
-    <div className="grid grid-cols-3 gap-6">
+    <div className="flex border-b border-r-border">
       {MAIN_TABS.map((tab) => (
-        <button key={tab} onClick={() => onChange(tab)}
-          className={`border-b pb-3 text-center font-family-display text-[24px] font-medium leading-[24px] tracking-[0px] transition-colors ${
+        <button
+          key={tab}
+          onClick={() => onChange(tab)}
+          className={`flex-1 py-3 text-sm transition-colors relative ${
             active === tab
-              ? 'border-r-text text-r-text'
-              : 'border-r-border text-[#6E665D] hover:text-r-text'
-          }`}>
+              ? 'text-r-text font-semibold'
+              : 'text-r-muted hover:text-r-text font-normal'
+          }`}
+        >
           {tab}
+          {active === tab && (
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-r-text" />
+          )}
         </button>
       ))}
     </div>
@@ -281,26 +293,20 @@ function ArchiveTab({ contributors, output }) {
     : allItems;
 
   return (
-    <div className="flex flex-col gap-10 pt-8">
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[56px_1fr_236px_236px]">
-        <div className="flex items-center justify-center text-r-text">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.84 5.66H20l-4.99 3.62 1.91 5.88L12 13.54 7.08 17.16l1.91-5.88L4 7.66h6.16L12 2z"/></svg>
-        </div>
+    <div className="flex flex-col gap-6 pt-6">
+      <div className="flex items-center gap-3">
+        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24" className="text-r-text shrink-0">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
+        </svg>
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Show me happy memories"
-          className="h-[72px] rounded-[18px] border border-r-border bg-[#F6EFE7] px-6 font-family-body text-[20px] leading-[20px] text-[#5F5A52] placeholder:text-[#5F5A52] focus:outline-none focus:ring-2 focus:ring-r-border/30"
+          className="flex-1 rounded-xl border border-r-border px-4 py-2.5 text-sm placeholder-r-muted bg-transparent focus:outline-none focus:border-r-border-focus text-r-text"
         />
-        <button type="button" className="flex h-[72px] items-center justify-between rounded-[18px] border border-r-border bg-[#F6EFE7] px-6 font-family-display text-[24px] leading-[24px] text-r-text">
-          <span>Filter</span>
-          <span className="size-0 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-[#4A4742]" />
-        </button>
-        <button type="button" className="flex h-[72px] items-center justify-between rounded-[18px] border border-r-border bg-[#F6EFE7] px-6 font-family-display text-[24px] leading-[24px] text-r-text">
-          <span>Sort</span>
-          <span className="size-0 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-[#4A4742]" />
-        </button>
+        <button className="rounded-full bg-r-btn px-5 py-2.5 text-sm font-medium text-r-btn-text hover:opacity-85 transition-opacity">Filter</button>
+        <button className="rounded-full bg-r-btn px-5 py-2.5 text-sm font-medium text-r-btn-text hover:opacity-85 transition-opacity">Sort</button>
       </div>
 
       {filtered.length === 0 ? (
@@ -317,27 +323,12 @@ function ArchiveTab({ contributors, output }) {
       ) : (
         <div className="grid grid-cols-3 gap-4">
           {filtered.map((item, i) => (
-            <div key={item.id || i} className="group rounded-xl overflow-hidden border border-neutral-200 bg-white">
+            <div key={item.id || i} className="rounded-2xl overflow-hidden border border-r-border bg-r-card">
               {item.type === 'photo' && (
                 item.url
-                  ? <div className="relative aspect-[4/3] w-full overflow-hidden">
-                      <img src={item.url} alt={item.caption || ''} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/0 px-8 text-center opacity-0 transition-all duration-300 group-hover:bg-black/38 group-hover:opacity-100">
-                        <p className="font-family-display text-[30px] leading-[34px] text-white">
-                          {item.caption || "Photo title"}
-                        </p>
-                        <p className="mt-4 font-family-body text-[16px] leading-[16px] text-white">
-                          {item.contributor_name ? `Submitted by ${item.contributor_name}` : "Submitted by contributor"}
-                        </p>
-                        <p className="mt-4 font-family-body text-[16px] leading-[16px] text-white">
-                          {item.taken_at
-                            ? new Date(item.taken_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-                            : "Date here"}
-                        </p>
-                      </div>
-                    </div>
-                  : <div className="aspect-[4/3] w-full bg-neutral-200 flex items-center justify-center">
-                      <span className="text-xs text-neutral-400">{item.contributor_name || 'Photo'}</span>
+                  ? <img src={item.url} alt={item.caption || ''} className="aspect-[4/3] w-full object-cover" />
+                  : <div className="aspect-[4/3] w-full bg-r-card flex items-center justify-center">
+                      <span className="text-xs text-r-muted">{item.contributor_name || 'Photo'}</span>
                     </div>
               )}
               {item.type === 'voice' && (
@@ -366,9 +357,6 @@ function ArchiveTab({ contributors, output }) {
 
 function ContributionsTab({ contributorslist, loading, error, onRetry }) {
   const [value, setValue] = useState("contributors");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [contributorFilter, setContributorFilter] = useState("all");
-  const [contributorSort, setContributorSort] = useState("recent");
 
   const submissions = contributorslist.filter((c) => {
     const status = String(c.status || "").toLowerCase();
@@ -379,91 +367,24 @@ function ContributionsTab({ contributorslist, loading, error, onRetry }) {
   const current = submissions[currentIndex];
   const handlePrev = () => setCurrentIndex((prev) => prev === 0 ? submissions.length - 1 : prev - 1);
   const handleNext = () => setCurrentIndex((prev) => prev === submissions.length - 1 ? 0 : prev + 1);
-  const contributorCards = [...contributorslist]
-    .filter((contributor) => {
-      if (contributorFilter === "anonymous") {
-        return String(contributor.name || "").trim().toLowerCase() === "anonymous";
-      }
-      if (contributorFilter === "named") {
-        return String(contributor.name || "").trim().toLowerCase() !== "anonymous";
-      }
-      return true;
-    })
-    .sort((a, b) => {
-      if (contributorSort === "name") {
-        return String(a.name || "").localeCompare(String(b.name || ""));
-      }
-      return new Date(b.submitted_at || 0) - new Date(a.submitted_at || 0);
-    });
 
   return (
     <div className="mx-auto max-w-7xl">
-      <div className="mb-6 flex flex-col gap-6">
-        <div className="flex items-center justify-between gap-6">
-          <div className="relative w-[450px]">
-            <select
-              onChange={(e) => setValue(e.target.value)}
-              value={value}
-              className="h-[63px] w-full appearance-none rounded-[22px] border border-r-border bg-[#F6EFE7] px-7 pr-20 font-family-display text-[24px] leading-[24px] text-r-text outline-none"
-            >
-              <option value="contributors">Contributors</option>
-              <option value="awaiting">Awaiting approval</option>
-            </select>
-            <span className="pointer-events-none absolute right-7 top-1/2 size-0 -translate-y-1/2 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-[#4A4742]" />
-          </div>
-          {value === "contributors" && (
-            <div className="flex items-center gap-5">
-              <div className="relative w-[213px]">
-                <select
-                  value={contributorFilter}
-                  onChange={(e) => setContributorFilter(e.target.value)}
-                  className="h-[63px] w-full appearance-none rounded-[18px] border border-r-border bg-[#F6EFE7] px-5 pr-16 font-family-display text-[24px] leading-[24px] text-r-text outline-none"
-                >
-                  <option value="all">Filter</option>
-                  <option value="anonymous">Anonymous</option>
-                  <option value="named">Named</option>
-                </select>
-                <span className="pointer-events-none absolute right-5 top-1/2 size-0 -translate-y-1/2 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-[#4A4742]" />
-              </div>
-              <div className="relative w-[213px]">
-                <select
-                  value={contributorSort}
-                  onChange={(e) => setContributorSort(e.target.value)}
-                  className="h-[63px] w-full appearance-none rounded-[18px] border border-r-border bg-[#F6EFE7] px-5 pr-16 font-family-display text-[24px] leading-[24px] text-r-text outline-none"
-                >
-                  <option value="recent">Sort</option>
-                  <option value="recent">Most recent</option>
-                  <option value="name">Name</option>
-                </select>
-                <span className="pointer-events-none absolute right-5 top-1/2 size-0 -translate-y-1/2 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-[#4A4742]" />
-              </div>
-            </div>
-          )}
-        </div>
+      <div className="mb-4 flex items-center justify-between">
+        <select onChange={(e) => setValue(e.target.value)} value={value}
+          className="border border-r-border rounded-md px-4 py-2 text-sm outline-none bg-transparent text-r-text">
+          <option value="contributors">Contributors</option>
+          <option value="awaiting">Awaiting Approval</option>
+        </select>
         {(value === "awaiting" && submissions.length > 0) && (
-          <div className="flex items-center justify-between gap-6">
-            <div className="flex h-[63px] w-full max-w-[434px] items-center rounded-full border border-r-border bg-[#F6EFE7] px-6">
-              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-[#4A4742]">
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-3.5-3.5" strokeLinecap="round" />
-              </svg>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search for a contributor"
-                className="ml-6 w-full bg-transparent font-family-body text-[20px] leading-[20px] text-[#5F5A52] placeholder:text-[#5F5A52] outline-none"
-              />
-            </div>
-            <div className="flex items-center gap-12 px-6 font-family-display text-[24px] leading-[24px] text-r-text">
-              <button onClick={handlePrev} className="transition hover:opacity-70">
-                <ChevronLeft size={54} strokeWidth={1.8} />
-              </button>
-              <span>1/5</span>
-              <button onClick={handleNext} className="transition hover:opacity-70">
-                <ChevronRight size={54} strokeWidth={1.8} />
-              </button>
-            </div>
+          <div className="flex items-center gap-4 text-sm text-r-secondary">
+            <button onClick={handlePrev} className="rounded p-1 transition hover:bg-r-card">
+              <ChevronLeft size={18} />
+            </button>
+            <span>{currentIndex + 1}/{submissions.length}</span>
+            <button onClick={handleNext} className="rounded p-1 transition hover:bg-r-card">
+              <ChevronRight size={18} />
+            </button>
           </div>
         )}
       </div>
@@ -483,33 +404,32 @@ function ContributionsTab({ contributorslist, loading, error, onRetry }) {
         />
       )}
       {value === "contributors" && !loading && !error && contributorslist.length > 0 && (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {contributorCards.map((contributor) => (
-            <article
-              key={contributor.id}
-              className="min-h-[287px] rounded-[18px] border border-r-border bg-[#F6EFE7] px-[50px] py-12"
-            >
-              <h3 className="font-family-display text-[28px] leading-[32px] text-r-text">
-                {contributor.name || "Anonymous"}
-              </h3>
-              <p className="mt-6 font-family-body text-[16px] leading-[20px] text-[#5F5A52]">
-                {contributor.contribution_count || 0} contributions
-              </p>
-              <p className="mt-4 font-family-body text-[16px] leading-[20px] text-[#5F5A52]">
-                Last submitted {contributor.submitted_at
-                  ? new Date(contributor.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-                  : 'May 20, 2026'}
-              </p>
-              <span className="mt-6 inline-flex min-h-[49px] min-w-[214px] items-center justify-center rounded-[14px] bg-[#B9C493] px-6 font-family-body text-[16px] leading-[20px] text-[#5C6549]">
-                {contributor.relationship_type || 'Relationship'}
+        <div className="grid grid-cols-3 gap-4">
+          {contributorslist.map((contributor) => (
+            <div key={contributor.id} className="rounded-2xl p-5 flex flex-col gap-3 bg-r-modal border border-r-border">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full shrink-0 bg-r-card" />
+                <div className="min-w-0">
+                  <p className="text-body-2 font-semibold text-r-text">{contributor.name}</p>
+                  <p className="text-caption text-r-muted mt-0.5">
+                    {String(contributor.status || '').toLowerCase() === 'submitted' ||
+                    contributor.submitted_at
+                      ? 'Submitted'
+                      : 'In progress'}
+                  </p>
+                  <p className="text-caption text-r-muted">
+                    Last submitted {contributor.submitted_at
+                      ? new Date(contributor.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                      : 'No date provided'}
+                  </p>
+                </div>
+              </div>
+              <span className="self-start rounded-full px-4 py-1.5 text-caption bg-r-shape"
+                style={{ color: '#FBF9F6' }}>
+                {contributor.relationship_type || 'No Relationship'}
               </span>
-            </article>
-          ))}
-          {contributorCards.length === 0 && (
-            <div className="col-span-full py-12 text-center font-family-body text-[18px] text-[#5F5A52]">
-              No contributors match the current filter.
             </div>
-          )}
+          ))}
         </div>
       )}
       {value === "awaiting" && (
@@ -559,86 +479,6 @@ function Lightbox({ photo, onClose, onPrev, onNext }) {
     </div>
   );
 }
-// ─── All Photos Section ───────────────────────────────────────────────────────
-
-function ConstellationSection({output, memorial,contributors, onGenerate, generating, canGenerate }) {
-  const [page, setPage] = useState(1);
-  const totalPages = 2;
-  return (
-    <div>      
-      <div className="rounded-2xl border border-neutral-100 bg-r-bg py-6">
-        <div className="mb-6 flex items-center justify-between gap-4">
-          {/* <select
-            value={tab}
-            onChange={handleChange}
-            className="border border-gray-300 bg-white px-4 py-2 text-sm shadow-sm outline-none"
-          >
-            <option value="Themes">
-              Constellation : Themes
-            </option>
-
-            <option value="Relationships">
-              Constellation : Relationships
-            </option>
-          </select> */}
-          <h2 className="text-[36px] mt-6 font-medium italic text-neutral-950" style={{ fontFamily: 'var(--font-boska, serif)' }}>
-            Constellation
-          </h2>        
-          <div className="flex items-center gap-4">
-            <button
-              onClick={onGenerate}
-              disabled={!canGenerate || generating}
-              className="rounded-full px-6 py-[14px] text-base text-neutral-950 transition-opacity hover:opacity-80 disabled:opacity-45 disabled:cursor-not-allowed border-none"
-              style={{ backgroundColor: 'var(--color-r-btn)' }}
-            >
-              {generating ? 'Generating…' : 'Generate'}
-            </button>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="transition-opacity hover:opacity-70 disabled:opacity-30"
-                aria-label="Previous page"
-              >
-                <svg width="25" height="50" viewBox="0 0 25 50" fill="none">
-                  <path fillRule="evenodd" clipRule="evenodd"
-                    d="M3.83906 26.4813L15.6245 38.2667L18.5703 35.3208L8.25781 25.0083L18.5703 14.6958L15.6245 11.75L3.83906 23.5354C3.4485 23.9261 3.22909 24.4559 3.22909 25.0083C3.22909 25.5608 3.4485 26.0906 3.83906 26.4813Z"
-                    fill="#423F39"/>
-                </svg>
-              </button>
-              <span className="text-2xl font-medium text-neutral-950 min-w-[48px] text-center"
-                style={{ fontFamily: 'var(--font-boska, serif)' }}>
-                {page} {totalPages}
-              </span>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="transition-opacity hover:opacity-70 disabled:opacity-30"
-                aria-label="Next page"
-              >
-                <svg width="25" height="50" viewBox="0 0 25 50" fill="none">
-                  <path fillRule="evenodd" clipRule="evenodd"
-                    d="M21.1609 26.4813L9.37552 38.2667L6.42969 35.3208L16.7422 25.0083L6.42969 14.6958L9.37552 11.75L21.1609 23.5354C21.5515 23.9261 21.7709 24.4559 21.7709 25.0083C21.7709 25.5608 21.5515 26.0906 21.1609 26.4813Z"
-                    fill="#423F39"/>
-                </svg>
-              </button>
-            </div>
-          </div>            
-        </div>       
-      </div>
-      <ConstellationGraph
-        ai_output={output}
-        memorial={memorial}
-        contributor={contributors}
-        page={page}
-        width={800}
-        height={800}
-      />
-    </div>
-  );
-}
-
-
 
 // ─── All Photos Section ───────────────────────────────────────────────────────
 
@@ -766,9 +606,9 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
       ];
 
   return (
-    <div className="flex flex-col gap-5 pt-4">
+    <div className="flex flex-col gap-5">
 
-      {/* Top bar */}
+      {/* Top bar — back to albums (when inside an album) + photo pagination */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           {openAlbum && (
@@ -782,32 +622,24 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
               Albums
             </button>
           )}
-          <h2
-            className="text-[36px] font-medium italic text-r-text"
-            style={{ fontFamily: 'var(--font-family-display)' }}
-          >
-            {openAlbum ? openAlbum.album_name : 'All photos'}
-          </h2>
-        </div>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={onGenerate}
-            disabled={!canGenerate || generating}
-            className="rounded-full px-6 py-[14px] text-base text-r-btn-text transition-opacity hover:opacity-80 disabled:opacity-45 disabled:cursor-not-allowed border-none"
-            style={{ backgroundColor: 'var(--color-r-btn)' }}
-          >
-            {generating ? 'Generating…' : 'Generate'}
-          </button>
-          <div className="flex items-center gap-3">
-            <PrevArrow onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} />
+          {openAlbum && (
             <span
-              className="text-2xl font-medium text-r-text min-w-[64px] text-center"
+              className="text-[24px] font-medium italic text-r-text"
               style={{ fontFamily: 'var(--font-family-display)' }}
             >
-              {page} / {totalPages}
+              {openAlbum.album_name}
             </span>
-            <NextArrow onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} />
-          </div>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <PrevArrow onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} />
+          <span
+            className="text-2xl font-medium text-r-text min-w-[64px] text-center"
+            style={{ fontFamily: 'var(--font-family-display)' }}
+          >
+            {page} / {totalPages}
+          </span>
+          <NextArrow onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} />
         </div>
       </div>
 
@@ -1003,7 +835,17 @@ function PreGenerationEmpty({ canGenerate, disabledMessage, generationError, gen
 
 // ─── Outputs Tab ──────────────────────────────────────────────────────────────
 
+const OUTPUT_SECTIONS = [
+  { key: 'story',                       label: 'Story' },
+  { key: 'constellation-themes',        label: 'Constellation | Themes' },
+  { key: 'constellation-relationships', label: 'Constellation | Relationships' },
+  { key: 'voices',                      label: 'Voices' },
+  { key: 'photos',                      label: 'All photos' },
+];
+
 function OutputsTab({ memorial, contributors, canGenerate, disabledMessage, generationError, generationJob, generating, onGenerate, output, loading, error, onRetry }) {
+  const [sectionIndex, setSectionIndex] = useState(0);
+
   if (loading) return <TabLoading />;
 
   if (error) {
@@ -1031,35 +873,84 @@ function OutputsTab({ memorial, contributors, canGenerate, disabledMessage, gene
     );
   }
 
+  const currentSection = OUTPUT_SECTIONS[sectionIndex];
+  const total = OUTPUT_SECTIONS.length;
+
+  // Constellation page: 1 = Themes, 2 = Relationships
+  const constellationPage = currentSection.key === 'constellation-relationships' ? 2 : 1;
+
   return (
-    <div className="flex flex-col divide-y divide-r-border pt-4">
-      <CollapsibleSection title="Story">
+    <div className="flex flex-col pt-4 gap-6">
+
+      {/* Top row: section title + Generate + arrows */}
+      <div className="flex items-center justify-between gap-4">
+        <h2
+          className="text-[36px] font-medium italic text-r-text"
+          style={{ fontFamily: 'var(--font-family-display)' }}
+        >
+          {currentSection.label}
+        </h2>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onGenerate}
+            disabled={!canGenerate || generating}
+            className="rounded-full px-6 py-[14px] text-base text-r-btn-text transition-opacity hover:opacity-80 disabled:opacity-45 disabled:cursor-not-allowed border-none"
+            style={{ backgroundColor: 'var(--color-r-btn)' }}
+          >
+            {generating ? 'Generating…' : 'Generate'}
+          </button>
+          <div className="flex items-center gap-3">
+            <PrevArrow
+              onClick={() => setSectionIndex((i) => Math.max(0, i - 1))}
+              disabled={sectionIndex === 0}
+            />
+            <span
+              className="text-2xl font-medium text-r-text min-w-[64px] text-center"
+              style={{ fontFamily: 'var(--font-family-display)' }}
+            >
+              {sectionIndex + 1} / {total}
+            </span>
+            <NextArrow
+              onClick={() => setSectionIndex((i) => Math.min(total - 1, i + 1))}
+              disabled={sectionIndex === total - 1}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Section content */}
+      {currentSection.key === 'story' && (
         <StorySlideshow output={output} story={output?.story} />
-      </CollapsibleSection>
-      <CollapsibleSection title="Constellation">
-        <ConstellationSection  
-          output={output}
+      )}
+
+      {(currentSection.key === 'constellation-themes' || currentSection.key === 'constellation-relationships') && (
+        <ConstellationGraph
+          ai_output={output}
           memorial={memorial}
-          contributors={contributors}
-          onGenerate={onGenerate}
-          generating={generating}
-          canGenerate={canGenerate}        
+          contributor={contributors}
+          page={constellationPage}
+          width={800}
+          height={800}
         />
-      </CollapsibleSection>
-      <CollapsibleSection title="Voices">
+      )}
+
+      {currentSection.key === 'voices' && (
         <VoicesTab output={output} voices={output?.voices} />
-      </CollapsibleSection>
-      <div className="pt-2 border-t border-r-border">
+      )}
+
+      {currentSection.key === 'photos' && (
         <AllPhotosSection
           albums={output?.photos}
           onGenerate={onGenerate}
           generating={generating}
           canGenerate={canGenerate}
         />
-      </div>
+      )}
+
     </div>
   );
 }
+
 
 // ─── Share Modal ──────────────────────────────────────────────────────────────
 
@@ -1349,39 +1240,60 @@ export default function MemorialOutputPage() {
   useEffect(() => { queueMicrotask(loadOutput); }, [loadOutput]);
 
   return (
-    <main className="min-h-screen bg-r-bg px-6 py-8 text-neutral-950 sm:px-[50px] sm:py-[50px]">
-      <div className="mx-auto flex w-full flex-col gap-8">
-        <Header2 backHref="/dashboard" />
+    <main className="min-h-screen bg-r-bg text-r-text flex flex-col">
 
-        <MemorialHeader memorial={memorial} onShare={() => setShowShare(true)} />
-        <TabBar active={activeTab} onChange={setActiveTab} />
+      {/* Nav spans full viewport width — matches design reference Header and ContributorNav */}
+      <nav className="w-full flex items-center justify-between px-6 sm:px-[50px] py-6">
+        <div className="flex items-center gap-2">
+          <img src="/Logo.svg" alt="" width={36} height={36} aria-hidden="true" />
+          <span className="text-r-text text-2xl leading-8 [font-family:var(--font-family-display)]">Remember</span>
+        </div>
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-2 text-r-text transition-opacity hover:opacity-70"
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M7.82484 13L12.7248 17.9C12.9248 18.1 13.0208 18.3334 13.0128 18.6C13.0048 18.8667 12.9005 19.1 12.6998 19.3C12.4998 19.4834 12.2665 19.5794 11.9998 19.588C11.7332 19.5967 11.4998 19.5007 11.2998 19.3L4.69984 12.7C4.59984 12.6 4.52884 12.4917 4.48684 12.375C4.44484 12.2584 4.42451 12.1334 4.42584 12C4.42718 11.8667 4.44818 11.7417 4.48884 11.625C4.52951 11.5084 4.60018 11.4 4.70084 11.3L11.3008 4.70005C11.4842 4.51672 11.7135 4.42505 11.9888 4.42505C12.2642 4.42505 12.5015 4.51672 12.7008 4.70005C12.9008 4.90005 13.0008 5.13772 13.0008 5.41305C13.0008 5.68838 12.9008 5.92572 12.7008 6.12505L7.82484 11H18.9998C19.2832 11 19.5208 11.096 19.7128 11.288C19.9048 11.48 20.0005 11.7174 19.9998 12C19.9992 12.2827 19.9032 12.5204 19.7118 12.713C19.5205 12.9057 19.2832 13.0014 18.9998 13H7.82484Z" fill="currentColor"/>
+          </svg>
+          <span className="text-base font-normal">Back</span>
+        </Link>
+      </nav>
 
-        <div>
-          {activeTab === 'Archive' && <ArchiveTab contributors={contributors} output={output} />}
-          {activeTab === 'Contributions' && (
-            <ContributionsTab
-              contributorslist={contributors}
-              loading={contributorsLoading}
-              error={contributorsError}
-              onRetry={loadContributors}
-            />
-          )}
-          {activeTab === 'Outputs' && (
-            <OutputsTab
-              memorial={memorial}
-              contributors={contributors}
-              canGenerate={canGenerate}
-              disabledMessage={generationDisabledMessage}
-              generationError={generationError}
-              generationJob={generationJob}
-              generating={generating}
-              onGenerate={handleGenerate}
-              output={output}
-              loading={outputLoading}
-              error={outputError}
-              onRetry={loadOutput}
-            />
-          )}
+      {/* Page content constrained to 960px */}
+      <div className="flex-1 px-6 sm:px-[50px] pb-16">
+        <div className="mx-auto flex w-full max-w-[960px] flex-col gap-8">
+
+          <MemorialHeader memorial={memorial} inviteToken={inviteToken} onShare={() => setShowShare(true)} />
+          <TabBar active={activeTab} onChange={setActiveTab} />
+
+          <div>
+            {activeTab === 'Archive' && <ArchiveTab contributors={contributors} output={output} />}
+            {activeTab === 'Contributions' && (
+              <ContributionsTab
+                contributorslist={contributors}
+                loading={contributorsLoading}
+                error={contributorsError}
+                onRetry={loadContributors}
+              />
+            )}
+            {activeTab === 'Outputs' && (
+              <OutputsTab
+                memorial={memorial}
+                contributors={contributors}
+                canGenerate={canGenerate}
+                disabledMessage={generationDisabledMessage}
+                generationError={generationError}
+                generationJob={generationJob}
+                generating={generating}
+                onGenerate={handleGenerate}
+                output={output}
+                loading={outputLoading}
+                error={outputError}
+                onRetry={loadOutput}
+              />
+            )}
+          </div>
+
         </div>
       </div>
 

@@ -2,7 +2,10 @@
 
 // frontend/src/components/contributor/RelationshipSelector.jsx
 
-import { useEffect, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -16,7 +19,10 @@ import {
   CONTRIBUTOR_RELATIONSHIP_FRIEND,
   CONTRIBUTOR_RELATIONSHIP_COLLEAGUE,
   CONTRIBUTOR_RELATIONSHIP_OTHER,
+  CONTRIBUTOR_RELATIONSHIP_TOP_LEVEL_OPTIONS,
 } from "@/lib/contribute/relationshipOptions.js";
+
+const RELATIONSHIP_FAMILY = "Family";
 
 const relationshipErrorCopy = {
   invalid: {
@@ -65,7 +71,7 @@ function LoadingState() {
         <div className="size-12 rounded-full border-2 animate-spin" style={{ borderColor: 'var(--color-r-border)', borderTopColor: 'var(--color-r-text)' }} />
         <p className="text-body-2 text-r-secondary">Opening your contribution...</p>
       </section>
-    </main>
+    </ContributorPageShell>
   );
 }
 
@@ -91,7 +97,7 @@ function RelationshipErrorState({ status, inviteToken }) {
           </Link>
         ) : null}
       </section>
-    </main>
+    </ContributorPageShell>
   );
 }
 

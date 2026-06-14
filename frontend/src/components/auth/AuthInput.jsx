@@ -11,7 +11,7 @@ export default function AuthInput({
     <div className={`flex w-full flex-col gap-[10px] ${className}`}>
       <label
         htmlFor={id}
-        className="text-[17px] font-medium leading-[25px] text-neutral-950 sm:text-[17.782px]"
+        className="text-[16px] font-normal leading-normal text-r-text"
       >
         {label}
       </label>
@@ -19,8 +19,8 @@ export default function AuthInput({
         id={id}
         aria-invalid={Boolean(error)}
         aria-describedby={errorId}
-        className={`h-[63px] w-full rounded-[13px] border bg-white px-5 text-xl text-neutral-950 outline-none transition placeholder:text-neutral-950/50 focus:border-r-border-focus focus:ring-2 focus:ring-r-border/40 ${
-          error ? "border-red-400" : "border-r-border"
+        className={`h-[63px] w-full rounded-[13px] border bg-transparent px-5 text-[20px] font-normal leading-normal text-r-text outline-none transition placeholder:text-r-secondary focus:border-r-border-focus focus:ring-2 focus:ring-r-border/40 ${
+          error ? "border-red-400" : "border-r-muted"
         }`}
         {...inputProps}
       />
