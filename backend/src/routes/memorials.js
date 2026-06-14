@@ -245,7 +245,7 @@ router.get('/:id/contributors', authMiddleware, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('contributors')
-      .select('id, name, relationship_type, relationship_label, status, submitted_at, created_at')
+      .select('id, name, relationship_type, status, submitted_at, created_at')
       .eq('memorial_id', req.params.id)
       .order('created_at', { ascending: false })
 

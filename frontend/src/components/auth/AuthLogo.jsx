@@ -1,7 +1,7 @@
 export default function AuthLogo() {
   return (
     <div
-      className="size-[100px] rounded-full bg-r-shape"
+      className="size-[81px] rounded-full bg-slate-300"
       aria-hidden="true"
     />
   );

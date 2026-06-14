@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import HeaderBrand from "./header-brand";
 
 export default function Header2({ backHref }) {
   const router = useRouter();
@@ -17,7 +16,11 @@ export default function Header2({ backHref }) {
 
   return (
     <header className="mx-auto flex w-full max-w-[1340px] items-center  font-(--font-family-body) justify-between">
-      <HeaderBrand />
+      <div className="logo">
+        <p className="text-[24px] font-normal text-(--text-color-1)">
+          Remember
+        </p>
+      </div>
       <div>
         <button
           type="button"

@@ -331,7 +331,7 @@ export default function SharePage() {
             <MemorialHeader memorial={memorial} />
             <TabBar active={activeTab} onChange={setActiveTab} />
             <div>
-              {activeTab === 'Story' && <StorySlideshow output={output} story={output?.story} framed={false} />}
+              {activeTab === 'Story' && <StorySlideshow output={output} story={output?.story} />}
               {activeTab === 'Constellation' && (
                 <ConstellationTab
                   data={output}
@@ -339,7 +339,7 @@ export default function SharePage() {
                   contributor={contributors}
                 />
               )}
-              {activeTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} variant="viewer" />}
+              {activeTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} />}
               {activeTab === 'All Photos' && <AllPhotosTab albums={normalizePhotos(output?.photos)} />}
             </div>
           </>

@@ -1,9 +1,7 @@
-'use client';
+import QuestionnaireFlow from "@/components/contributor/QuestionnaireFlow.jsx";
 
-import { useParams } from 'next/navigation';
-import QuestionnaireFlow from '@/components/contributor/QuestionnaireFlow.jsx';
+export default async function QuestionsPage({ params }) {
+  const { inviteToken } = await params;
 
-export default function QuestionsPage() {
-  const { inviteToken } = useParams();
   return <QuestionnaireFlow inviteToken={inviteToken} />;
 }

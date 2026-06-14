@@ -1,5 +1,3 @@
-// frontend/src/components/contributor/AutosaveStatus.jsx
-
 export default function AutosaveStatus({ status }) {
   const statusCopy = {
     idle: "",
@@ -10,10 +8,9 @@ export default function AutosaveStatus({ status }) {
   };
 
   const text = statusCopy[status] ?? "";
-  const isError = status === "error";
 
   return (
-    <p className={`min-h-5 text-caption ${isError ? "text-r-danger" : "text-r-muted"}`} aria-live="polite">
+    <p className="min-h-6 text-sm leading-6 text-slate-500" aria-live="polite">
       {text}
     </p>
   );

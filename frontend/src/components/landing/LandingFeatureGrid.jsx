@@ -5,19 +5,19 @@ const features = [
     title: "Gather Memories",
     body: "Invite family and friends to contribute photos, videos, audio recordings, and written memories.",
     icon: "upload",
-    iconTone: "bg-[#C9DCE4] text-r-accent",
+    iconTone: "bg-blue-100 text-blue-600",
   },
   {
     title: "Curate Together",
     body: "Review and organize contributions from everyone who knew them. Build a complete picture of their life.",
     icon: "users",
-    iconTone: "bg-[#EDCDC2] text-r-family",
+    iconTone: "bg-purple-100 text-purple-600",
   },
   {
     title: "Private & Safe",
     body: "Your memorial is private and invitation-only. AI helps flag any inappropriate content.",
     icon: "shield",
-    iconTone: "bg-[#B7C19A] text-r-shape",
+    iconTone: "bg-green-100 text-green-600",
   },
 ];
 
