@@ -479,86 +479,6 @@ function Lightbox({ photo, onClose, onPrev, onNext }) {
     </div>
   );
 }
-// ─── All Photos Section ───────────────────────────────────────────────────────
-
-function ConstellationSection({output, memorial,contributors, onGenerate, generating, canGenerate }) {
-  const [page, setPage] = useState(1);
-  const totalPages = 2;
-  return (
-    <div>      
-      <div className="rounded-2xl border border-neutral-100 bg-r-bg py-6">
-        <div className="mb-6 flex items-center justify-between gap-4">
-          {/* <select
-            value={tab}
-            onChange={handleChange}
-            className="border border-gray-300 bg-white px-4 py-2 text-sm shadow-sm outline-none"
-          >
-            <option value="Themes">
-              Constellation : Themes
-            </option>
-
-            <option value="Relationships">
-              Constellation : Relationships
-            </option>
-          </select> */}
-          <h2 className="text-[36px] mt-6 font-medium italic text-neutral-950" style={{ fontFamily: 'var(--font-boska, serif)' }}>
-            Constellation
-          </h2>        
-          <div className="flex items-center gap-4">
-            <button
-              onClick={onGenerate}
-              disabled={!canGenerate || generating}
-              className="rounded-full px-6 py-[14px] text-base text-neutral-950 transition-opacity hover:opacity-80 disabled:opacity-45 disabled:cursor-not-allowed border-none"
-              style={{ backgroundColor: 'var(--color-r-btn)' }}
-            >
-              {generating ? 'Generating…' : 'Generate'}
-            </button>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="transition-opacity hover:opacity-70 disabled:opacity-30"
-                aria-label="Previous page"
-              >
-                <svg width="25" height="50" viewBox="0 0 25 50" fill="none">
-                  <path fillRule="evenodd" clipRule="evenodd"
-                    d="M3.83906 26.4813L15.6245 38.2667L18.5703 35.3208L8.25781 25.0083L18.5703 14.6958L15.6245 11.75L3.83906 23.5354C3.4485 23.9261 3.22909 24.4559 3.22909 25.0083C3.22909 25.5608 3.4485 26.0906 3.83906 26.4813Z"
-                    fill="#423F39"/>
-                </svg>
-              </button>
-              <span className="text-2xl font-medium text-neutral-950 min-w-[48px] text-center"
-                style={{ fontFamily: 'var(--font-boska, serif)' }}>
-                {page} {totalPages}
-              </span>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="transition-opacity hover:opacity-70 disabled:opacity-30"
-                aria-label="Next page"
-              >
-                <svg width="25" height="50" viewBox="0 0 25 50" fill="none">
-                  <path fillRule="evenodd" clipRule="evenodd"
-                    d="M21.1609 26.4813L9.37552 38.2667L6.42969 35.3208L16.7422 25.0083L6.42969 14.6958L9.37552 11.75L21.1609 23.5354C21.5515 23.9261 21.7709 24.4559 21.7709 25.0083C21.7709 25.5608 21.5515 26.0906 21.1609 26.4813Z"
-                    fill="#423F39"/>
-                </svg>
-              </button>
-            </div>
-          </div>            
-        </div>       
-      </div>
-      <ConstellationGraph
-        ai_output={output}
-        memorial={memorial}
-        contributor={contributors}
-        page={page}
-        width={800}
-        height={800}
-      />
-    </div>
-  );
-}
-
-
 
 // ─── All Photos Section ───────────────────────────────────────────────────────
 
@@ -686,9 +606,9 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
       ];
 
   return (
-    <div className="flex flex-col gap-5 pt-4">
+    <div className="flex flex-col gap-5">
 
-      {/* Top bar */}
+      {/* Top bar — back to albums (when inside an album) + photo pagination */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           {openAlbum && (
@@ -702,32 +622,24 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
               Albums
             </button>
           )}
-          <h2
-            className="text-[36px] font-medium italic text-r-text"
-            style={{ fontFamily: 'var(--font-family-display)' }}
-          >
-            {openAlbum ? openAlbum.album_name : 'All photos'}
-          </h2>
-        </div>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={onGenerate}
-            disabled={!canGenerate || generating}
-            className="rounded-full px-6 py-[14px] text-base text-r-btn-text transition-opacity hover:opacity-80 disabled:opacity-45 disabled:cursor-not-allowed border-none"
-            style={{ backgroundColor: 'var(--color-r-btn)' }}
-          >
-            {generating ? 'Generating…' : 'Generate'}
-          </button>
-          <div className="flex items-center gap-3">
-            <PrevArrow onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} />
+          {openAlbum && (
             <span
-              className="text-2xl font-medium text-r-text min-w-[64px] text-center"
+              className="text-[24px] font-medium italic text-r-text"
               style={{ fontFamily: 'var(--font-family-display)' }}
             >
-              {page} / {totalPages}
+              {openAlbum.album_name}
             </span>
-            <NextArrow onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} />
-          </div>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <PrevArrow onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} />
+          <span
+            className="text-2xl font-medium text-r-text min-w-[64px] text-center"
+            style={{ fontFamily: 'var(--font-family-display)' }}
+          >
+            {page} / {totalPages}
+          </span>
+          <NextArrow onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} />
         </div>
       </div>
 
@@ -923,7 +835,17 @@ function PreGenerationEmpty({ canGenerate, disabledMessage, generationError, gen
 
 // ─── Outputs Tab ──────────────────────────────────────────────────────────────
 
+const OUTPUT_SECTIONS = [
+  { key: 'story',                       label: 'Story' },
+  { key: 'constellation-themes',        label: 'Constellation | Themes' },
+  { key: 'constellation-relationships', label: 'Constellation | Relationships' },
+  { key: 'voices',                      label: 'Voices' },
+  { key: 'photos',                      label: 'All photos' },
+];
+
 function OutputsTab({ memorial, contributors, canGenerate, disabledMessage, generationError, generationJob, generating, onGenerate, output, loading, error, onRetry }) {
+  const [sectionIndex, setSectionIndex] = useState(0);
+
   if (loading) return <TabLoading />;
 
   if (error) {
@@ -951,35 +873,84 @@ function OutputsTab({ memorial, contributors, canGenerate, disabledMessage, gene
     );
   }
 
+  const currentSection = OUTPUT_SECTIONS[sectionIndex];
+  const total = OUTPUT_SECTIONS.length;
+
+  // Constellation page: 1 = Themes, 2 = Relationships
+  const constellationPage = currentSection.key === 'constellation-relationships' ? 2 : 1;
+
   return (
-    <div className="flex flex-col divide-y divide-r-border pt-4">
-      <CollapsibleSection title="Story">
+    <div className="flex flex-col pt-4 gap-6">
+
+      {/* Top row: section title + Generate + arrows */}
+      <div className="flex items-center justify-between gap-4">
+        <h2
+          className="text-[36px] font-medium italic text-r-text"
+          style={{ fontFamily: 'var(--font-family-display)' }}
+        >
+          {currentSection.label}
+        </h2>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onGenerate}
+            disabled={!canGenerate || generating}
+            className="rounded-full px-6 py-[14px] text-base text-r-btn-text transition-opacity hover:opacity-80 disabled:opacity-45 disabled:cursor-not-allowed border-none"
+            style={{ backgroundColor: 'var(--color-r-btn)' }}
+          >
+            {generating ? 'Generating…' : 'Generate'}
+          </button>
+          <div className="flex items-center gap-3">
+            <PrevArrow
+              onClick={() => setSectionIndex((i) => Math.max(0, i - 1))}
+              disabled={sectionIndex === 0}
+            />
+            <span
+              className="text-2xl font-medium text-r-text min-w-[64px] text-center"
+              style={{ fontFamily: 'var(--font-family-display)' }}
+            >
+              {sectionIndex + 1} / {total}
+            </span>
+            <NextArrow
+              onClick={() => setSectionIndex((i) => Math.min(total - 1, i + 1))}
+              disabled={sectionIndex === total - 1}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Section content */}
+      {currentSection.key === 'story' && (
         <StorySlideshow output={output} story={output?.story} />
-      </CollapsibleSection>
-      <CollapsibleSection title="Constellation">
-        <ConstellationSection  
-          output={output}
+      )}
+
+      {(currentSection.key === 'constellation-themes' || currentSection.key === 'constellation-relationships') && (
+        <ConstellationGraph
+          ai_output={output}
           memorial={memorial}
-          contributors={contributors}
-          onGenerate={onGenerate}
-          generating={generating}
-          canGenerate={canGenerate}        
+          contributor={contributors}
+          page={constellationPage}
+          width={800}
+          height={800}
         />
-      </CollapsibleSection>
-      <CollapsibleSection title="Voices">
+      )}
+
+      {currentSection.key === 'voices' && (
         <VoicesTab output={output} voices={output?.voices} />
-      </CollapsibleSection>
-      <div className="pt-2 border-t border-r-border">
+      )}
+
+      {currentSection.key === 'photos' && (
         <AllPhotosSection
           albums={output?.photos}
           onGenerate={onGenerate}
           generating={generating}
           canGenerate={canGenerate}
         />
-      </div>
+      )}
+
     </div>
   );
 }
+
 
 // ─── Share Modal ──────────────────────────────────────────────────────────────
 
