@@ -736,11 +736,11 @@ export default function MemorialOutputPage() {
   return (
     <div className="min-h-screen w-full pb-20 bg-r-bg">
       <header className="flex items-center justify-between px-8 py-5">
-        <span className="text-h4 text-r-text">Remember</span>
+        {/* <span className="text-h4 text-r-text">Remember</span>
         <div className="flex items-center gap-4">
           <button onClick={() => setShowShare(true)} className="text-body-2 text-r-text transition-opacity hover:opacity-70 bg-none border-none cursor-pointer">Share</button>
           <Link href={id ? `/memorial/${id}/manage` : '/dashboard'} className="...">← Back</Link>
-        </div>
+        </div> */}
       </header>
 
       <main className="px-8 pb-8">
@@ -752,7 +752,7 @@ export default function MemorialOutputPage() {
           <OutputError onRetry={load} />
         ) : (
           <>
-            <MemorialHeader memorial={memorial} onShare={() => setShowShare(true)} />
+            {/* <MemorialHeader memorial={memorial} onShare={() => setShowShare(true)} /> */}
             {activeTab === 'Slideshow' && <SlideshowSection output={output} />}
             {activeTab === 'Constellations' && <ConstellationsSection output={output} memorial={memorial} contributor={contributors} />}
             {activeTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} variant="viewer" />}

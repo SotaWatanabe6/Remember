@@ -6,6 +6,7 @@ import { useCallback, useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Share2, Settings } from 'lucide-react';
+import { Share2, Settings } from 'lucide-react';
 import { generateMemorialOutput, getGenerationJobStatus, getMemorialOutput } from '@/services/memorialService';
 import { getMemorialContributors } from '@/services/contributorService';
 import { getMemorial, createInviteLink, createShareLink } from '@/lib/api';
@@ -16,7 +17,7 @@ import StorySlideshow from "@/components/output/StorySlideshow";
 import VoicesTab from "@/components/output/VoicesTab";
 import ProcessingTextSequence from "@/components/dashboard/ProcessingTextSequence";
 import { getAuthToken } from "@/lib/api.js";
-import MemorialCoverImage from "@/components/memorial/MemorialCoverImage.jsx";
+import Header2 from "@/components/ui-components/navs/header2";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 // ─── Generation constants ─────────────────────────────────────────────────────
@@ -215,7 +216,9 @@ function CollapsibleSection({ title, children, defaultOpen = false }) {
     <div>
       <button onClick={() => setOpen(!open)} className="flex w-full items-center gap-3 py-3 text-left">
         <span className="text-base font-medium text-r-text">{title}</span>
+        <span className="text-base font-medium text-r-text">{title}</span>
         <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"
+          className={`text-r-text transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>
           className={`text-r-text transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>
           <path d="M7 10l5 5 5-5z" />
         </svg>
@@ -231,6 +234,7 @@ function TabLoading() {
   return (
     <div className="flex justify-center py-16">
       <div className="h-8 w-8 animate-spin rounded-full border-2 border-r-border border-t-r-text" />
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-r-border border-t-r-text" />
     </div>
   );
 }
@@ -238,6 +242,9 @@ function TabLoading() {
 function TabEmpty({ title, message }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="h-16 w-16 rounded-full bg-r-card flex items-center justify-center mb-4" />
+      <p className="text-r-text text-base font-medium">{title}</p>
+      <p className="text-r-secondary text-sm mt-1 max-w-xs">{message}</p>
       <div className="h-16 w-16 rounded-full bg-r-card flex items-center justify-center mb-4" />
       <p className="text-r-text text-base font-medium">{title}</p>
       <p className="text-r-secondary text-sm mt-1 max-w-xs">{message}</p>
@@ -255,7 +262,10 @@ function TabError({ title, message, onRetry }) {
       </div>
       <p className="text-r-text text-base font-medium">{title}</p>
       <p className="text-r-secondary text-sm mt-1 max-w-xs">{message}</p>
+      <p className="text-r-text text-base font-medium">{title}</p>
+      <p className="text-r-secondary text-sm mt-1 max-w-xs">{message}</p>
       <button onClick={onRetry}
+        className="mt-4 rounded-full bg-r-btn px-6 py-2.5 text-sm font-medium text-r-btn-text hover:opacity-85 transition-opacity">
         className="mt-4 rounded-full bg-r-btn px-6 py-2.5 text-sm font-medium text-r-btn-text hover:opacity-85 transition-opacity">
         Try again
       </button>
@@ -312,8 +322,10 @@ function ArchiveTab({ contributors, output }) {
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <p className="text-r-text text-base font-medium">
+          <p className="text-r-text text-base font-medium">
             {allItems.length === 0 ? 'No contributions yet' : 'No results found'}
           </p>
+          <p className="text-r-secondary text-sm mt-1 max-w-xs">
           <p className="text-r-secondary text-sm mt-1 max-w-xs">
             {allItems.length === 0
               ? 'Submitted contributions will appear here once generated.'
@@ -334,13 +346,17 @@ function ArchiveTab({ contributors, output }) {
               {item.type === 'voice' && (
                 <div className="aspect-[4/3] w-full bg-r-card flex flex-col items-center justify-center gap-2 p-4">
                   <p className="text-sm font-medium text-r-text text-center">{item.contributor_title}</p>
+                <div className="aspect-[4/3] w-full bg-r-card flex flex-col items-center justify-center gap-2 p-4">
+                  <p className="text-sm font-medium text-r-text text-center">{item.contributor_title}</p>
                   <div className="flex items-center gap-[2px]">
                     {Array.from({ length: 20 }).map((_, j) => (
+                      <div key={j} className="w-[2px] rounded-full bg-r-muted"
                       <div key={j} className="w-[2px] rounded-full bg-r-muted"
                         style={{ height: `${8 + ((j * 5) % 16)}px` }} />
                     ))}
                   </div>
                   {item.contributor_name && (
+                    <p className="text-xs text-r-secondary">Submitted by {item.contributor_name}</p>
                     <p className="text-xs text-r-secondary">Submitted by {item.contributor_name}</p>
                   )}
                 </div>
@@ -357,6 +373,9 @@ function ArchiveTab({ contributors, output }) {
 
 function ContributionsTab({ contributorslist, loading, error, onRetry }) {
   const [value, setValue] = useState("contributors");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [contributorFilter, setContributorFilter] = useState("all");
+  const [contributorSort, setContributorSort] = useState("recent");
 
   const submissions = contributorslist.filter((c) => {
     const status = String(c.status || "").toLowerCase();
@@ -367,6 +386,22 @@ function ContributionsTab({ contributorslist, loading, error, onRetry }) {
   const current = submissions[currentIndex];
   const handlePrev = () => setCurrentIndex((prev) => prev === 0 ? submissions.length - 1 : prev - 1);
   const handleNext = () => setCurrentIndex((prev) => prev === submissions.length - 1 ? 0 : prev + 1);
+  const contributorCards = [...contributorslist]
+    .filter((contributor) => {
+      if (contributorFilter === "anonymous") {
+        return String(contributor.name || "").trim().toLowerCase() === "anonymous";
+      }
+      if (contributorFilter === "named") {
+        return String(contributor.name || "").trim().toLowerCase() !== "anonymous";
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (contributorSort === "name") {
+        return String(a.name || "").localeCompare(String(b.name || ""));
+      }
+      return new Date(b.submitted_at || 0) - new Date(a.submitted_at || 0);
+    });
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -404,32 +439,33 @@ function ContributionsTab({ contributorslist, loading, error, onRetry }) {
         />
       )}
       {value === "contributors" && !loading && !error && contributorslist.length > 0 && (
-        <div className="grid grid-cols-3 gap-4">
-          {contributorslist.map((contributor) => (
-            <div key={contributor.id} className="rounded-2xl p-5 flex flex-col gap-3 bg-r-modal border border-r-border">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full shrink-0 bg-r-card" />
-                <div className="min-w-0">
-                  <p className="text-body-2 font-semibold text-r-text">{contributor.name}</p>
-                  <p className="text-caption text-r-muted mt-0.5">
-                    {String(contributor.status || '').toLowerCase() === 'submitted' ||
-                    contributor.submitted_at
-                      ? 'Submitted'
-                      : 'In progress'}
-                  </p>
-                  <p className="text-caption text-r-muted">
-                    Last submitted {contributor.submitted_at
-                      ? new Date(contributor.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-                      : 'No date provided'}
-                  </p>
-                </div>
-              </div>
-              <span className="self-start rounded-full px-4 py-1.5 text-caption bg-r-shape"
-                style={{ color: '#FBF9F6' }}>
-                {contributor.relationship_type || 'No Relationship'}
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {contributorCards.map((contributor) => (
+            <article
+              key={contributor.id}
+              className="min-h-[287px] rounded-[18px] border border-r-border bg-[#F6EFE7] px-[50px] py-12"
+            >
+              <h3 className="font-family-display text-[28px] leading-[32px] text-r-text">
+                {contributor.name || "Anonymous"}
+              </h3>
+              <p className="mt-6 font-family-body text-[16px] leading-[20px] text-[#5F5A52]">
+                {contributor.contribution_count || 0} contributions
+              </p>
+              <p className="mt-4 font-family-body text-[16px] leading-[20px] text-[#5F5A52]">
+                Last submitted {contributor.submitted_at
+                  ? new Date(contributor.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                  : 'May 20, 2026'}
+              </p>
+              <span className="mt-6 inline-flex min-h-[49px] min-w-[214px] items-center justify-center rounded-[14px] bg-[#B9C493] px-6 font-family-body text-[16px] leading-[20px] text-[#5C6549]">
+                {contributor.relationship_type || 'Relationship'}
               </span>
-            </div>
+            </article>
           ))}
+          {contributorCards.length === 0 && (
+            <div className="col-span-full py-12 text-center font-family-body text-[18px] text-[#5F5A52]">
+              No contributors match the current filter.
+            </div>
+          )}
         </div>
       )}
       {value === "awaiting" && (
@@ -456,7 +492,10 @@ function Lightbox({ photo, onClose, onPrev, onNext }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4" onClick={onClose}>
       <div className="relative max-w-3xl w-full" onClick={(e) => e.stopPropagation()}>
         <div className="relative w-full max-h-[80vh] overflow-hidden rounded-2xl bg-neutral-900 flex items-center justify-center">
+        <div className="relative w-full max-h-[80vh] overflow-hidden rounded-2xl bg-neutral-900 flex items-center justify-center">
           {photo.url
+            ? <img src={photo.url} alt={photo.caption || ''} className="max-h-[80vh] w-auto max-w-full object-contain" />
+            : <div className="h-64 w-full bg-neutral-700 flex items-center justify-center"><span className="text-neutral-500 text-sm">No image</span></div>}
             ? <img src={photo.url} alt={photo.caption || ''} className="max-h-[80vh] w-auto max-w-full object-contain" />
             : <div className="h-64 w-full bg-neutral-700 flex items-center justify-center"><span className="text-neutral-500 text-sm">No image</span></div>}
         </div>
@@ -479,7 +518,6 @@ function Lightbox({ photo, onClose, onPrev, onNext }) {
     </div>
   );
 }
-
 // ─── All Photos Section ───────────────────────────────────────────────────────
 
 function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
@@ -679,6 +717,12 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </FilterSelect>
+            className="w-[207px]"
+          >
+            {sortOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </FilterSelect>
         </div>
       )}
 
@@ -776,13 +820,21 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
           onPrev={prevPhoto}
           onNext={nextPhoto}
         />
+        <Lightbox
+          photo={lightboxPhoto}
+          onClose={() => setLightboxPhoto(null)}
+          onPrev={prevPhoto}
+          onNext={nextPhoto}
+        />
       )}
     </div>
   );
 }
 
 
+
 // ─── Pre-generation empty state ───────────────────────────────────────────────
+
 
 
 function PreGenerationEmpty({ canGenerate, disabledMessage, generationError, generationJob, generating, onGenerate }) {
@@ -791,17 +843,29 @@ function PreGenerationEmpty({ canGenerate, disabledMessage, generationError, gen
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <div className="h-16 w-16 rounded-full bg-r-card flex items-center justify-center mb-4">
         <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" className="text-r-muted">
+      <div className="h-16 w-16 rounded-full bg-r-card flex items-center justify-center mb-4">
+        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" className="text-r-muted">
           <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
         </svg>
       </div>
       <p className="text-r-text text-base font-medium">
         {isPending ? "Generation is in progress" : "Generation hasn't run yet"}
+      <p className="text-r-text text-base font-medium">
+        {isPending ? "Generation is in progress" : "Generation hasn't run yet"}
       </p>
+      <p className="text-r-secondary text-sm mt-1 max-w-xs leading-relaxed">
       <p className="text-r-secondary text-sm mt-1 max-w-xs leading-relaxed">
         {isPending
           ? "Outputs will appear here automatically once the memorial is ready."
           : "Once you have contributions, click Generate to create the Story, Constellation, Voices, and Photos."}
       </p>
+      <button
+        type="button"
+        onClick={onGenerate}
+        disabled={!canGenerate || generating}
+        className="mt-6 flex h-[50px] w-[207px] items-center justify-center rounded-full px-6 text-sm font-medium text-r-btn-text transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-45 border-none"
+        style={{ backgroundColor: 'var(--color-r-btn)' }}
+      >
       <button
         type="button"
         onClick={onGenerate}
@@ -815,8 +879,11 @@ function PreGenerationEmpty({ canGenerate, disabledMessage, generationError, gen
         <div className="mt-4 w-full max-w-xs" aria-live="polite">
           <div className="h-1.5 overflow-hidden rounded-full bg-r-card">
             <div className="h-full rounded-full bg-r-text transition-all duration-300"
+          <div className="h-1.5 overflow-hidden rounded-full bg-r-card">
+            <div className="h-full rounded-full bg-r-text transition-all duration-300"
               style={{ width: `${Math.max(10, generationJob?.progress ?? 10)}%` }} />
           </div>
+          <p className="mt-2 text-xs font-medium text-r-secondary">
           <p className="mt-2 text-xs font-medium text-r-secondary">
             {generationJob?.current_step || "Preparing generation..."}
           </p>
@@ -825,8 +892,10 @@ function PreGenerationEmpty({ canGenerate, disabledMessage, generationError, gen
       )}
       {!generating && disabledMessage && (
         <p className="mt-3 max-w-xs text-xs text-r-secondary">{disabledMessage}</p>
+        <p className="mt-3 max-w-xs text-xs text-r-secondary">{disabledMessage}</p>
       )}
       {generationError && (
+        <p className="mt-3 max-w-xs text-sm text-r-danger" role="alert">{generationError}</p>
         <p className="mt-3 max-w-xs text-sm text-r-danger" role="alert">{generationError}</p>
       )}
     </div>
@@ -989,6 +1058,7 @@ function ShareModal({ onClose, memorialId }) {
           const message = err instanceof Error ? err.message : 'Could not load share links.';
           if (message.toLowerCase().includes('not authorized') || message.toLowerCase().includes('do not own')) {
             setLinksError('This memorial is not linked to your account. Go to Dashboard, open a memorial you created, then try Share again.');
+            setLinksError('This memorial is not linked to your account. Go to Dashboard, open a memorial you created, then try Share again.');
           } else if (message.toLowerCase().includes('logged in')) {
             setLinksError(`${message} Sign in and try again.`);
           } else {
@@ -1007,6 +1077,7 @@ function ShareModal({ onClose, memorialId }) {
   async function copyLink(type) {
     setCopyError(null);
     const url = type === 'contributor' ? contributorUrl : viewerUrl;
+    if (!url) { setCopyError('Link is not ready yet.'); return; }
     if (!url) { setCopyError('Link is not ready yet.'); return; }
     try {
       await copyTextToClipboard(url);
@@ -1033,6 +1104,8 @@ function ShareModal({ onClose, memorialId }) {
         </div>
         {linksError && <p className="text-body-2 text-r-danger mb-4">{linksError}</p>}
         {copyError && <p className="text-body-2 text-r-danger mb-4">{copyError}</p>}
+        {linksError && <p className="text-body-2 text-r-danger mb-4">{linksError}</p>}
+        {copyError && <p className="text-body-2 text-r-danger mb-4">{copyError}</p>}
         {[
           { label: 'Invite Contributors', sub: 'For friends and family to share their memories:', type: 'contributor', copied: copiedContributor, url: contributorUrl },
           { label: 'Invite Viewers', sub: 'For anyone to view this memorial:', type: 'viewer', copied: copiedViewer, url: viewerUrl },
@@ -1042,12 +1115,15 @@ function ShareModal({ onClose, memorialId }) {
               <p className="text-h3 text-r-text">{label}</p>
               <p className="text-body-2 text-r-secondary mt-0.5">{sub}</p>
               {url && <p className="text-caption text-r-secondary mt-2 break-all">{url}</p>}
+              {url && <p className="text-caption text-r-secondary mt-2 break-all">{url}</p>}
             </div>
             <button
               type="button"
               onClick={() => copyLink(type)}
               disabled={linksLoading || !url}
               className="shrink-0 rounded-full px-4 py-2 text-h4 transition-all ml-5 border-none disabled:opacity-50"
+              style={{ backgroundColor: copied ? '#7D8C6A' : 'var(--color-r-btn)', color: copied ? '#FBF9F6' : 'var(--color-r-btn-text)' }}
+            >
               style={{ backgroundColor: copied ? '#7D8C6A' : 'var(--color-r-btn)', color: copied ? '#FBF9F6' : 'var(--color-r-btn-text)' }}
             >
               {copied ? 'Copied!' : linksLoading ? 'Loading…' : 'Copy Link'}
@@ -1086,6 +1162,7 @@ export default function MemorialOutputPage() {
   const [generationJob, setGenerationJob] = useState(null);
   const [memorial, setMemorial] = useState(null);
   const [inviteToken, setInviteToken] = useState(null);
+  const [inviteToken, setInviteToken] = useState(null);
   const memorialId = id;
 
   useEffect(() => {
@@ -1098,6 +1175,16 @@ export default function MemorialOutputPage() {
         setMemorial(normalized);
         setGenerating(isGeneratingMemorial(normalized));
       })
+      .catch(() => { setMemorial(null); });
+
+    // Load the invite token so "Upload Memories" can link the organizer
+    // straight into the contributor flow as themselves.
+    createInviteLink(id)
+      .then((res) => {
+        const token = res?.invite_link?.token ?? res?.token ?? null;
+        setInviteToken(token);
+      })
+      .catch(() => { /* non-critical — button falls back to manage page */ });
       .catch(() => { setMemorial(null); });
 
     // Load the invite token so "Upload Memories" can link the organizer
@@ -1213,12 +1300,14 @@ export default function MemorialOutputPage() {
           }
         } catch {
           // Output is loaded; header refresh can wait for next page visit.
+          // Output is loaded; header refresh can wait for next page visit.
         }
       }
     }
 
     pollPendingOutput();
     const intervalId = window.setInterval(pollPendingOutput, OUTPUT_PENDING_POLL_INTERVAL_MS);
+    return () => { cancelled = true; window.clearInterval(intervalId); };
     return () => { cancelled = true; window.clearInterval(intervalId); };
   }, [generating, id, output]);
 

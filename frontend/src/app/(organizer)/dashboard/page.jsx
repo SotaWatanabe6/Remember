@@ -47,29 +47,29 @@ export default function AccountBoardPage() {
     <div className="p-(--page-pad-x)">
       <Header2 />
 
-      <main className="mx-auto flex w-full max-w-[1340px] flex-col px-6 pb-16 pt-[96px] sm:px-[50px] sm:pb-24 sm:pt-[110px]">
-        <section className="relative flex min-h-[200px] sm:min-h-[280px] flex-col items-center justify-center px-4 text-center">
-          <div className="mb-6 sm:mb-9 flex size-[80px] sm:size-[124px] items-center justify-center rounded-full bg-[#C4D2E3]" />
-          <h1 className="font-family-display text-2xl text-r-text sm:text-h1">
+      <main className="mx-auto flex w-full max-w-[1340px] flex-col px-6 pb-16 pt-[70px] sm:px-[50px] sm:pb-24 sm:pt-[86px]">
+        <section className="relative flex min-h-[320px] flex-col items-center justify-center px-4 text-center sm:min-h-[360px]">
+          <div className="mb-10 flex size-[118px] items-center justify-center rounded-full bg-[#788764]" />
+          <h1 className="font-family-display text-[40px] font-bold leading-[40px] tracking-[0px] text-r-text">
             Your Memorials
           </h1>
-          <p className="mt-5 font-family-body text-body-1 text-r-secondary">
+          <p className="mt-6 font-family-body text-[20px] leading-[20px] tracking-[0px] text-[#5F5A52]">
             All memorials you created will be stored here
           </p>
         </section>
 
         <section
-          className="mt-[72px] grid grid-cols-1 gap-6 lg:grid-cols-3"
+          className="mt-[44px] grid grid-cols-1 gap-6 lg:grid-cols-3"
           aria-label="Memorial profiles"
         >
           <Link
             href="/memorial/create"
-            className="flex min-h-[365px] flex-col items-center justify-center rounded-[20px] border border-r-border bg-white px-8 text-center shadow-[0_1px_10px_rgba(0,0,0,0.04)] transition hover:border-r-border-focus hover:shadow-[0_10px_24px_rgba(0,0,0,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-r-border-focus"
+            className="flex min-h-[420px] flex-col items-center justify-center rounded-[28px] border border-r-border bg-[#F2EAE2] px-8 text-center transition hover:border-r-border-focus focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-r-border-focus"
           >
-            <span className="flex size-[52px] items-center justify-center rounded-full border border-r-btn-text text-[40px] font-light leading-none text-r-btn-text">
+            <span className="flex size-[58px] items-center justify-center rounded-full bg-r-text text-[42px] font-light leading-none text-[#F2EAE2]">
               +
             </span>
-            <span className="mt-6 font-family-display text-[24px] font-medium leading-[32px] text-r-text">
+            <span className="mt-7 font-family-display text-[34px] leading-[40px] text-r-text">
               Create new
             </span>
           </Link>
@@ -79,11 +79,13 @@ export default function AccountBoardPage() {
               {[...Array(3)].map((_, i) => (
                 <div
                   key={i}
-                  className="rounded-[20px] border border-[#D7DBE2] bg-white px-8 py-8 shadow-[0_1px_10px_rgba(0,0,0,0.04)]"
+                  className="overflow-hidden rounded-[28px] border border-r-border bg-[#F2EAE2]"
                 >
-                  <div className="space-y-4">
-                    <SkeletonCard className="h-32 w-32 rounded-full mx-auto" />
-                    <SkeletonText lines={3} className="text-center" />
+                  <SkeletonCard className="h-[255px] w-full rounded-none bg-[#E8DDD2]" />
+                  <div className="space-y-4 px-6 py-6">
+                    <SkeletonText lines={2} className="max-w-[220px]" />
+                    <SkeletonCard className="h-[44px] w-[180px] rounded-[14px] bg-[#E3D8CD]" />
+                    <SkeletonText lines={1} className="max-w-[250px]" />
                   </div>
                 </div>
               ))}
@@ -91,23 +93,23 @@ export default function AccountBoardPage() {
           ) : null}
 
           {!isLoading && loadError ? (
-            <article className="flex min-h-[365px] items-center justify-center rounded-[20px] border border-[#F2C7C7] bg-white px-8 text-center text-body-1 text-red-600 shadow-[0_1px_10px_rgba(0,0,0,0.04)]">
+            <article className="flex min-h-[420px] items-center justify-center rounded-[28px] border border-[#E2B9B1] bg-[#F2EAE2] px-8 text-center text-[18px] leading-[28px] text-red-600">
               {loadError}
             </article>
           ) : null}
 
           {!isLoading && !loadError && memorials.length === 0 ? (
-            <article className="flex min-h-[365px] items-center justify-center rounded-[20px] border border-[#D7DBE2] bg-white px-8 text-center text-body-1 text-(--text-color-2) shadow-[0_1px_10px_rgba(0,0,0,0.04)]">
+            <article className="flex min-h-[420px] items-center justify-center rounded-[28px] border border-r-border bg-[#F2EAE2] px-8 text-center text-[18px] leading-[28px] text-r-secondary">
               You haven&apos;t created any memorials yet.
             </article>
           ) : null}
 
           {!isLoading && !loadError
-            ? memorials.map((memorial) => (
+              ? memorials.map((memorial) => (
                 <Link
                   key={memorial.id}
                   href={`/memorial/${memorial.id}/manage`}
-                  className="rounded-[20px] transition hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-400"
+                  className="rounded-[28px] transition hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-400"
                 >
                   <AccountProfileCard memorial={memorial} />
                 </Link>
