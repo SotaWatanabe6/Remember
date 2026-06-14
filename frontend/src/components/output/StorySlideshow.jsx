@@ -290,11 +290,6 @@ export default function StorySlideshow({ output, story, loading = false, error =
                   {slide.narration}
                 </p>
               ) : null}
-              {slide.matchedQuote ? (
-                <p className="mt-3 max-w-2xl text-sm italic text-white/60 sm:text-base">
-                  &ldquo;{slide.matchedQuote}&rdquo;
-                </p>
-              ) : null}
               <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-[#cad5e2] sm:text-base">
                 <span>{slide.contributorName}</span>
                 {slide.relationshipLabel ? (
