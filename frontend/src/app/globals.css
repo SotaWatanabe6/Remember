@@ -371,6 +371,10 @@
 
 @layer utilities {
 
+  
+  .font-display { font-family: var(--font-family-display); }
+  .font-body    { font-family: var(--font-family-body); }
+
   /* Text color helpers */
   .on-dark        { color: #fbf9f6; }
   .text-primary   { color: var(--color-r-text); }
