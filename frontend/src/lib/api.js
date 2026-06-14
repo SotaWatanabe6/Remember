@@ -693,6 +693,48 @@ export async function getContributors(memorialId) {
   }
 }
 
+/**
+ * GET /contribute/:contributorid/photosUrls
+ * Returns all contributors photos for a memorial. Protected.
+ * Used by Mendrika's viewer page.
+ * TODO: Replace with real fetch() on Day 9.
+ */
+export async function getContributorsPhotos(contributorId) {
+  try {
+    const token = await getAuthToken();
+    const response = await fetch(`${API_URL}/contribute/${encodeURIComponent(contributorId)}/photoUrls`, {
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error('Failed to fetch photos from contributor');
+    return response.json();
+  } catch {
+    // Fallback to mock — prevents constellation page from crashing
+    await delay(MOCK_DELAY);
+    return { contributors: MOCK_CONTRIBUTORS };
+  }
+}
+/**
+ * GET /contribute/questionnaire-responses/:contributorid
+ * Returns all contributors response questionnary for a memorial. Protected.
+ * Used by Mendrika's viewer page.
+ * TODO: Replace with real fetch() on Day 9.
+ */
+export async function getContributorsResponse(contributorId) {
+  try {
+    const token = await getAuthToken();
+    console.log(token);
+    const response = await fetch(`${API_URL}/contribute/questionnaire-responses/${encodeURIComponent(contributorId)}`, {
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error('Failed to fetch response from contributor');
+    return response.json();
+  } catch {
+    // Fallback to mock — prevents constellation page from crashing
+    await delay(MOCK_DELAY);
+    return { contributors: MOCK_CONTRIBUTORS };
+  }
+}
+
 // ─── TEAM: SHARE LINK (confirm owner with team) ───────────────────────────────
 
 /**
@@ -907,12 +949,15 @@ export async function saveRelationship(token, relationshipInput) {
     };
   }
 
+  const session = JSON.parse(localStorage.getItem(`remember_contributor_session:${token}`) || '{}');
+
   return requestJson(`/contribute/${encodeURIComponent(token)}/relationship`, {
     method: "POST",
     body: JSON.stringify({
       contributor_token: relationshipInput.contributor_token,
       relationship_type: relationshipInput.relationship_type,
       relationship_label: relationshipInput.relationship_label ?? null,
+      is_anonymous: session?.is_anonymous ?? false,
     }),
   });
 }
