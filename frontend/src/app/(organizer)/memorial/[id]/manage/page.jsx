@@ -5,7 +5,6 @@
 import { useCallback, useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Share2, Settings } from 'lucide-react';
 import { generateMemorialOutput, getGenerationJobStatus, getMemorialOutput } from '@/services/memorialService';
 import { getMemorialContributors } from '@/services/contributorService';
 import { getMemorial, createInviteLink, createShareLink } from '@/lib/api';
@@ -44,6 +43,15 @@ function normalizeMemorialForView(memorial) {
 
 function isGeneratingMemorial(memorial) {
   return String(memorial?.status || "").toLowerCase() === "generating";
+}
+
+// ─── Status badge helper (from Blessing) ─────────────────────────────────────
+
+function getManageStatus(status) {
+  const key = String(status || "").toLowerCase();
+  if (key === "complete") return { label: "Memorial published", className: "bg-[#DCE3C6] text-[#5C6549]" };
+  if (key === "collecting" || key === "generating") return { label: "Collecting memories", className: "bg-[#CFE1EE] text-[#526776]" };
+  return { label: "Not started", className: "bg-[#EFCFC2] text-[#755A55]" };
 }
 
 // ─── Pagination arrows (shared) ───────────────────────────────────────────────
@@ -88,8 +96,8 @@ function FilterSelect({ value, onChange, children, className = "" }) {
       <select
         value={value}
         onChange={onChange}
-        className="w-full appearance-none rounded-[12.7px] border border-r-border px-5 py-4 pr-12 text-xl font-medium text-r-text bg-transparent focus:outline-none cursor-pointer"
-        style={{ fontFamily: 'var(--font-family-display)' }}
+        className="w-full appearance-none rounded-[12.7px] border border-r-border bg-transparent px-5 py-4 pr-12 text-xl font-medium text-r-text focus:outline-none cursor-pointer"
+        style={{ fontFamily: "var(--font-family-display)" }}
       >
         {children}
       </select>
@@ -102,77 +110,75 @@ function FilterSelect({ value, onChange, children, className = "" }) {
   );
 }
 
-// ─── Memorial Header ──────────────────────────────────────────────────────────
+// ─── Memorial Header (Blessing's layout + my inviteToken + MemorialCoverImage) ──
 
 function MemorialHeader({ memorial, inviteToken, onShare }) {
+  const status = getManageStatus(memorial?.status);
+  const birthYear = memorial?.date_of_birth ? new Date(memorial.date_of_birth).getFullYear() : "";
+  const passingYear = memorial?.date_of_passing ? new Date(memorial.date_of_passing).getFullYear() : "";
+
   return (
-    <div className="flex items-start gap-8">
-      {/* Circular avatar — matches Figma design */}
-      <div className="relative h-[145px] w-[145px] shrink-0 overflow-hidden rounded-full border border-r-border">
-        <MemorialCoverImage
-          src={memorial?.cover_photo_url}
-          name={memorial?.subject_name}
-          fill
-          className="h-full w-full object-cover"
-        />
+    <div className="grid gap-8 lg:grid-cols-[240px_1fr_220px] lg:items-start">
+
+      {/* Avatar */}
+      <div className="flex justify-center lg:justify-start">
+        <div className="relative size-[220px] overflow-hidden rounded-full bg-r-card border border-r-border">
+          <MemorialCoverImage
+            src={memorial?.cover_photo_url}
+            name={memorial?.subject_name}
+            fill
+            className="h-full w-full object-cover"
+          />
+        </div>
       </div>
 
       {/* Info */}
-      <div className="flex-1 min-w-0 pt-2">
+      <div className="min-w-0 pt-2">
         <h1
-          className="text-[32px] font-medium text-r-text leading-tight"
-          style={{ fontFamily: 'var(--font-family-display)', fontStyle: 'italic' }}
+          className="text-[36px] font-medium italic leading-[36px] text-r-text"
+          style={{ fontFamily: 'var(--font-family-display)' }}
         >
           {memorial?.subject_name || ''}
         </h1>
-        <p className="mt-1 text-sm text-r-muted">
-          {memorial?.date_of_birth && new Date(memorial.date_of_birth).getFullYear()}
-          {memorial?.date_of_birth && memorial?.date_of_passing && ' - '}
-          {memorial?.date_of_passing && new Date(memorial.date_of_passing).getFullYear()}
+        <p className="mt-4 text-[16px] leading-[16px] text-r-secondary">
+          {birthYear}{birthYear && passingYear ? " - " : ""}{passingYear}
         </p>
-        <p className="mt-2 text-sm text-r-secondary leading-relaxed max-w-md">
+        <p className="mt-6 max-w-[520px] text-[20px] leading-[26px] text-r-secondary">
           {memorial?.bio || ''}
         </p>
         {memorial?.status && (
-          <span className="mt-3 inline-block rounded-full px-4 py-1.5 text-caption bg-r-shape"
-            style={{ color: '#FBF9F6' }}>
-            {memorial.status === 'collecting' ? 'Collecting memories'
-              : memorial.status === 'generating' ? 'Generating'
-              : memorial.status === 'complete' ? 'Complete'
-              : memorial.status}
+          <span className={`mt-6 inline-block rounded-full px-5 py-2 text-sm font-medium ${status.className}`}>
+            {status.label}
           </span>
         )}
       </div>
 
-      {/* Actions — matches Figma: two pill buttons + icon row */}
-      <div className="flex shrink-0 flex-col items-end gap-3 pt-2">
-        {/* Upload Memories: organizer goes through the same contributor flow as everyone else.
-            Links to /contribute/[inviteToken] once the token is loaded. */}
-        <Link
-          href={inviteToken ? `/contribute/${inviteToken}` : '#'}
-          className="w-44 py-2.5 rounded-full border border-r-border bg-r-btn text-r-btn-text text-sm text-center font-medium hover:opacity-85 transition-opacity"
-        >
-          Upload Memories
-        </Link>
-        <Link
-          href={memorial?.id ? `/memorial/${memorial.id}/output` : '#'}
-          className="w-44 py-2.5 rounded-full border border-r-border bg-r-btn text-r-btn-text text-sm text-center font-medium hover:opacity-85 transition-opacity"
-        >
-          View Memorial
-        </Link>
-        <div className="flex items-center gap-5 mt-1 pr-1">
-          <button
-            onClick={onShare}
-            aria-label="Share"
-            className="text-r-text hover:opacity-60 transition-opacity"
+      {/* Actions */}
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4">
+          <Link
+            href={inviteToken ? `/contribute/${inviteToken}` : '#'}
+            className="rounded-full bg-r-btn px-6 py-5 text-center text-[18px] leading-[20px] text-r-btn-text transition hover:opacity-85"
           >
-            <Share2 size={20} />
+            Upload Memories
+          </Link>
+          <Link
+            href={memorial?.id ? `/memorial/${memorial.id}/output` : '#'}
+            className="rounded-full bg-r-btn px-6 py-5 text-center text-[18px] leading-[20px] text-r-btn-text transition hover:opacity-85"
+          >
+            View Memorial
+          </Link>
+        </div>
+        <div className="flex items-center justify-end gap-10 text-r-text">
+          <button type="button" onClick={onShare} className="transition hover:opacity-70" aria-label="Share memorial">
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M18 16.08c-.76 0-1.44.3-1.96.77l-7.13-4.16a3.27 3.27 0 000-1.38l7.12-4.15A2.99 2.99 0 0018 7.91a3 3 0 10-2.83-4 3 3 0 00.12 1.49L8.17 9.56a3 3 0 100 4.88l7.12 4.16c-.08.23-.12.47-.12.72a3 3 0 103-3.24z"/>
+            </svg>
           </button>
-          <button
-            aria-label="Settings"
-            className="text-r-text hover:opacity-60 transition-opacity"
-          >
-            <Settings size={20} />
+          <button type="button" className="transition hover:opacity-70" aria-label="Memorial settings">
+            <svg width="46" height="46" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.6-.22l-2.39.96a7.03 7.03 0 00-1.63-.94l-.36-2.54a.49.49 0 00-.49-.42h-3.84a.49.49 0 00-.49.42l-.36 2.54c-.58.22-1.13.53-1.63.94l-2.39-.96a.5.5 0 00-.6.22L2.54 8.84a.5.5 0 00.12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32c.14.24.43.34.69.22l2.39-.96c.5.4 1.05.72 1.63.94l.36 2.54c.05.24.25.42.49.42h3.84c.24 0 .44-.18.49-.42l.36-2.54c.58-.22 1.13-.53 1.63-.94l2.39.96c.26.12.55.02.69-.22l1.92-3.32a.5.5 0 00-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1112 8a3.5 3.5 0 010 7.5z"/>
+            </svg>
           </button>
         </div>
       </div>
@@ -180,47 +186,27 @@ function MemorialHeader({ memorial, inviteToken, onShare }) {
   );
 }
 
-// ─── Tab bar ──────────────────────────────────────────────────────────────────
+// ─── Tab bar (Blessing's Boska sizing) ───────────────────────────────────────
 
 const MAIN_TABS = ['Archive', 'Contributions', 'Outputs'];
 
 function TabBar({ active, onChange }) {
   return (
-    <div className="flex border-b border-r-border">
+    <div className="grid grid-cols-3 gap-6">
       {MAIN_TABS.map((tab) => (
         <button
           key={tab}
           onClick={() => onChange(tab)}
-          className={`flex-1 py-3 text-sm transition-colors relative ${
+          className={`border-b pb-3 text-center transition-colors text-[24px] font-medium leading-[24px] ${
             active === tab
-              ? 'text-r-text font-semibold'
-              : 'text-r-muted hover:text-r-text font-normal'
+              ? 'border-r-text text-r-text'
+              : 'border-r-border text-r-muted hover:text-r-text'
           }`}
+          style={{ fontFamily: 'var(--font-family-display)' }}
         >
           {tab}
-          {active === tab && (
-            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-r-text" />
-          )}
         </button>
       ))}
-    </div>
-  );
-}
-
-// ─── Collapsible section ──────────────────────────────────────────────────────
-
-function CollapsibleSection({ title, children, defaultOpen = false }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div>
-      <button onClick={() => setOpen(!open)} className="flex w-full items-center gap-3 py-3 text-left">
-        <span className="text-base font-medium text-r-text">{title}</span>
-        <svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"
-          className={`text-r-text transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>
-          <path d="M7 10l5 5 5-5z" />
-        </svg>
-      </button>
-      {open && <div className="pb-6">{children}</div>}
     </div>
   );
 }
@@ -263,7 +249,7 @@ function TabError({ title, message, onRetry }) {
   );
 }
 
-// ─── Archive Tab ──────────────────────────────────────────────────────────────
+// ─── Archive Tab (Blessing's redesigned search bar + card hover overlay) ──────
 
 function ArchiveTab({ contributors, output }) {
   const [query, setQuery] = useState('');
@@ -275,7 +261,6 @@ function ArchiveTab({ contributors, output }) {
   albums.forEach((album) => {
     (album.photos || []).forEach((p) => allPhotos.push({ type: 'photo', ...p }));
   });
-
   const allVoices = (output?.voices || []).map((v) => ({ type: 'voice', ...v }));
   const allItems = [...allPhotos, ...allVoices];
 
@@ -293,20 +278,29 @@ function ArchiveTab({ contributors, output }) {
     : allItems;
 
   return (
-    <div className="flex flex-col gap-6 pt-6">
-      <div className="flex items-center gap-3">
-        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24" className="text-r-text shrink-0">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
-        </svg>
+    <div className="flex flex-col gap-10 pt-8">
+      {/* Search + Filter + Sort row (Blessing's 4-column grid design) */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[56px_1fr_236px_236px]">
+        <div className="flex items-center justify-center text-r-text">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2l1.84 5.66H20l-4.99 3.62 1.91 5.88L12 13.54 7.08 17.16l1.91-5.88L4 7.66h6.16L12 2z"/>
+          </svg>
+        </div>
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Show me happy memories"
-          className="flex-1 rounded-xl border border-r-border px-4 py-2.5 text-sm placeholder-r-muted bg-transparent focus:outline-none focus:border-r-border-focus text-r-text"
+          className="h-[72px] rounded-[18px] border border-r-border bg-r-card px-6 text-[20px] leading-[20px] text-r-secondary placeholder:text-r-muted focus:outline-none focus:ring-2 focus:ring-r-border"
         />
-        <button className="rounded-full bg-r-btn px-5 py-2.5 text-sm font-medium text-r-btn-text hover:opacity-85 transition-opacity">Filter</button>
-        <button className="rounded-full bg-r-btn px-5 py-2.5 text-sm font-medium text-r-btn-text hover:opacity-85 transition-opacity">Sort</button>
+        <button type="button" className="flex h-[72px] items-center justify-between rounded-[18px] border border-r-border bg-r-card px-6 text-[24px] leading-[24px] text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
+          <span>Filter</span>
+          <span className="size-0 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-r-text" />
+        </button>
+        <button type="button" className="flex h-[72px] items-center justify-between rounded-[18px] border border-r-border bg-r-card px-6 text-[24px] leading-[24px] text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
+          <span>Sort</span>
+          <span className="size-0 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-r-text" />
+        </button>
       </div>
 
       {filtered.length === 0 ? (
@@ -323,10 +317,26 @@ function ArchiveTab({ contributors, output }) {
       ) : (
         <div className="grid grid-cols-3 gap-4">
           {filtered.map((item, i) => (
-            <div key={item.id || i} className="rounded-2xl overflow-hidden border border-r-border bg-r-card">
+            <div key={item.id || i} className="group rounded-xl overflow-hidden border border-r-border bg-r-card">
               {item.type === 'photo' && (
                 item.url
-                  ? <img src={item.url} alt={item.caption || ''} className="aspect-[4/3] w-full object-cover" />
+                  ? <div className="relative aspect-[4/3] w-full overflow-hidden">
+                      <img src={item.url} alt={item.caption || ''} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+                      {/* Blessing's hover overlay with caption/contributor/date */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/0 px-8 text-center opacity-0 transition-all duration-300 group-hover:bg-black/38 group-hover:opacity-100">
+                        <p className="text-[30px] leading-[34px] text-white" style={{ fontFamily: 'var(--font-family-display)' }}>
+                          {item.caption || "Photo title"}
+                        </p>
+                        <p className="mt-4 text-[16px] leading-[16px] text-white">
+                          {item.contributor_name ? `Submitted by ${item.contributor_name}` : "Submitted by contributor"}
+                        </p>
+                        <p className="mt-4 text-[16px] leading-[16px] text-white">
+                          {item.taken_at
+                            ? new Date(item.taken_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                            : ""}
+                        </p>
+                      </div>
+                    </div>
                   : <div className="aspect-[4/3] w-full bg-r-card flex items-center justify-center">
                       <span className="text-xs text-r-muted">{item.contributor_name || 'Photo'}</span>
                     </div>
@@ -353,10 +363,13 @@ function ArchiveTab({ contributors, output }) {
   );
 }
 
-// ─── Contributions Tab ────────────────────────────────────────────────────────
+// ─── Contributions Tab (Blessing's filter/sort/larger cards) ─────────────────
 
 function ContributionsTab({ contributorslist, loading, error, onRetry }) {
   const [value, setValue] = useState("contributors");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [contributorFilter, setContributorFilter] = useState("all");
+  const [contributorSort, setContributorSort] = useState("recent");
 
   const submissions = contributorslist.filter((c) => {
     const status = String(c.status || "").toLowerCase();
@@ -368,23 +381,95 @@ function ContributionsTab({ contributorslist, loading, error, onRetry }) {
   const handlePrev = () => setCurrentIndex((prev) => prev === 0 ? submissions.length - 1 : prev - 1);
   const handleNext = () => setCurrentIndex((prev) => prev === submissions.length - 1 ? 0 : prev + 1);
 
+  const contributorCards = [...contributorslist]
+    .filter((contributor) => {
+      if (contributorFilter === "anonymous") return String(contributor.name || "").trim().toLowerCase() === "anonymous";
+      if (contributorFilter === "named") return String(contributor.name || "").trim().toLowerCase() !== "anonymous";
+      return true;
+    })
+    .sort((a, b) => {
+      if (contributorSort === "name") return String(a.name || "").localeCompare(String(b.name || ""));
+      return new Date(b.submitted_at || 0) - new Date(a.submitted_at || 0);
+    });
+
   return (
     <div className="mx-auto max-w-7xl">
-      <div className="mb-4 flex items-center justify-between">
-        <select onChange={(e) => setValue(e.target.value)} value={value}
-          className="border border-r-border rounded-md px-4 py-2 text-sm outline-none bg-transparent text-r-text">
-          <option value="contributors">Contributors</option>
-          <option value="awaiting">Awaiting Approval</option>
-        </select>
-        {(value === "awaiting" && submissions.length > 0) && (
-          <div className="flex items-center gap-4 text-sm text-r-secondary">
-            <button onClick={handlePrev} className="rounded p-1 transition hover:bg-r-card">
-              <ChevronLeft size={18} />
-            </button>
-            <span>{currentIndex + 1}/{submissions.length}</span>
-            <button onClick={handleNext} className="rounded p-1 transition hover:bg-r-card">
-              <ChevronRight size={18} />
-            </button>
+      <div className="mb-6 flex flex-col gap-6">
+
+        {/* Top controls row */}
+        <div className="flex items-center justify-between gap-6">
+          {/* Contributors / Awaiting dropdown */}
+          <div className="relative w-[450px]">
+            <select
+              onChange={(e) => setValue(e.target.value)}
+              value={value}
+              className="h-[63px] w-full appearance-none rounded-[22px] border border-r-border bg-r-card px-7 pr-20 text-[24px] leading-[24px] text-r-text outline-none"
+              style={{ fontFamily: 'var(--font-family-display)' }}
+            >
+              <option value="contributors">Contributors</option>
+              <option value="awaiting">Awaiting approval</option>
+            </select>
+            <span className="pointer-events-none absolute right-7 top-1/2 size-0 -translate-y-1/2 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-r-text" />
+          </div>
+
+          {/* Filter + Sort (contributors view only) */}
+          {value === "contributors" && (
+            <div className="flex items-center gap-5">
+              <div className="relative w-[213px]">
+                <select
+                  value={contributorFilter}
+                  onChange={(e) => setContributorFilter(e.target.value)}
+                  className="h-[63px] w-full appearance-none rounded-[18px] border border-r-border bg-r-card px-5 pr-16 text-[24px] leading-[24px] text-r-text outline-none"
+                  style={{ fontFamily: 'var(--font-family-display)' }}
+                >
+                  <option value="all">Filter</option>
+                  <option value="anonymous">Anonymous</option>
+                  <option value="named">Named</option>
+                </select>
+                <span className="pointer-events-none absolute right-5 top-1/2 size-0 -translate-y-1/2 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-r-text" />
+              </div>
+              <div className="relative w-[213px]">
+                <select
+                  value={contributorSort}
+                  onChange={(e) => setContributorSort(e.target.value)}
+                  className="h-[63px] w-full appearance-none rounded-[18px] border border-r-border bg-r-card px-5 pr-16 text-[24px] leading-[24px] text-r-text outline-none"
+                  style={{ fontFamily: 'var(--font-family-display)' }}
+                >
+                  <option value="recent">Sort</option>
+                  <option value="recent">Most recent</option>
+                  <option value="name">Name</option>
+                </select>
+                <span className="pointer-events-none absolute right-5 top-1/2 size-0 -translate-y-1/2 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-r-text" />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Search + pagination row (awaiting view only) */}
+        {value === "awaiting" && submissions.length > 0 && (
+          <div className="flex items-center justify-between gap-6">
+            <div className="flex h-[63px] w-full max-w-[434px] items-center rounded-full border border-r-border bg-r-card px-6">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-r-text">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" strokeLinecap="round" />
+              </svg>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search for a contributor"
+                className="ml-6 w-full bg-transparent text-[20px] leading-[20px] text-r-secondary placeholder:text-r-muted outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-12 px-6 text-[24px] leading-[24px] text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
+              <button onClick={handlePrev} className="transition hover:opacity-70">
+                <ChevronLeft size={54} strokeWidth={1.8} />
+              </button>
+              <span>{currentIndex + 1}/{submissions.length}</span>
+              <button onClick={handleNext} className="transition hover:opacity-70">
+                <ChevronRight size={54} strokeWidth={1.8} />
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -404,32 +489,33 @@ function ContributionsTab({ contributorslist, loading, error, onRetry }) {
         />
       )}
       {value === "contributors" && !loading && !error && contributorslist.length > 0 && (
-        <div className="grid grid-cols-3 gap-4">
-          {contributorslist.map((contributor) => (
-            <div key={contributor.id} className="rounded-2xl p-5 flex flex-col gap-3 bg-r-modal border border-r-border">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full shrink-0 bg-r-card" />
-                <div className="min-w-0">
-                  <p className="text-body-2 font-semibold text-r-text">{contributor.name}</p>
-                  <p className="text-caption text-r-muted mt-0.5">
-                    {String(contributor.status || '').toLowerCase() === 'submitted' ||
-                    contributor.submitted_at
-                      ? 'Submitted'
-                      : 'In progress'}
-                  </p>
-                  <p className="text-caption text-r-muted">
-                    Last submitted {contributor.submitted_at
-                      ? new Date(contributor.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-                      : 'No date provided'}
-                  </p>
-                </div>
-              </div>
-              <span className="self-start rounded-full px-4 py-1.5 text-caption bg-r-shape"
-                style={{ color: '#FBF9F6' }}>
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {contributorCards.map((contributor) => (
+            <article
+              key={contributor.id}
+              className="min-h-[287px] rounded-[18px] border border-r-border bg-r-card px-[50px] py-12"
+            >
+              <h3 className="text-[28px] leading-[32px] text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
+                {contributor.name || "Anonymous"}
+              </h3>
+              <p className="mt-6 text-[16px] leading-[20px] text-r-secondary">
+                {contributor.contribution_count || 0} contributions
+              </p>
+              <p className="mt-4 text-[16px] leading-[20px] text-r-secondary">
+                Last submitted {contributor.submitted_at
+                  ? new Date(contributor.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                  : 'No date provided'}
+              </p>
+              <span className="mt-6 inline-flex min-h-[49px] min-w-[214px] items-center justify-center rounded-[14px] bg-r-shape px-6 text-[16px] leading-[20px]" style={{ color: '#FBF9F6' }}>
                 {contributor.relationship_type || 'No Relationship'}
               </span>
-            </div>
+            </article>
           ))}
+          {contributorCards.length === 0 && (
+            <div className="col-span-full py-12 text-center text-[18px] text-r-secondary">
+              No contributors match the current filter.
+            </div>
+          )}
         </div>
       )}
       {value === "awaiting" && (
@@ -439,7 +525,7 @@ function ContributionsTab({ contributorslist, loading, error, onRetry }) {
   );
 }
 
-// ─── Lightbox ─────────────────────────────────────────────────────────────────
+// ─── Lightbox (my version — object-contain, no face cropping) ────────────────
 
 function Lightbox({ photo, onClose, onPrev, onNext }) {
   useEffect(() => {
@@ -480,20 +566,17 @@ function Lightbox({ photo, onClose, onPrev, onNext }) {
   );
 }
 
-// ─── All Photos Section ───────────────────────────────────────────────────────
+// ─── All Photos Section (my version — album drill-in, sort, pagination) ───────
 
 function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
   const PHOTOS_PER_PAGE = 6;
-  const [filterView, setFilterView] = useState('all'); // 'all' | 'albums'
+  const [filterView, setFilterView] = useState('all');
   const [sortOrder, setSortOrder] = useState('recently_added');
   const [page, setPage] = useState(1);
-  const [openAlbum, setOpenAlbum] = useState(null); // album object when drilling into an album
+  const [openAlbum, setOpenAlbum] = useState(null);
   const [lightboxPhoto, setLightboxPhoto] = useState(null);
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
-  // Normalize both backend shapes:
-  // Real: { albums: [{ name, photos, cover_photo_url, photo_count }] }
-  // Mock: [{ album_name, photos, cover_photo_url }]
   const albumList = (() => {
     if (!albums) return [];
     if (albums.albums && Array.isArray(albums.albums)) {
@@ -502,11 +585,8 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
         cover_photo_url: a.cover_photo_url || a.photos?.[0]?.url || null,
         photo_count: a.photo_count ?? a.photos?.length ?? 0,
         photos: (a.photos || []).map((p) => ({
-          id: p.id,
-          url: p.url || null,
-          caption: p.caption || null,
-          taken_at: p.taken_at || null,
-          contributor_name: p.contributor_name || null,
+          id: p.id, url: p.url || null, caption: p.caption || null,
+          taken_at: p.taken_at || null, contributor_name: p.contributor_name || null,
         })),
       }));
     }
@@ -524,98 +604,47 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
   const allPhotos = albumList.flatMap((album) =>
     (album.photos || []).map((p) => ({ ...p, album_name: album.album_name }))
   );
-
   const isAlbumView = filterView === 'albums';
 
-  // When a filter view changes, reset album drill-in and page
-  function handleFilterChange(val) {
-    setFilterView(val);
-    setOpenAlbum(null);
-    setPage(1);
-    // Reset sort to a valid option for the new view
-    setSortOrder('recently_added');
-  }
+  function handleFilterChange(val) { setFilterView(val); setOpenAlbum(null); setPage(1); setSortOrder('recently_added'); }
+  function handleAlbumClick(album) { setOpenAlbum(album); setPage(1); }
+  function handleBackToAlbums() { setOpenAlbum(null); setPage(1); }
 
-  function handleAlbumClick(album) {
-    setOpenAlbum(album);
-    setPage(1);
-  }
-
-  function handleBackToAlbums() {
-    setOpenAlbum(null);
-    setPage(1);
-  }
-
-  // Sort the photos being displayed
   function sortPhotos(photos) {
     return [...photos].sort((a, b) => {
-      if (sortOrder === 'oldest') {
-        return new Date(a.taken_at || a.created_at || 0) - new Date(b.taken_at || b.created_at || 0);
-      }
-      if (sortOrder === 'name') {
-        return (a.caption || '').localeCompare(b.caption || '');
-      }
-      // recently_added (default)
+      if (sortOrder === 'oldest') return new Date(a.taken_at || a.created_at || 0) - new Date(b.taken_at || b.created_at || 0);
+      if (sortOrder === 'name') return (a.caption || '').localeCompare(b.caption || '');
       return new Date(b.taken_at || b.created_at || 0) - new Date(a.taken_at || a.created_at || 0);
     });
   }
 
   function sortAlbums(list) {
-    return [...list].sort((a, b) => {
-      if (sortOrder === 'name') {
-        return (a.album_name || '').localeCompare(b.album_name || '');
-      }
-      // recently_added — albums don't have dates so keep original order
-      return 0;
-    });
+    return [...list].sort((a, b) => sortOrder === 'name' ? (a.album_name || '').localeCompare(b.album_name || '') : 0);
   }
 
-  // Determine what to paginate
   let itemsForPagination = [];
-  if (openAlbum) {
-    itemsForPagination = sortPhotos(openAlbum.photos || []);
-  } else if (isAlbumView) {
-    itemsForPagination = sortAlbums(albumList);
-  } else {
-    itemsForPagination = sortPhotos(allPhotos);
-  }
+  if (openAlbum) itemsForPagination = sortPhotos(openAlbum.photos || []);
+  else if (isAlbumView) itemsForPagination = sortAlbums(albumList);
+  else itemsForPagination = sortPhotos(allPhotos);
 
   const totalPages = Math.max(1, Math.ceil(itemsForPagination.length / PHOTOS_PER_PAGE));
   const paginatedItems = itemsForPagination.slice((page - 1) * PHOTOS_PER_PAGE, page * PHOTOS_PER_PAGE);
 
   function openLightbox(photo, index) { setLightboxPhoto(photo); setLightboxIndex(index); }
-  function prevPhoto() {
-    const i = (lightboxIndex - 1 + paginatedItems.length) % paginatedItems.length;
-    setLightboxIndex(i); setLightboxPhoto(paginatedItems[i]);
-  }
-  function nextPhoto() {
-    const i = (lightboxIndex + 1) % paginatedItems.length;
-    setLightboxIndex(i); setLightboxPhoto(paginatedItems[i]);
-  }
+  function prevPhoto() { const i = (lightboxIndex - 1 + paginatedItems.length) % paginatedItems.length; setLightboxIndex(i); setLightboxPhoto(paginatedItems[i]); }
+  function nextPhoto() { const i = (lightboxIndex + 1) % paginatedItems.length; setLightboxIndex(i); setLightboxPhoto(paginatedItems[i]); }
 
-  // Sort options differ by view
   const sortOptions = (isAlbumView && !openAlbum)
-    ? [
-        { value: 'recently_added', label: 'Recently added' },
-        { value: 'name', label: 'Name' },
-      ]
-    : [
-        { value: 'recently_added', label: 'Recently added' },
-        { value: 'oldest', label: 'Oldest' },
-        { value: 'name', label: 'Name' },
-      ];
+    ? [{ value: 'recently_added', label: 'Recently added' }, { value: 'name', label: 'Name' }]
+    : [{ value: 'recently_added', label: 'Recently added' }, { value: 'oldest', label: 'Oldest' }, { value: 'name', label: 'Name' }];
 
   return (
     <div className="flex flex-col gap-5">
-
-      {/* Top bar — back to albums (when inside an album) + photo pagination */}
+      {/* Back to albums + photo pagination */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           {openAlbum && (
-            <button
-              onClick={handleBackToAlbums}
-              className="flex items-center gap-1.5 text-r-secondary text-sm hover:text-r-text transition-colors"
-            >
+            <button onClick={handleBackToAlbums} className="flex items-center gap-1.5 text-r-secondary text-sm hover:text-r-text transition-colors">
               <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
@@ -623,167 +652,95 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
             </button>
           )}
           {openAlbum && (
-            <span
-              className="text-[24px] font-medium italic text-r-text"
-              style={{ fontFamily: 'var(--font-family-display)' }}
-            >
+            <span className="text-[24px] font-medium italic text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
               {openAlbum.album_name}
             </span>
           )}
         </div>
         <div className="flex items-center gap-3">
           <PrevArrow onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} />
-          <span
-            className="text-2xl font-medium text-r-text min-w-[64px] text-center"
-            style={{ fontFamily: 'var(--font-family-display)' }}
-          >
+          <span className="text-2xl font-medium text-r-text min-w-[64px] text-center" style={{ fontFamily: 'var(--font-family-display)' }}>
             {page} / {totalPages}
           </span>
           <NextArrow onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} />
         </div>
       </div>
 
-      {/* Filter + Sort — hide filter when inside an album */}
+      {/* Filter + Sort */}
       {!openAlbum && (
         <div className="flex items-center justify-between gap-4">
-          <FilterSelect
-            value={filterView}
-            onChange={(e) => handleFilterChange(e.target.value)}
-            className="flex-1 max-w-[434px]"
-          >
+          <FilterSelect value={filterView} onChange={(e) => handleFilterChange(e.target.value)} className="flex-1 max-w-[434px]">
             <option value="all">All photos</option>
             <option value="albums">Albums</option>
           </FilterSelect>
-
-          <FilterSelect
-            value={sortOrder}
-            onChange={(e) => { setSortOrder(e.target.value); setPage(1); }}
-            className="w-[207px]"
-          >
-            {sortOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
+          <FilterSelect value={sortOrder} onChange={(e) => { setSortOrder(e.target.value); setPage(1); }} className="w-[207px]">
+            {sortOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
           </FilterSelect>
         </div>
       )}
-
-      {/* Inside an open album: sort only */}
       {openAlbum && (
         <div className="flex justify-end">
-          <FilterSelect
-            value={sortOrder}
-            onChange={(e) => { setSortOrder(e.target.value); setPage(1); }}
-            className="w-[207px]"
-          >
-            {sortOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
+          <FilterSelect value={sortOrder} onChange={(e) => { setSortOrder(e.target.value); setPage(1); }} className="w-[207px]">
+            {sortOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
           </FilterSelect>
         </div>
       )}
 
       {/* Albums grid */}
       {isAlbumView && !openAlbum && (
-        albumList.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <p className="text-base font-medium text-r-text">No albums yet</p>
-            <p className="text-sm text-r-secondary mt-1 max-w-xs">
-              AI-named albums are created after Generate runs.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-3 gap-5">
-            {paginatedItems.map((album, index) => (
-              <button
-                key={album.album_name || index}
-                onClick={() => handleAlbumClick(album)}
-                className="group relative rounded-2xl overflow-hidden border border-r-border bg-r-card text-left cursor-pointer hover:opacity-90 transition-opacity"
-                style={{ aspectRatio: '4/3' }}
-              >
-                {album.cover_photo_url ? (
-                  <img
-                    src={album.cover_photo_url}
-                    alt={album.album_name}
-                    className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                ) : (
-                  <div className="h-full w-full bg-r-card" />
-                )}
-                <div className="absolute inset-0 bg-black/20 flex flex-col justify-end p-4">
-                  <p
-                    className="text-white text-sm font-medium truncate"
-                    style={{ fontFamily: 'var(--font-family-display)' }}
-                  >
-                    {album.album_name}
-                  </p>
-                  <p className="text-white/70 text-xs mt-0.5">
-                    {album.photo_count || album.photos?.length || 0} photos
-                  </p>
-                </div>
-              </button>
-            ))}
-          </div>
-        )
+        albumList.length === 0
+          ? <div className="flex flex-col items-center justify-center py-16 text-center"><p className="text-base font-medium text-r-text">No albums yet</p><p className="text-sm text-r-secondary mt-1 max-w-xs">AI-named albums are created after Generate runs.</p></div>
+          : <div className="grid grid-cols-3 gap-5">
+              {paginatedItems.map((album, index) => (
+                <button key={album.album_name || index} onClick={() => handleAlbumClick(album)}
+                  className="group relative rounded-2xl overflow-hidden border border-r-border bg-r-card text-left cursor-pointer hover:opacity-90 transition-opacity" style={{ aspectRatio: '4/3' }}>
+                  {album.cover_photo_url
+                    ? <img src={album.cover_photo_url} alt={album.album_name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    : <div className="h-full w-full bg-r-card" />}
+                  <div className="absolute inset-0 bg-black/20 flex flex-col justify-end p-4">
+                    <p className="text-white text-sm font-medium truncate" style={{ fontFamily: 'var(--font-family-display)' }}>{album.album_name}</p>
+                    <p className="text-white/70 text-xs mt-0.5">{album.photo_count || album.photos?.length || 0} photos</p>
+                  </div>
+                </button>
+              ))}
+            </div>
       )}
 
-      {/* Photo grid — shown for "All photos" view OR when inside an album */}
+      {/* Photos grid */}
       {(!isAlbumView || openAlbum) && (
-        paginatedItems.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <p className="text-base font-medium text-r-text">
-              {openAlbum ? 'No photos in this album' : 'No photos yet'}
-            </p>
-            <p className="text-sm text-r-secondary mt-1 max-w-xs">
-              {openAlbum
-                ? 'This album has no photos assigned yet.'
-                : 'Photos will appear here once contributors have submitted and the memorial has been generated.'}
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-3 gap-5">
-            {paginatedItems.map((photo, index) => (
-              <button
-                key={photo.id || index}
-                onClick={() => openLightbox(photo, index)}
-                className="group relative w-full overflow-hidden rounded-2xl bg-r-card"
-                style={{ aspectRatio: '4/3' }}
-              >
-                {photo.url ? (
-                  <img
-                    src={photo.url}
-                    alt={photo.caption || ''}
-                    className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                ) : (
-                  <div className="h-full w-full bg-r-card" />
-                )}
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors duration-200 flex items-end p-3 opacity-0 group-hover:opacity-100">
-                  <div className="w-full">
-                    {photo.caption && <p className="text-white text-xs font-semibold truncate">{photo.caption}</p>}
-                    {photo.contributor_name && <p className="text-white text-xs truncate">{photo.contributor_name}</p>}
+        paginatedItems.length === 0
+          ? <div className="flex flex-col items-center justify-center py-16 text-center">
+              <p className="text-base font-medium text-r-text">{openAlbum ? 'No photos in this album' : 'No photos yet'}</p>
+              <p className="text-sm text-r-secondary mt-1 max-w-xs">
+                {openAlbum ? 'This album has no photos assigned yet.' : 'Photos will appear here once contributors have submitted and the memorial has been generated.'}
+              </p>
+            </div>
+          : <div className="grid grid-cols-3 gap-5">
+              {paginatedItems.map((photo, index) => (
+                <button key={photo.id || index} onClick={() => openLightbox(photo, index)}
+                  className="group relative w-full overflow-hidden rounded-2xl bg-r-card" style={{ aspectRatio: '4/3' }}>
+                  {photo.url
+                    ? <img src={photo.url} alt={photo.caption || ''} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    : <div className="h-full w-full bg-r-card" />}
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors duration-200 flex items-end p-3 opacity-0 group-hover:opacity-100">
+                    <div className="w-full">
+                      {photo.caption && <p className="text-white text-xs font-semibold truncate">{photo.caption}</p>}
+                      {photo.contributor_name && <p className="text-white text-xs truncate">{photo.contributor_name}</p>}
+                    </div>
                   </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        )
+                </button>
+              ))}
+            </div>
       )}
 
       {lightboxPhoto && (
-        <Lightbox
-          photo={lightboxPhoto}
-          onClose={() => setLightboxPhoto(null)}
-          onPrev={prevPhoto}
-          onNext={nextPhoto}
-        />
+        <Lightbox photo={lightboxPhoto} onClose={() => setLightboxPhoto(null)} onPrev={prevPhoto} onNext={nextPhoto} />
       )}
     </div>
   );
 }
 
-
 // ─── Pre-generation empty state ───────────────────────────────────────────────
-
 
 function PreGenerationEmpty({ canGenerate, disabledMessage, generationError, generationJob, generating, onGenerate }) {
   const isPending = generating && !generationError;
@@ -802,13 +759,9 @@ function PreGenerationEmpty({ canGenerate, disabledMessage, generationError, gen
           ? "Outputs will appear here automatically once the memorial is ready."
           : "Once you have contributions, click Generate to create the Story, Constellation, Voices, and Photos."}
       </p>
-      <button
-        type="button"
-        onClick={onGenerate}
-        disabled={!canGenerate || generating}
+      <button type="button" onClick={onGenerate} disabled={!canGenerate || generating}
         className="mt-6 flex h-[50px] w-[207px] items-center justify-center rounded-full px-6 text-sm font-medium text-r-btn-text transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-45 border-none"
-        style={{ backgroundColor: 'var(--color-r-btn)' }}
-      >
+        style={{ backgroundColor: 'var(--color-r-btn)' }}>
         {generating ? "Generating..." : "Generate"}
       </button>
       {isPending && (
@@ -817,23 +770,17 @@ function PreGenerationEmpty({ canGenerate, disabledMessage, generationError, gen
             <div className="h-full rounded-full bg-r-text transition-all duration-300"
               style={{ width: `${Math.max(10, generationJob?.progress ?? 10)}%` }} />
           </div>
-          <p className="mt-2 text-xs font-medium text-r-secondary">
-            {generationJob?.current_step || "Preparing generation..."}
-          </p>
+          <p className="mt-2 text-xs font-medium text-r-secondary">{generationJob?.current_step || "Preparing generation..."}</p>
           <ProcessingTextSequence />
         </div>
       )}
-      {!generating && disabledMessage && (
-        <p className="mt-3 max-w-xs text-xs text-r-secondary">{disabledMessage}</p>
-      )}
-      {generationError && (
-        <p className="mt-3 max-w-xs text-sm text-r-danger" role="alert">{generationError}</p>
-      )}
+      {!generating && disabledMessage && <p className="mt-3 max-w-xs text-xs text-r-secondary">{disabledMessage}</p>}
+      {generationError && <p className="mt-3 max-w-xs text-sm text-r-danger" role="alert">{generationError}</p>}
     </div>
   );
 }
 
-// ─── Outputs Tab ──────────────────────────────────────────────────────────────
+// ─── Outputs Tab (my version — 5-section arrow navigation, no dropdowns) ─────
 
 const OUTPUT_SECTIONS = [
   { key: 'story',                       label: 'Story' },
@@ -847,73 +794,40 @@ function OutputsTab({ memorial, contributors, canGenerate, disabledMessage, gene
   const [sectionIndex, setSectionIndex] = useState(0);
 
   if (loading) return <TabLoading />;
-
   if (error) {
-    return (
-      <TabError
-        title="Unable to load outputs"
-        message="The generated memorial output could not be loaded. Archive and Contributions are still available."
-        onRetry={onRetry}
-      />
-    );
+    return <TabError title="Unable to load outputs" message="The generated memorial output could not be loaded. Archive and Contributions are still available." onRetry={onRetry} />;
   }
-
   if (!output) {
     return (
       <div className="pt-6">
-        <PreGenerationEmpty
-          canGenerate={canGenerate}
-          disabledMessage={disabledMessage}
-          generationError={generationError}
-          generationJob={generationJob}
-          generating={generating}
-          onGenerate={onGenerate}
-        />
+        <PreGenerationEmpty canGenerate={canGenerate} disabledMessage={disabledMessage} generationError={generationError} generationJob={generationJob} generating={generating} onGenerate={onGenerate} />
       </div>
     );
   }
 
   const currentSection = OUTPUT_SECTIONS[sectionIndex];
   const total = OUTPUT_SECTIONS.length;
-
-  // Constellation page: 1 = Themes, 2 = Relationships
   const constellationPage = currentSection.key === 'constellation-relationships' ? 2 : 1;
 
   return (
     <div className="flex flex-col pt-4 gap-6">
-
       {/* Top row: section title + Generate + arrows */}
       <div className="flex items-center justify-between gap-4">
-        <h2
-          className="text-[36px] font-medium italic text-r-text"
-          style={{ fontFamily: 'var(--font-family-display)' }}
-        >
+        <h2 className="text-[36px] font-medium italic text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
           {currentSection.label}
         </h2>
         <div className="flex items-center gap-4">
-          <button
-            onClick={onGenerate}
-            disabled={!canGenerate || generating}
+          <button onClick={onGenerate} disabled={!canGenerate || generating}
             className="rounded-full px-6 py-[14px] text-base text-r-btn-text transition-opacity hover:opacity-80 disabled:opacity-45 disabled:cursor-not-allowed border-none"
-            style={{ backgroundColor: 'var(--color-r-btn)' }}
-          >
+            style={{ backgroundColor: 'var(--color-r-btn)' }}>
             {generating ? 'Generating…' : 'Generate'}
           </button>
           <div className="flex items-center gap-3">
-            <PrevArrow
-              onClick={() => setSectionIndex((i) => Math.max(0, i - 1))}
-              disabled={sectionIndex === 0}
-            />
-            <span
-              className="text-2xl font-medium text-r-text min-w-[64px] text-center"
-              style={{ fontFamily: 'var(--font-family-display)' }}
-            >
+            <PrevArrow onClick={() => setSectionIndex((i) => Math.max(0, i - 1))} disabled={sectionIndex === 0} />
+            <span className="text-2xl font-medium text-r-text min-w-[64px] text-center" style={{ fontFamily: 'var(--font-family-display)' }}>
               {sectionIndex + 1} / {total}
             </span>
-            <NextArrow
-              onClick={() => setSectionIndex((i) => Math.min(total - 1, i + 1))}
-              disabled={sectionIndex === total - 1}
-            />
+            <NextArrow onClick={() => setSectionIndex((i) => Math.min(total - 1, i + 1))} disabled={sectionIndex === total - 1} />
           </div>
         </div>
       </div>
@@ -922,7 +836,6 @@ function OutputsTab({ memorial, contributors, canGenerate, disabledMessage, gene
       {currentSection.key === 'story' && (
         <StorySlideshow output={output} story={output?.story} />
       )}
-
       {(currentSection.key === 'constellation-themes' || currentSection.key === 'constellation-relationships') && (
         <ConstellationGraph
           ai_output={output}
@@ -933,24 +846,15 @@ function OutputsTab({ memorial, contributors, canGenerate, disabledMessage, gene
           height={800}
         />
       )}
-
       {currentSection.key === 'voices' && (
         <VoicesTab output={output} voices={output?.voices} />
       )}
-
       {currentSection.key === 'photos' && (
-        <AllPhotosSection
-          albums={output?.photos}
-          onGenerate={onGenerate}
-          generating={generating}
-          canGenerate={canGenerate}
-        />
+        <AllPhotosSection albums={output?.photos} onGenerate={onGenerate} generating={generating} canGenerate={canGenerate} />
       )}
-
     </div>
   );
 }
-
 
 // ─── Share Modal ──────────────────────────────────────────────────────────────
 
@@ -965,25 +869,16 @@ function ShareModal({ onClose, memorialId }) {
 
   useEffect(() => {
     let cancelled = false;
-
     async function loadShareLinks() {
-      setLinksLoading(true);
-      setLinksError(null);
-      setContributorUrl('');
-      setViewerUrl('');
+      setLinksLoading(true); setLinksError(null); setContributorUrl(''); setViewerUrl('');
       try {
         const invite = await createInviteLink(memorialId);
         if (cancelled) return;
         setContributorUrl(normalizeShareUrl(invite?.invite_link?.url ?? ''));
-
         try {
           const share = await createShareLink(memorialId);
-          if (!cancelled) {
-            setViewerUrl(normalizeShareUrl(share?.share_link?.url ?? ''));
-          }
-        } catch (shareErr) {
-          console.warn('Viewer share link unavailable:', shareErr);
-        }
+          if (!cancelled) setViewerUrl(normalizeShareUrl(share?.share_link?.url ?? ''));
+        } catch (shareErr) { console.warn('Viewer share link unavailable:', shareErr); }
       } catch (err) {
         if (!cancelled) {
           const message = err instanceof Error ? err.message : 'Could not load share links.';
@@ -995,11 +890,8 @@ function ShareModal({ onClose, memorialId }) {
             setLinksError(`${message} Close and try again.`);
           }
         }
-      } finally {
-        if (!cancelled) setLinksLoading(false);
-      }
+      } finally { if (!cancelled) setLinksLoading(false); }
     }
-
     loadShareLinks();
     return () => { cancelled = true; };
   }, [memorialId]);
@@ -1010,16 +902,9 @@ function ShareModal({ onClose, memorialId }) {
     if (!url) { setCopyError('Link is not ready yet.'); return; }
     try {
       await copyTextToClipboard(url);
-      if (type === 'contributor') {
-        setCopiedContributor(true);
-        setTimeout(() => setCopiedContributor(false), 2000);
-      } else {
-        setCopiedViewer(true);
-        setTimeout(() => setCopiedViewer(false), 2000);
-      }
-    } catch {
-      setCopyError('Copy failed. Select the link below and copy manually.');
-    }
+      if (type === 'contributor') { setCopiedContributor(true); setTimeout(() => setCopiedContributor(false), 2000); }
+      else { setCopiedViewer(true); setTimeout(() => setCopiedViewer(false), 2000); }
+    } catch { setCopyError('Copy failed. Select the link below and copy manually.'); }
   }
 
   return (
@@ -1043,13 +928,9 @@ function ShareModal({ onClose, memorialId }) {
               <p className="text-body-2 text-r-secondary mt-0.5">{sub}</p>
               {url && <p className="text-caption text-r-secondary mt-2 break-all">{url}</p>}
             </div>
-            <button
-              type="button"
-              onClick={() => copyLink(type)}
-              disabled={linksLoading || !url}
+            <button type="button" onClick={() => copyLink(type)} disabled={linksLoading || !url}
               className="shrink-0 rounded-full px-4 py-2 text-h4 transition-all ml-5 border-none disabled:opacity-50"
-              style={{ backgroundColor: copied ? '#7D8C6A' : 'var(--color-r-btn)', color: copied ? '#FBF9F6' : 'var(--color-r-btn-text)' }}
-            >
+              style={{ backgroundColor: copied ? '#7D8C6A' : 'var(--color-r-btn)', color: copied ? '#FBF9F6' : 'var(--color-r-btn-text)' }}>
               {copied ? 'Copied!' : linksLoading ? 'Loading…' : 'Copy Link'}
             </button>
           </div>
@@ -1069,7 +950,7 @@ function ShareModal({ onClose, memorialId }) {
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Page (my structure — full-width nav, 960px content, inviteToken) ─────────
 
 export default function MemorialOutputPage() {
   const { id } = useParams();
@@ -1100,43 +981,34 @@ export default function MemorialOutputPage() {
       })
       .catch(() => { setMemorial(null); });
 
-    // Load the invite token so "Upload Memories" can link the organizer
-    // straight into the contributor flow as themselves.
     createInviteLink(id)
       .then((res) => {
         const token = res?.invite_link?.token ?? res?.token ?? null;
         setInviteToken(token);
       })
-      .catch(() => { /* non-critical — button falls back to manage page */ });
+      .catch(() => { /* non-critical */ });
   }, [id]);
 
   const loadContributors = useCallback(async () => {
     if (!memorialId) return;
-    setContributorsLoading(true);
-    setContributorsError(null);
+    setContributorsLoading(true); setContributorsError(null);
     try {
       const token = await getAuthToken();
       const contributor = await getMemorialContributors(memorialId, token);
       const memorialApi = await getMemorial(memorialId);
       const m = memorialApi?.memorial ?? memorialApi;
       const normalized = normalizeMemorialForView(m);
-      if (normalized) {
-        setMemorial(normalized);
-        setGenerating((current) => current || isGeneratingMemorial(normalized));
-      }
+      if (normalized) { setMemorial(normalized); setGenerating((current) => current || isGeneratingMemorial(normalized)); }
       setContributors(contributor.contributors ?? []);
     } catch (err) {
       setContributorsError(err instanceof Error ? err.message : "Failed to fetch contributors");
       setContributors([]);
-    } finally {
-      setContributorsLoading(false);
-    }
+    } finally { setContributorsLoading(false); }
   }, [memorialId]);
 
   const loadOutput = useCallback(async (options = {}) => {
     if (!id) return;
-    setOutputLoading(true);
-    setOutputError(null);
+    setOutputLoading(true); setOutputError(null);
     try {
       const token = await getAuthToken();
       const data = await getMemorialOutput(id, token, options);
@@ -1146,31 +1018,24 @@ export default function MemorialOutputPage() {
       setOutputError(err instanceof Error ? err.message : "Failed to fetch memorial output");
       setOutput(null);
       return null;
-    } finally {
-      setOutputLoading(false);
-    }
+    } finally { setOutputLoading(false); }
   }, [id]);
 
   const handleGenerate = useCallback(async () => {
     if (!memorialId || generating) return;
-    setGenerating(true);
-    setGenerationError(null);
-    setGenerationJob(null);
+    setGenerating(true); setGenerationError(null); setGenerationJob(null);
     const token = await getAuthToken();
     let keepGenerating = false;
     try {
       const generation = await generateMemorialOutput(memorialId, token);
       const initialJob = generation?.job ?? null;
       setGenerationJob(initialJob);
-
       if (initialJob?.id) {
         let latestJob = initialJob;
         for (let attempt = 0; attempt < GENERATION_MAX_POLL_ATTEMPTS; attempt += 1) {
           const status = String(latestJob?.status || "").toLowerCase();
           if (GENERATION_SUCCESS_STATUSES.has(status)) break;
-          if (GENERATION_FAILURE_STATUSES.has(status)) {
-            throw new Error(latestJob?.error_message || "Generation failed. Please try again.");
-          }
+          if (GENERATION_FAILURE_STATUSES.has(status)) throw new Error(latestJob?.error_message || "Generation failed. Please try again.");
           await sleep(GENERATION_POLL_INTERVAL_MS);
           const jobStatus = await getGenerationJobStatus(initialJob.id, token);
           latestJob = jobStatus?.job ?? latestJob;
@@ -1183,40 +1048,28 @@ export default function MemorialOutputPage() {
           return;
         }
       }
-
       await loadOutput({ fallbackToMock: process.env.NODE_ENV !== 'production' });
     } catch (err) {
       setGenerationError(err instanceof Error ? err.message : "Generation failed. Please try again.");
-    } finally {
-      if (!keepGenerating) setGenerating(false);
-    }
+    } finally { if (!keepGenerating) setGenerating(false); }
   }, [generating, loadOutput, memorialId]);
 
   useEffect(() => {
     if (!id || output || !generating) return undefined;
     let cancelled = false;
-
     async function pollPendingOutput() {
       const token = await getAuthToken();
       const data = await getMemorialOutput(id, token);
       if (cancelled) return;
       if (data) {
-        setOutput(data);
-        setOutputError(null);
-        setGenerating(false);
+        setOutput(data); setOutputError(null); setGenerating(false);
         setGenerationJob((job) => job ? { ...job, status: 'complete', progress: 100, current_step: 'Complete' } : job);
         try {
           const memorialApi = await getMemorial(id);
-          if (!cancelled) {
-            const normalized = normalizeMemorialForView(memorialApi?.memorial ?? memorialApi);
-            if (normalized) setMemorial(normalized);
-          }
-        } catch {
-          // Output is loaded; header refresh can wait for next page visit.
-        }
+          if (!cancelled) { const normalized = normalizeMemorialForView(memorialApi?.memorial ?? memorialApi); if (normalized) setMemorial(normalized); }
+        } catch { /* output loaded; header refresh waits */ }
       }
     }
-
     pollPendingOutput();
     const intervalId = window.setInterval(pollPendingOutput, OUTPUT_PENDING_POLL_INTERVAL_MS);
     return () => { cancelled = true; window.clearInterval(intervalId); };
@@ -1242,16 +1095,13 @@ export default function MemorialOutputPage() {
   return (
     <main className="min-h-screen bg-r-bg text-r-text flex flex-col">
 
-      {/* Nav spans full viewport width — matches design reference Header and ContributorNav */}
+      {/* Full-width nav */}
       <nav className="w-full flex items-center justify-between px-6 sm:px-[50px] py-6">
         <div className="flex items-center gap-2">
           <img src="/Logo.svg" alt="" width={36} height={36} aria-hidden="true" />
           <span className="text-r-text text-2xl leading-8 [font-family:var(--font-family-display)]">Remember</span>
         </div>
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-2 text-r-text transition-opacity hover:opacity-70"
-        >
+        <Link href="/dashboard" className="flex items-center gap-2 text-r-text transition-opacity hover:opacity-70">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
             <path d="M7.82484 13L12.7248 17.9C12.9248 18.1 13.0208 18.3334 13.0128 18.6C13.0048 18.8667 12.9005 19.1 12.6998 19.3C12.4998 19.4834 12.2665 19.5794 11.9998 19.588C11.7332 19.5967 11.4998 19.5007 11.2998 19.3L4.69984 12.7C4.59984 12.6 4.52884 12.4917 4.48684 12.375C4.44484 12.2584 4.42451 12.1334 4.42584 12C4.42718 11.8667 4.44818 11.7417 4.48884 11.625C4.52951 11.5084 4.60018 11.4 4.70084 11.3L11.3008 4.70005C11.4842 4.51672 11.7135 4.42505 11.9888 4.42505C12.2642 4.42505 12.5015 4.51672 12.7008 4.70005C12.9008 4.90005 13.0008 5.13772 13.0008 5.41305C13.0008 5.68838 12.9008 5.92572 12.7008 6.12505L7.82484 11H18.9998C19.2832 11 19.5208 11.096 19.7128 11.288C19.9048 11.48 20.0005 11.7174 19.9998 12C19.9992 12.2827 19.9032 12.5204 19.7118 12.713C19.5205 12.9057 19.2832 13.0014 18.9998 13H7.82484Z" fill="currentColor"/>
           </svg>
@@ -1259,13 +1109,11 @@ export default function MemorialOutputPage() {
         </Link>
       </nav>
 
-      {/* Page content constrained to 960px */}
+      {/* Content constrained to 960px */}
       <div className="flex-1 px-6 sm:px-[50px] pb-16">
         <div className="mx-auto flex w-full max-w-[960px] flex-col gap-8">
-
           <MemorialHeader memorial={memorial} inviteToken={inviteToken} onShare={() => setShowShare(true)} />
           <TabBar active={activeTab} onChange={setActiveTab} />
-
           <div>
             {activeTab === 'Archive' && <ArchiveTab contributors={contributors} output={output} />}
             {activeTab === 'Contributions' && (
@@ -1293,7 +1141,6 @@ export default function MemorialOutputPage() {
               />
             )}
           </div>
-
         </div>
       </div>
 
