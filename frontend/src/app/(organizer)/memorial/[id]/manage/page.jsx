@@ -16,7 +16,7 @@ import StorySlideshow from "@/components/output/StorySlideshow";
 import VoicesTab from "@/components/output/VoicesTab";
 import ProcessingTextSequence from "@/components/dashboard/ProcessingTextSequence";
 import { getAuthToken } from "@/lib/api.js";
-import MemorialCoverImage from "@/components/memorial/MemorialCoverImage.jsx";
+import Header2 from "@/components/ui-components/navs/header2";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 // ─── Generation constants ─────────────────────────────────────────────────────
@@ -46,53 +46,69 @@ function isGeneratingMemorial(memorial) {
   return String(memorial?.status || "").toLowerCase() === "generating";
 }
 
+function getManageStatus(status) {
+  const key = String(status || "").toLowerCase();
+  if (key === "complete") return { label: "Memorial published", className: "bg-[#DCE3C6] text-[#5C6549]" };
+  if (key === "collecting" || key === "generating") return { label: "Collecting memories", className: "bg-[#CFE1EE] text-[#526776]" };
+  return { label: "Not started", className: "bg-[#EFCFC2] text-[#755A55]" };
+}
+
+function isDisplayImage(url) {
+  return typeof url === "string" && /^https?:\/\//i.test(url);
+}
+
 // ─── Memorial Header ──────────────────────────────────────────────────────────
 
 function MemorialHeader({ memorial, onShare }) {
+  const status = getManageStatus(memorial?.status);
+  const birthYear = memorial?.date_of_birth ? new Date(memorial.date_of_birth).getFullYear() : "";
+  const passingYear = memorial?.date_of_passing ? new Date(memorial.date_of_passing).getFullYear() : "";
+
   return (
-    <div className="flex items-start gap-8">
-      <div className="relative h-36 w-36 shrink-0 overflow-hidden">
-        <MemorialCoverImage
-          src={memorial?.cover_photo_url}
-          name={memorial?.subject_name}
-          fill
-          className="h-full w-full"
-        />
+    <div className="grid gap-8 lg:grid-cols-[420px_1fr_260px] lg:items-center">
+      <div className="flex justify-center lg:justify-start">
+        <div className="size-[220px] overflow-hidden rounded-full bg-[#F3EBE3]">
+          {isDisplayImage(memorial?.cover_photo_url) ? (
+            <img
+              src={memorial.cover_photo_url}
+              alt={memorial?.subject_name || "Memorial portrait"}
+              className="h-full w-full object-cover"
+            />
+          ) : null}
+        </div>
       </div>
-      <div className="flex-1 min-w-0 pt-2">
-        <h1 className="text-[32px] font-medium text-neutral-950 leading-tight">
+      <div className="min-w-0 text-center lg:text-left">
+        <h1 className="font-family-display text-[36px] font-medium italic leading-[36px] tracking-[0px] text-r-text">
           {memorial?.subject_name || ''}
         </h1>
-        <p className="mt-1 text-sm text-slate-400">
-          {memorial?.date_of_birth && new Date(memorial.date_of_birth).getFullYear()}
-          {memorial?.date_of_birth && memorial?.date_of_passing && ' - '}
-          {memorial?.date_of_passing && new Date(memorial.date_of_passing).getFullYear()}
+        <p className="mt-4 font-family-body text-[16px] leading-[16px] tracking-[0px] text-[#5F5A52]">
+          {birthYear}
+          {birthYear && passingYear ? " - " : ""}
+          {passingYear}
         </p>
-        <p className="mt-2 text-sm text-slate-500 leading-relaxed max-w-md">
+        <p className="mt-6 max-w-[520px] font-family-body text-[20px] leading-[20px] tracking-[0px] text-[#5F5A52]">
           {memorial?.bio || ''}
         </p>
-        {memorial?.status && (
-          <span className="mt-3 inline-block rounded-full px-4 py-1.5 text-caption bg-r-shape"
-            style={{ color: '#FBF9F6' }}>
-            {memorial.status === 'collecting' ? 'Collecting'
-              : memorial.status === 'generating' ? 'Generating'
-              : memorial.status === 'complete' ? 'Complete'
-              : memorial.status}
-          </span>
-        )}
       </div>
-      <div className="flex shrink-0 flex-col gap-2 pt-2">
-        <Link href={memorial?.id ? `/memorial/${memorial.id}/output` : '#'}
-          className="rounded-full bg-neutral-950 px-6 py-2.5 text-sm font-semibold text-white text-center hover:opacity-80 transition-opacity">
-          View page
-        </Link>
-        <button onClick={onShare}
-          className="rounded-full bg-neutral-950 px-6 py-2.5 text-sm font-semibold text-white hover:opacity-80 transition-opacity">
-          Share
-        </button>
-        <button className="rounded-full bg-neutral-950 px-6 py-2.5 text-sm font-semibold text-white hover:opacity-80 transition-opacity">
-          Settings
-        </button>
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4">
+          <Link href={memorial?.id ? `/memorial/${memorial.id}/manage/contributions` : '#'}
+            className="rounded-full bg-r-btn px-6 py-5 text-center font-family-body text-[18px] leading-[20px] text-r-btn-text transition hover:brightness-95">
+            Upload Memories
+          </Link>
+          <Link href={memorial?.id ? `/memorial/${memorial.id}/output` : '#'}
+            className="rounded-full bg-r-btn px-6 py-5 text-center font-family-body text-[18px] leading-[20px] text-r-btn-text transition hover:brightness-95">
+            View Memorial
+          </Link>
+        </div>
+        <div className="flex items-center justify-center gap-10 text-r-text lg:justify-end">
+          <button type="button" onClick={onShare} className="transition hover:opacity-70" aria-label="Share memorial">
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77l-7.13-4.16a3.27 3.27 0 000-1.38l7.12-4.15A2.99 2.99 0 0018 7.91a3 3 0 10-2.83-4 3 3 0 00.12 1.49L8.17 9.56a3 3 0 100 4.88l7.12 4.16c-.08.23-.12.47-.12.72a3 3 0 103-3.24z"/></svg>
+          </button>
+          <button type="button" className="transition hover:opacity-70" aria-label="Memorial settings">
+            <svg width="46" height="46" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.6-.22l-2.39.96a7.03 7.03 0 00-1.63-.94l-.36-2.54a.49.49 0 00-.49-.42h-3.84a.49.49 0 00-.49.42l-.36 2.54c-.58.22-1.13.53-1.63.94l-2.39-.96a.5.5 0 00-.6.22L2.54 8.84a.5.5 0 00.12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32c.14.24.43.34.69.22l2.39-.96c.5.4 1.05.72 1.63.94l.36 2.54c.05.24.25.42.49.42h3.84c.24 0 .44-.18.49-.42l.36-2.54c.58-.22 1.13-.53 1.63-.94l2.39.96c.26.12.55.02.69-.22l1.92-3.32a.5.5 0 00-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1112 8a3.5 3.5 0 010 7.5z"/></svg>
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -104,13 +120,13 @@ const MAIN_TABS = ['Archive', 'Contributions', 'Outputs'];
 
 function TabBar({ active, onChange }) {
   return (
-    <div className="flex border-b border-neutral-200">
+    <div className="grid grid-cols-3 gap-6">
       {MAIN_TABS.map((tab) => (
         <button key={tab} onClick={() => onChange(tab)}
-          className={`px-8 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
+          className={`border-b pb-3 text-center font-family-display text-[24px] font-medium leading-[24px] tracking-[0px] transition-colors ${
             active === tab
-              ? 'border-neutral-950 text-neutral-950 font-semibold'
-              : 'border-transparent text-slate-500 hover:text-neutral-950'
+              ? 'border-r-text text-r-text'
+              : 'border-r-border text-[#6E665D] hover:text-r-text'
           }`}>
           {tab}
         </button>
@@ -206,20 +222,26 @@ function ArchiveTab({ contributors, output }) {
     : allItems;
 
   return (
-    <div className="flex flex-col gap-6 pt-6">
-      <div className="flex items-center gap-3">
-        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24" className="text-neutral-950 shrink-0">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
-        </svg>
+    <div className="flex flex-col gap-10 pt-8">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[56px_1fr_236px_236px]">
+        <div className="flex items-center justify-center text-r-text">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.84 5.66H20l-4.99 3.62 1.91 5.88L12 13.54 7.08 17.16l1.91-5.88L4 7.66h6.16L12 2z"/></svg>
+        </div>
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Show me happy memories"
-          className="flex-1 rounded-xl border border-neutral-200 px-4 py-2.5 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-neutral-200"
+          className="h-[72px] rounded-[18px] border border-r-border bg-[#F6EFE7] px-6 font-family-body text-[20px] leading-[20px] text-[#5F5A52] placeholder:text-[#5F5A52] focus:outline-none focus:ring-2 focus:ring-r-border/30"
         />
-        <button className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-80 transition-opacity">Filter</button>
-        <button className="rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-80 transition-opacity">Sort</button>
+        <button type="button" className="flex h-[72px] items-center justify-between rounded-[18px] border border-r-border bg-[#F6EFE7] px-6 font-family-display text-[24px] leading-[24px] text-r-text">
+          <span>Filter</span>
+          <span className="size-0 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-[#4A4742]" />
+        </button>
+        <button type="button" className="flex h-[72px] items-center justify-between rounded-[18px] border border-r-border bg-[#F6EFE7] px-6 font-family-display text-[24px] leading-[24px] text-r-text">
+          <span>Sort</span>
+          <span className="size-0 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-[#4A4742]" />
+        </button>
       </div>
 
       {filtered.length === 0 ? (
@@ -236,10 +258,25 @@ function ArchiveTab({ contributors, output }) {
       ) : (
         <div className="grid grid-cols-3 gap-4">
           {filtered.map((item, i) => (
-            <div key={item.id || i} className="rounded-xl overflow-hidden border border-neutral-200 bg-white">
+            <div key={item.id || i} className="group rounded-xl overflow-hidden border border-neutral-200 bg-white">
               {item.type === 'photo' && (
                 item.url
-                  ? <img src={item.url} alt={item.caption || ''} className="aspect-[4/3] w-full object-cover" />
+                  ? <div className="relative aspect-[4/3] w-full overflow-hidden">
+                      <img src={item.url} alt={item.caption || ''} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/0 px-8 text-center opacity-0 transition-all duration-300 group-hover:bg-black/38 group-hover:opacity-100">
+                        <p className="font-family-display text-[30px] leading-[34px] text-white">
+                          {item.caption || "Photo title"}
+                        </p>
+                        <p className="mt-4 font-family-body text-[16px] leading-[16px] text-white">
+                          {item.contributor_name ? `Submitted by ${item.contributor_name}` : "Submitted by contributor"}
+                        </p>
+                        <p className="mt-4 font-family-body text-[16px] leading-[16px] text-white">
+                          {item.taken_at
+                            ? new Date(item.taken_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                            : "Date here"}
+                        </p>
+                      </div>
+                    </div>
                   : <div className="aspect-[4/3] w-full bg-neutral-200 flex items-center justify-center">
                       <span className="text-xs text-neutral-400">{item.contributor_name || 'Photo'}</span>
                     </div>
@@ -270,6 +307,9 @@ function ArchiveTab({ contributors, output }) {
 
 function ContributionsTab({ contributorslist, loading, error, onRetry }) {
   const [value, setValue] = useState("contributors");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [contributorFilter, setContributorFilter] = useState("all");
+  const [contributorSort, setContributorSort] = useState("recent");
 
   const submissions = contributorslist.filter((c) => {
     const status = String(c.status || "").toLowerCase();
@@ -280,24 +320,91 @@ function ContributionsTab({ contributorslist, loading, error, onRetry }) {
   const current = submissions[currentIndex];
   const handlePrev = () => setCurrentIndex((prev) => prev === 0 ? submissions.length - 1 : prev - 1);
   const handleNext = () => setCurrentIndex((prev) => prev === submissions.length - 1 ? 0 : prev + 1);
+  const contributorCards = [...contributorslist]
+    .filter((contributor) => {
+      if (contributorFilter === "anonymous") {
+        return String(contributor.name || "").trim().toLowerCase() === "anonymous";
+      }
+      if (contributorFilter === "named") {
+        return String(contributor.name || "").trim().toLowerCase() !== "anonymous";
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (contributorSort === "name") {
+        return String(a.name || "").localeCompare(String(b.name || ""));
+      }
+      return new Date(b.submitted_at || 0) - new Date(a.submitted_at || 0);
+    });
 
   return (
     <div className="mx-auto max-w-7xl">
-      <div className="mb-4 flex items-center justify-between">
-        <select onChange={(e) => setValue(e.target.value)} value={value}
-          className="border border-gray-300 rounded-md px-4 py-2 text-sm outline-none">
-          <option value="contributors">Contributors</option>
-          <option value="awaiting">Awaiting Approval</option>
-        </select>
+      <div className="mb-6 flex flex-col gap-6">
+        <div className="flex items-center justify-between gap-6">
+          <div className="relative w-[450px]">
+            <select
+              onChange={(e) => setValue(e.target.value)}
+              value={value}
+              className="h-[63px] w-full appearance-none rounded-[22px] border border-r-border bg-[#F6EFE7] px-7 pr-20 font-family-display text-[24px] leading-[24px] text-r-text outline-none"
+            >
+              <option value="contributors">Contributors</option>
+              <option value="awaiting">Awaiting approval</option>
+            </select>
+            <span className="pointer-events-none absolute right-7 top-1/2 size-0 -translate-y-1/2 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-[#4A4742]" />
+          </div>
+          {value === "contributors" && (
+            <div className="flex items-center gap-5">
+              <div className="relative w-[213px]">
+                <select
+                  value={contributorFilter}
+                  onChange={(e) => setContributorFilter(e.target.value)}
+                  className="h-[63px] w-full appearance-none rounded-[18px] border border-r-border bg-[#F6EFE7] px-5 pr-16 font-family-display text-[24px] leading-[24px] text-r-text outline-none"
+                >
+                  <option value="all">Filter</option>
+                  <option value="anonymous">Anonymous</option>
+                  <option value="named">Named</option>
+                </select>
+                <span className="pointer-events-none absolute right-5 top-1/2 size-0 -translate-y-1/2 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-[#4A4742]" />
+              </div>
+              <div className="relative w-[213px]">
+                <select
+                  value={contributorSort}
+                  onChange={(e) => setContributorSort(e.target.value)}
+                  className="h-[63px] w-full appearance-none rounded-[18px] border border-r-border bg-[#F6EFE7] px-5 pr-16 font-family-display text-[24px] leading-[24px] text-r-text outline-none"
+                >
+                  <option value="recent">Sort</option>
+                  <option value="recent">Most recent</option>
+                  <option value="name">Name</option>
+                </select>
+                <span className="pointer-events-none absolute right-5 top-1/2 size-0 -translate-y-1/2 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-[#4A4742]" />
+              </div>
+            </div>
+          )}
+        </div>
         {(value === "awaiting" && submissions.length > 0) && (
-          <div className="flex items-center gap-4 text-sm text-gray-600">
-            <button onClick={handlePrev} className="rounded p-1 transition hover:bg-gray-200">
-              <ChevronLeft size={18} />
-            </button>
-            <span>{currentIndex + 1}/{submissions.length}</span>
-            <button onClick={handleNext} className="rounded p-1 transition hover:bg-gray-200">
-              <ChevronRight size={18} />
-            </button>
+          <div className="flex items-center justify-between gap-6">
+            <div className="flex h-[63px] w-full max-w-[434px] items-center rounded-full border border-r-border bg-[#F6EFE7] px-6">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-[#4A4742]">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" strokeLinecap="round" />
+              </svg>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search for a contributor"
+                className="ml-6 w-full bg-transparent font-family-body text-[20px] leading-[20px] text-[#5F5A52] placeholder:text-[#5F5A52] outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-12 px-6 font-family-display text-[24px] leading-[24px] text-r-text">
+              <button onClick={handlePrev} className="transition hover:opacity-70">
+                <ChevronLeft size={54} strokeWidth={1.8} />
+              </button>
+              <span>1/5</span>
+              <button onClick={handleNext} className="transition hover:opacity-70">
+                <ChevronRight size={54} strokeWidth={1.8} />
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -317,32 +424,33 @@ function ContributionsTab({ contributorslist, loading, error, onRetry }) {
         />
       )}
       {value === "contributors" && !loading && !error && contributorslist.length > 0 && (
-        <div className="grid grid-cols-3 gap-4">
-          {contributorslist.map((contributor) => (
-            <div key={contributor.id} className="rounded-2xl p-5 flex flex-col gap-3 bg-r-modal border border-r-border">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full shrink-0 bg-r-card" />
-                <div className="min-w-0">
-                  <p className="text-body-2 font-semibold text-r-text">{contributor.name}</p>
-                  <p className="text-caption text-r-muted mt-0.5">
-                    {String(contributor.status || '').toLowerCase() === 'submitted' ||
-                    contributor.submitted_at
-                      ? 'Submitted'
-                      : 'In progress'}
-                  </p>
-                  <p className="text-caption text-r-muted">
-                    Last submitted {contributor.submitted_at
-                      ? new Date(contributor.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-                      : 'No date provided'}
-                  </p>
-                </div>
-              </div>
-              <span className="self-start rounded-full px-4 py-1.5 text-caption bg-r-shape"
-                style={{ color: '#FBF9F6' }}>
-                {contributor.relationship_type || 'No Relationship'}
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {contributorCards.map((contributor) => (
+            <article
+              key={contributor.id}
+              className="min-h-[287px] rounded-[18px] border border-r-border bg-[#F6EFE7] px-[50px] py-12"
+            >
+              <h3 className="font-family-display text-[28px] leading-[32px] text-r-text">
+                {contributor.name || "Anonymous"}
+              </h3>
+              <p className="mt-6 font-family-body text-[16px] leading-[20px] text-[#5F5A52]">
+                {contributor.contribution_count || 0} contributions
+              </p>
+              <p className="mt-4 font-family-body text-[16px] leading-[20px] text-[#5F5A52]">
+                Last submitted {contributor.submitted_at
+                  ? new Date(contributor.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                  : 'May 20, 2026'}
+              </p>
+              <span className="mt-6 inline-flex min-h-[49px] min-w-[214px] items-center justify-center rounded-[14px] bg-[#B9C493] px-6 font-family-body text-[16px] leading-[20px] text-[#5C6549]">
+                {contributor.relationship_type || 'Relationship'}
               </span>
-            </div>
+            </article>
           ))}
+          {contributorCards.length === 0 && (
+            <div className="col-span-full py-12 text-center font-family-body text-[18px] text-[#5F5A52]">
+              No contributors match the current filter.
+            </div>
+          )}
         </div>
       )}
       {value === "awaiting" && (
@@ -970,16 +1078,9 @@ export default function MemorialOutputPage() {
   useEffect(() => { queueMicrotask(loadOutput); }, [loadOutput]);
 
   return (
-    <main className="min-h-screen bg-r-bg px-6 py-10 text-neutral-950 sm:px-[50px]">
-      <div className="mx-auto flex w-full max-w-[960px] flex-col gap-8">
-
-        <nav className="flex h-10 items-center justify-between">
-          <span className="text-2xl leading-8 text-neutral-950">Remember</span>
-          <Link href="/dashboard" className="flex items-center gap-1.5 text-base text-neutral-950 hover:text-slate-600 transition-colors">
-            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-            Back
-          </Link>
-        </nav>
+    <main className="min-h-screen bg-r-bg px-6 py-8 text-neutral-950 sm:px-[50px] sm:py-[50px]">
+      <div className="mx-auto flex w-full flex-col gap-8">
+        <Header2 backHref="/dashboard" />
 
         <MemorialHeader memorial={memorial} onShare={() => setShowShare(true)} />
         <TabBar active={activeTab} onChange={setActiveTab} />
