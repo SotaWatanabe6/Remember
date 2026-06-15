@@ -114,8 +114,6 @@ function SlideshowSection({ output, memorial }) {
 // ─── Constellations ───────────────────────────────────────────────────────────
 
 function ConstellationsSection({ output, memorial, contributor }) {
-  const [page, setPage] = useState(1); // 1 = Themes, 2 = Relationships
-
   if (!output?.constellation) {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
@@ -126,42 +124,13 @@ function ConstellationsSection({ output, memorial, contributor }) {
       </div>
     );
   }
-
   return (
-    <div className="flex flex-col gap-4 py-4">
-      {/* Themes | Relationships sub-tab */}
-      <div className="flex items-center justify-between">
-        <div className="flex gap-8 border-b border-r-border">
-          {[{ label: 'Themes', page: 1 }, { label: 'Relationships', page: 2 }].map((item) => (
-            <button
-              key={item.label}
-              onClick={() => setPage(item.page)}
-              className={`pb-3 text-sm transition-colors relative ${
-                page === item.page ? 'text-r-text font-semibold' : 'text-r-muted hover:text-r-text'
-              }`}
-            >
-              {item.label}
-              {page === item.page && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-r-text" />
-              )}
-            </button>
-          ))}
-        </div>
-        {/* Sort dropdown per Figma */}
-        <FilterSelect
-          value="sort"
-          onChange={() => {}}
-          className="w-[180px]"
-        >
-          <option value="sort" disabled>Sort</option>
-        </FilterSelect>
-      </div>
+    <div className="py-4">
       <ConstellationGraph
         ai_output={output}
         memorial={memorial}
         contributor={contributor}
         relationships={output?.relationships ?? []}
-        page={page}
         width={1250}
         height={800}
       />
