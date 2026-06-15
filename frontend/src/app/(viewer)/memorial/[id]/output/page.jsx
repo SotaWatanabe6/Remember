@@ -2,7 +2,7 @@
 
 // frontend/src/app/(viewer)/memorial/[id]/output/page.jsx
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getMemorialOutput, getMemorialById, createInviteLink, createShareLink, getAuthToken } from '@/lib/api';
@@ -11,6 +11,7 @@ import { getMemorialContributors } from '@/services/contributorService';
 import ConstellationGraph from "@/components/output/constellation";
 import StorySlideshow from '@/components/output/StorySlideshow';
 import MemorialCoverImage from '@/components/memorial/MemorialCoverImage.jsx';
+import VoicesTab from '@/components/output/VoicesTab';
 
 // ─── Filter Select — matches Figma dropdown style (Boska, rounded-[12.7px], triangle arrow) ──
 
@@ -61,7 +62,39 @@ function BottomNav({ active, onChange }) {
 
 // ─── Slideshow ────────────────────────────────────────────────────────────────
 
-function SlideshowSection({ output }) {
+function formatMemorialYear(value) {
+  if (!value) return '';
+
+  const date = new Date(value);
+  if (!Number.isNaN(date.getTime())) return String(date.getFullYear());
+
+  const yearMatch = String(value).match(/\b\d{4}\b/);
+  return yearMatch?.[0] || '';
+}
+
+function getMemorialYears(memorial) {
+  const birthYear = formatMemorialYear(memorial?.date_of_birth || memorial?.birth_date);
+  const passingYear = formatMemorialYear(memorial?.date_of_passing || memorial?.death_date);
+
+  if (birthYear && passingYear) return `${birthYear} - ${passingYear}`;
+  return birthYear || passingYear;
+}
+
+function StoryMemorialSummary({ memorial }) {
+  const name = memorial?.subject_name || memorial?.deceased_name || '';
+  const years = getMemorialYears(memorial);
+
+  if (!name && !years) return null;
+
+  return (
+    <header className="w-full text-center">
+      {name ? <h1 className="font-display text-[40px] font-bold leading-none text-r-text sm:text-[48px]">{name}</h1> : null}
+      {years ? <p className="mt-3 text-body-1 text-r-muted">{years}</p> : null}
+    </header>
+  );
+}
+
+function SlideshowSection({ output, memorial }) {
   if (!output?.story || output.story.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
@@ -71,8 +104,9 @@ function SlideshowSection({ output }) {
     );
   }
   return (
-    <div className="mx-auto max-w-[960px]">
-      <StorySlideshow output={output} story={output?.story} />
+    <div className="mx-auto flex w-full max-w-[1281px] flex-col gap-8">
+      <StoryMemorialSummary memorial={memorial} />
+      <StorySlideshow output={output} story={output?.story} framed={false} />
     </div>
   );
 }
@@ -870,11 +904,12 @@ export default function MemorialOutputPage() {
           <OutputError onRetry={load} />
         ) : (
           <>
-            {activeTab === 'Slideshow' && <SlideshowSection output={output} />}
+            {activeTab === 'Slideshow' && <SlideshowSection output={output} memorial={memorial} />}
             {activeTab === 'Constellations' && (
               <ConstellationsSection output={output} memorial={memorial} contributor={contributors} />
             )}
-            {activeTab === 'Voices' && <VoicesSection voices={output?.voices} />}
+            {/* {activeTab === 'Voices' && <VoicesSection voices={output?.voices} />} */}
+            {activeTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} variant="viewer" />}
             {activeTab === 'Photo Archive' && (
               <PhotoArchiveSection output={output} contributors={contributors} />
             )}
@@ -887,3 +922,10 @@ export default function MemorialOutputPage() {
     </div>
   );
 }
+
+// {/* <MemorialHeader memorial={memorial} onShare={() => setShowShare(true)} /> */}
+//             {activeTab === 'Slideshow' && <SlideshowSection output={output} memorial={memorial} />}
+//             {activeTab === 'Constellations' && <ConstellationsSection output={output} memorial={memorial} contributor={contributors} />}
+//             {activeTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} variant="viewer" />}
+//             {activeTab === 'Contributions' && <ContributionsSection contributorslist={contributors} />}
+//             {activeTab === 'Photo Archive' && <PhotoArchiveSection output={output} contributors={contributors} />}

@@ -2,9 +2,9 @@
 
 // frontend/src/components/contributor/RelationshipSelector.jsx
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   getContributorRelationshipDraft,
   saveContributorRelationship,

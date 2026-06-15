@@ -566,7 +566,7 @@ function Lightbox({ photo, onClose, onPrev, onNext }) {
   );
 }
 
-// ─── All Photos Section (my version — album drill-in, sort, pagination) ───────
+// ─── All Photos Section ───────────────────────────────────────────────────────
 
 function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
   const PHOTOS_PER_PAGE = 6;
@@ -640,7 +640,8 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Back to albums + photo pagination */}
+
+      {/* Top bar — back to albums (when inside an album) + photo pagination */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           {openAlbum && (
@@ -652,14 +653,20 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
             </button>
           )}
           {openAlbum && (
-            <span className="text-[24px] font-medium italic text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
+            <span
+              className="text-[24px] font-medium italic text-r-text"
+              style={{ fontFamily: 'var(--font-family-display)' }}
+            >
               {openAlbum.album_name}
             </span>
           )}
         </div>
         <div className="flex items-center gap-3">
           <PrevArrow onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} />
-          <span className="text-2xl font-medium text-r-text min-w-[64px] text-center" style={{ fontFamily: 'var(--font-family-display)' }}>
+          <span
+            className="text-2xl font-medium text-r-text min-w-[64px] text-center"
+            style={{ fontFamily: 'var(--font-family-display)' }}
+          >
             {page} / {totalPages}
           </span>
           <NextArrow onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} />
@@ -807,27 +814,45 @@ function OutputsTab({ memorial, contributors, canGenerate, disabledMessage, gene
 
   const currentSection = OUTPUT_SECTIONS[sectionIndex];
   const total = OUTPUT_SECTIONS.length;
+
+  // Constellation page: 1 = Themes, 2 = Relationships
   const constellationPage = currentSection.key === 'constellation-relationships' ? 2 : 1;
 
   return (
     <div className="flex flex-col pt-4 gap-6">
+
       {/* Top row: section title + Generate + arrows */}
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-[36px] font-medium italic text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
+        <h2
+          className="text-[36px] font-medium italic text-r-text"
+          style={{ fontFamily: 'var(--font-family-display)' }}
+        >
           {currentSection.label}
         </h2>
         <div className="flex items-center gap-4">
-          <button onClick={onGenerate} disabled={!canGenerate || generating}
+          <button
+            onClick={onGenerate}
+            disabled={!canGenerate || generating}
             className="rounded-full px-6 py-[14px] text-base text-r-btn-text transition-opacity hover:opacity-80 disabled:opacity-45 disabled:cursor-not-allowed border-none"
-            style={{ backgroundColor: 'var(--color-r-btn)' }}>
+            style={{ backgroundColor: 'var(--color-r-btn)' }}
+          >
             {generating ? 'Generating…' : 'Generate'}
           </button>
           <div className="flex items-center gap-3">
-            <PrevArrow onClick={() => setSectionIndex((i) => Math.max(0, i - 1))} disabled={sectionIndex === 0} />
-            <span className="text-2xl font-medium text-r-text min-w-[64px] text-center" style={{ fontFamily: 'var(--font-family-display)' }}>
+            <PrevArrow
+              onClick={() => setSectionIndex((i) => Math.max(0, i - 1))}
+              disabled={sectionIndex === 0}
+            />
+            <span
+              className="text-2xl font-medium text-r-text min-w-[64px] text-center"
+              style={{ fontFamily: 'var(--font-family-display)' }}
+            >
               {sectionIndex + 1} / {total}
             </span>
-            <NextArrow onClick={() => setSectionIndex((i) => Math.min(total - 1, i + 1))} disabled={sectionIndex === total - 1} />
+            <NextArrow
+              onClick={() => setSectionIndex((i) => Math.min(total - 1, i + 1))}
+              disabled={sectionIndex === total - 1}
+            />
           </div>
         </div>
       </div>
@@ -846,15 +871,24 @@ function OutputsTab({ memorial, contributors, canGenerate, disabledMessage, gene
           height={800}
         />
       )}
+
       {currentSection.key === 'voices' && (
         <VoicesTab output={output} voices={output?.voices} />
       )}
+
       {currentSection.key === 'photos' && (
-        <AllPhotosSection albums={output?.photos} onGenerate={onGenerate} generating={generating} canGenerate={canGenerate} />
+        <AllPhotosSection
+          albums={output?.photos}
+          onGenerate={onGenerate}
+          generating={generating}
+          canGenerate={canGenerate}
+        />
       )}
+
     </div>
   );
 }
+
 
 // ─── Share Modal ──────────────────────────────────────────────────────────────
 
