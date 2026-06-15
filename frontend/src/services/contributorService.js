@@ -548,6 +548,71 @@ export async function getMemorialContributors(memorialId, token) {
   }
 }
 
+async function organizerContributorRequest(path, token, options = {}) {
+  const accessToken = token?.access_token || token || (await getAuthToken()) || "";
+  if (!accessToken) {
+    throw new Error("You need to be signed in to manage contributors.");
+  }
+
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      ...(options.headers || {}),
+    },
+  });
+
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    data = null;
+  }
+
+  if (!res.ok) {
+    throw new Error(data?.error || data?.message || "Contributor request failed.");
+  }
+
+  return data;
+}
+
+export async function getMemorialContributorSubmission(memorialId, contributorId, token) {
+  if (!memorialId) throw new Error("memorialId is required");
+  if (!contributorId) throw new Error("contributorId is required");
+
+  return organizerContributorRequest(
+    `/memorials/${encodeURIComponent(memorialId)}/contributors/${encodeURIComponent(contributorId)}/submission`,
+    token,
+  );
+}
+
+export async function updateMemorialContributorStatus(memorialId, contributorId, status, token) {
+  if (!memorialId) throw new Error("memorialId is required");
+  if (!contributorId) throw new Error("contributorId is required");
+  if (!status) throw new Error("status is required");
+
+  return organizerContributorRequest(
+    `/memorials/${encodeURIComponent(memorialId)}/contributors/${encodeURIComponent(contributorId)}/status`,
+    token,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    },
+  );
+}
+
+export async function deleteMemorialContributor(memorialId, contributorId, token) {
+  if (!memorialId) throw new Error("memorialId is required");
+  if (!contributorId) throw new Error("contributorId is required");
+
+  return organizerContributorRequest(
+    `/memorials/${encodeURIComponent(memorialId)}/contributors/${encodeURIComponent(contributorId)}`,
+    token,
+    { method: "DELETE" },
+  );
+}
+
 export async function saveQuestionnaireResponse(inviteToken, response, options = {}) {
   const draft =
     options.draft ??

@@ -6,7 +6,7 @@ import { useEffect, useState, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { deletePhoto, deleteVoice, getContributorSummary, submitContribution } from '@/lib/api.js';
+import { deletePhoto, deleteVoice, getContributorSummary, saveContributorStory, submitContribution } from '@/lib/api.js';
 
 function ContributorNav({ backHref }) {
   return (
@@ -156,7 +156,14 @@ export default function ReviewPage() {
     try {
       const session = JSON.parse(localStorage.getItem(`remember_contributor_session:${inviteToken}`) || '{}');
       const contributorToken = session?.contributorToken || session?.contributorId;
-      if (contributorToken) await submitContribution(inviteToken, contributorToken);
+      if (contributorToken) {
+        await Promise.all(
+          stories
+            .filter((story) => String(story?.title || story?.body || '').trim())
+            .map((story) => saveContributorStory(inviteToken, contributorToken, story)),
+        );
+        await submitContribution(inviteToken, contributorToken);
+      }
       router.push(`/contribute/${inviteToken}/submitted`);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Could not submit. Please try again.');

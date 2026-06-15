@@ -5,6 +5,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
+import { saveContributorStory } from '@/lib/api.js';
 
 function ContributorNav({ backHref }) {
   return (
@@ -36,17 +37,15 @@ const WAVEFORM_PATH = "M25.0007 5.2085C25.7775 5.20853 26.5265 5.49791 27.1015 6
 
 function useSpeechToText({ onFinalTranscript, onInterimTranscript }) {
   const [listening, setListening] = useState(false);
-  const [supported, setSupported] = useState(true);
+  const [supported, setSupported] = useState(() => (
+    typeof window === 'undefined' || Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)
+  ));
   const recognitionRef = useRef(null);
-
-  useEffect(() => {
-    const SpeechRecognition = window?.SpeechRecognition || window?.webkitSpeechRecognition;
-    if (!SpeechRecognition) setSupported(false);
-  }, []);
 
   function start() {
     const SpeechRecognition = window?.SpeechRecognition || window?.webkitSpeechRecognition;
     if (!SpeechRecognition) {
+      setSupported(false);
       alert('Speech recognition is not supported in this browser. Try Chrome or Edge.');
       return;
     }
@@ -94,13 +93,14 @@ export default function StoryPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const [deceasedName, setDeceasedName] = useState('');
-  useEffect(() => {
+  const [deceasedName] = useState(() => {
     try {
       const session = JSON.parse(localStorage.getItem(`remember_contributor_session:${inviteToken}`) || '{}');
-      if (session?.memorialSubjectName) setDeceasedName(session.memorialSubjectName);
-    } catch {}
-  }, [inviteToken]);
+      return session?.memorialSubjectName || '';
+    } catch {
+      return '';
+    }
+  });
 
   const { listening, supported, toggle: toggleMic } = useSpeechToText({
     onFinalTranscript: (text) => {
@@ -125,13 +125,19 @@ export default function StoryPage() {
     try {
       const storiesKey = `remember_stories:${inviteToken}`;
       const existing = JSON.parse(localStorage.getItem(storiesKey) || '[]');
+      const session = JSON.parse(localStorage.getItem(`remember_contributor_session:${inviteToken}`) || '{}');
+      const contributorToken = session?.contributorToken || session?.contributorId;
       const newStory = {
         id: `story-${Date.now()}`,
         title: title.trim(),
         body: body.trim(),
         created_at: new Date().toISOString(),
       };
-      localStorage.setItem(storiesKey, JSON.stringify([...existing, newStory]));
+      if (newStory.title || newStory.body) {
+        await saveContributorStory(inviteToken, contributorToken, newStory);
+      } else {
+        localStorage.setItem(storiesKey, JSON.stringify([...existing, newStory]));
+      }
       router.push(`/contribute/${inviteToken}/review`);
     } catch (err) {
       console.error('Story save failed:', err);

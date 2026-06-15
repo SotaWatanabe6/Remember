@@ -1,3 +1,5 @@
+import ContributionRoutePage from "@/components/organizer/ContributionRoutePage.jsx";
+
 export default function MemorialContributionsPage() {
-  return null;
+  return <ContributionRoutePage initialView="contributors" />;
 }

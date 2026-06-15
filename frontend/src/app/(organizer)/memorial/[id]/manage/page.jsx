@@ -10,13 +10,12 @@ import { getMemorialContributors } from '@/services/contributorService';
 import { getMemorial, createInviteLink, createShareLink } from '@/lib/api';
 import { copyTextToClipboard, normalizeShareUrl } from '@/lib/copyToClipboard';
 import ConstellationGraph from "@/components/output/constellation";
-import MemorialContributionApproval from "@/components/output/contribution-awaiting";
 import StorySlideshow from "@/components/output/StorySlideshow";
 import VoicesTab from "@/components/output/VoicesTab";
 import ProcessingTextSequence from "@/components/dashboard/ProcessingTextSequence";
 import { getAuthToken } from "@/lib/api.js";
 import MemorialCoverImage from "@/components/memorial/MemorialCoverImage.jsx";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import ContributionsPanel from "@/components/organizer/ContributionsPanel.jsx";
 
 // ─── Generation constants ─────────────────────────────────────────────────────
 
@@ -365,163 +364,17 @@ function ArchiveTab({ contributors, output }) {
 
 // ─── Contributions Tab (Blessing's filter/sort/larger cards) ─────────────────
 
-function ContributionsTab({ contributorslist, loading, error, onRetry }) {
-  const [value, setValue] = useState("contributors");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [contributorFilter, setContributorFilter] = useState("all");
-  const [contributorSort, setContributorSort] = useState("recent");
-
-  const submissions = contributorslist.filter((c) => {
-    const status = String(c.status || "").toLowerCase();
-    return status === "submitted" || Boolean(c.submitted_at);
-  });
-
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const current = submissions[currentIndex];
-  const handlePrev = () => setCurrentIndex((prev) => prev === 0 ? submissions.length - 1 : prev - 1);
-  const handleNext = () => setCurrentIndex((prev) => prev === submissions.length - 1 ? 0 : prev + 1);
-
-  const contributorCards = [...contributorslist]
-    .filter((contributor) => {
-      if (contributorFilter === "anonymous") return String(contributor.name || "").trim().toLowerCase() === "anonymous";
-      if (contributorFilter === "named") return String(contributor.name || "").trim().toLowerCase() !== "anonymous";
-      return true;
-    })
-    .sort((a, b) => {
-      if (contributorSort === "name") return String(a.name || "").localeCompare(String(b.name || ""));
-      return new Date(b.submitted_at || 0) - new Date(a.submitted_at || 0);
-    });
-
+function ContributionsTab({ memorialId, contributorslist, loading, error, onRetry, onContributorsChange }) {
   return (
-    <div className="mx-auto max-w-7xl">
-      <div className="mb-6 flex flex-col gap-6">
-
-        {/* Top controls row */}
-        <div className="flex items-center justify-between gap-6">
-          {/* Contributors / Awaiting dropdown */}
-          <div className="relative w-[450px]">
-            <select
-              onChange={(e) => setValue(e.target.value)}
-              value={value}
-              className="h-[63px] w-full appearance-none rounded-[22px] border border-r-border bg-r-card px-7 pr-20 text-[24px] leading-[24px] text-r-text outline-none"
-              style={{ fontFamily: 'var(--font-family-display)' }}
-            >
-              <option value="contributors">Contributors</option>
-              <option value="awaiting">Awaiting approval</option>
-            </select>
-            <span className="pointer-events-none absolute right-7 top-1/2 size-0 -translate-y-1/2 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-r-text" />
-          </div>
-
-          {/* Filter + Sort (contributors view only) */}
-          {value === "contributors" && (
-            <div className="flex items-center gap-5">
-              <div className="relative w-[213px]">
-                <select
-                  value={contributorFilter}
-                  onChange={(e) => setContributorFilter(e.target.value)}
-                  className="h-[63px] w-full appearance-none rounded-[18px] border border-r-border bg-r-card px-5 pr-16 text-[24px] leading-[24px] text-r-text outline-none"
-                  style={{ fontFamily: 'var(--font-family-display)' }}
-                >
-                  <option value="all">Filter</option>
-                  <option value="anonymous">Anonymous</option>
-                  <option value="named">Named</option>
-                </select>
-                <span className="pointer-events-none absolute right-5 top-1/2 size-0 -translate-y-1/2 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-r-text" />
-              </div>
-              <div className="relative w-[213px]">
-                <select
-                  value={contributorSort}
-                  onChange={(e) => setContributorSort(e.target.value)}
-                  className="h-[63px] w-full appearance-none rounded-[18px] border border-r-border bg-r-card px-5 pr-16 text-[24px] leading-[24px] text-r-text outline-none"
-                  style={{ fontFamily: 'var(--font-family-display)' }}
-                >
-                  <option value="recent">Sort</option>
-                  <option value="recent">Most recent</option>
-                  <option value="name">Name</option>
-                </select>
-                <span className="pointer-events-none absolute right-5 top-1/2 size-0 -translate-y-1/2 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-r-text" />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Search + pagination row (awaiting view only) */}
-        {value === "awaiting" && submissions.length > 0 && (
-          <div className="flex items-center justify-between gap-6">
-            <div className="flex h-[63px] w-full max-w-[434px] items-center rounded-full border border-r-border bg-r-card px-6">
-              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-r-text">
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-3.5-3.5" strokeLinecap="round" />
-              </svg>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search for a contributor"
-                className="ml-6 w-full bg-transparent text-[20px] leading-[20px] text-r-secondary placeholder:text-r-muted outline-none"
-              />
-            </div>
-            <div className="flex items-center gap-12 px-6 text-[24px] leading-[24px] text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
-              <button onClick={handlePrev} className="transition hover:opacity-70">
-                <ChevronLeft size={54} strokeWidth={1.8} />
-              </button>
-              <span>{currentIndex + 1}/{submissions.length}</span>
-              <button onClick={handleNext} className="transition hover:opacity-70">
-                <ChevronRight size={54} strokeWidth={1.8} />
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {value === "contributors" && loading && <TabLoading />}
-      {value === "contributors" && !loading && error && (
-        <TabError
-          title="Unable to load contributors"
-          message="Contributor details could not be loaded. You can still use the other tabs."
-          onRetry={onRetry}
-        />
-      )}
-      {value === "contributors" && !loading && !error && contributorslist.length === 0 && (
-        <TabEmpty
-          title="No contributors yet"
-          message="Contributors will appear here once people begin sharing memories."
-        />
-      )}
-      {value === "contributors" && !loading && !error && contributorslist.length > 0 && (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {contributorCards.map((contributor) => (
-            <article
-              key={contributor.id}
-              className="min-h-[287px] rounded-[18px] border border-r-border bg-r-card px-[50px] py-12"
-            >
-              <h3 className="text-[28px] leading-[32px] text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
-                {contributor.name || "Anonymous"}
-              </h3>
-              <p className="mt-6 text-[16px] leading-[20px] text-r-secondary">
-                {contributor.contribution_count || 0} contributions
-              </p>
-              <p className="mt-4 text-[16px] leading-[20px] text-r-secondary">
-                Last submitted {contributor.submitted_at
-                  ? new Date(contributor.submitted_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-                  : 'No date provided'}
-              </p>
-              <span className="mt-6 inline-flex min-h-[49px] min-w-[214px] items-center justify-center rounded-[14px] bg-r-shape px-6 text-[16px] leading-[20px]" style={{ color: '#FBF9F6' }}>
-                {contributor.relationship_type || 'No Relationship'}
-              </span>
-            </article>
-          ))}
-          {contributorCards.length === 0 && (
-            <div className="col-span-full py-12 text-center text-[18px] text-r-secondary">
-              No contributors match the current filter.
-            </div>
-          )}
-        </div>
-      )}
-      {value === "awaiting" && (
-        <MemorialContributionApproval contributors={current} gallery={submissions.length} />
-      )}
-    </div>
+    <ContributionsPanel
+      memorialId={memorialId}
+      contributorslist={contributorslist}
+      loading={loading}
+      error={error}
+      onRetry={onRetry}
+      onContributorsChange={onContributorsChange}
+      initialView="contributors"
+    />
   );
 }
 
@@ -1111,7 +964,7 @@ export default function MemorialOutputPage() {
 
   const submittedContributionCount = contributors.filter((contributor) => {
     const status = String(contributor?.status || "").toLowerCase();
-    return status === "submitted" || Boolean(contributor?.submitted_at);
+    return status === "submitted" || status === "approved" || Boolean(contributor?.submitted_at);
   }).length;
 
   const canGenerate = !contributorsLoading && !contributorsError && submittedContributionCount > 0;
@@ -1152,10 +1005,12 @@ export default function MemorialOutputPage() {
             {activeTab === 'Archive' && <ArchiveTab contributors={contributors} output={output} />}
             {activeTab === 'Contributions' && (
               <ContributionsTab
+                memorialId={memorialId}
                 contributorslist={contributors}
                 loading={contributorsLoading}
                 error={contributorsError}
                 onRetry={loadContributors}
+                onContributorsChange={setContributors}
               />
             )}
             {activeTab === 'Outputs' && (

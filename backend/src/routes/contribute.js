@@ -315,6 +315,65 @@ router.post('/:token/submit', async (req, res) => {
   }
 })
 
+// POST /contribute/:token/stories — save a freeform story contribution
+router.post('/:token/stories', async (req, res) => {
+  try {
+    const { contributor_token, client_story_id, title, body } = req.body
+    const storyTitle = String(title || '').trim()
+    const storyBody = String(body || '').trim()
+
+    if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
+    if (!storyTitle && !storyBody) return res.status(400).json({ error: 'Story title or body is required' })
+
+    const { data: invite, error: inviteError } = await supabase
+      .from('invite_links')
+      .select('id, memorial_id, is_active')
+      .eq('token', req.params.token)
+      .single()
+
+    if (inviteError || !invite || !invite.is_active) {
+      return res.status(410).json({ error: 'This link is no longer active.' })
+    }
+
+    const { data: contributor } = await supabase
+      .from('contributors')
+      .select('id, memorial_id')
+      .eq('id', contributor_token)
+      .single()
+
+    if (!contributor) return res.status(404).json({ error: 'Contributor not found' })
+    if (contributor.memorial_id !== invite.memorial_id) {
+      return res.status(403).json({ error: 'Contributor does not belong to this invitation.' })
+    }
+
+    const payload = {
+      memorial_id: contributor.memorial_id,
+      contributor_id: contributor.id,
+      client_story_id: client_story_id || null,
+      title: storyTitle || null,
+      body: storyBody || null,
+      updated_at: new Date().toISOString()
+    }
+
+    const storyQuery = client_story_id
+      ? supabase
+        .from('contributor_stories')
+        .upsert(payload, { onConflict: 'contributor_id,client_story_id' })
+      : supabase
+        .from('contributor_stories')
+        .insert(payload)
+
+    const { data, error } = await storyQuery
+      .select('id, client_story_id, title, body, created_at, updated_at')
+      .single()
+
+    if (error) return res.status(400).json({ error: error.message })
+    res.status(201).json({ story: data })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // GET /contribute/:token/photos — list saved contributor photos
 router.get('/:token/photos', async (req, res) => {
   try {
