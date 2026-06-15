@@ -497,14 +497,24 @@ function InvalidToken({ message }) {
           <span className="text-r-text text-2xl leading-8 [font-family:var(--font-family-display)]">Remember</span>
         </div>
       </nav>
-      <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
-        <div className="h-16 w-16 rounded-full flex items-center justify-center mb-4 bg-r-card">
-          <svg width="24" height="24" fill="none" stroke="var(--color-r-danger)" strokeWidth="1.5" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
+      <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-6">
+        {/* Brand circle — matches Figma error page */}
+        <div className="w-[100px] h-[100px] rounded-full flex items-center justify-center" style={{ backgroundColor: 'var(--color-r-shape)' }}>
+          <img src="/Logo.svg" alt="" width={52} height={52} aria-hidden="true" />
         </div>
-        <h2 className="text-h3 text-r-text mb-2">This link is no longer available</h2>
-        <p className="max-w-xs leading-relaxed text-body-2 text-r-muted">{message || 'The share link may have expired or been removed.'}</p>
+        <div className="flex flex-col gap-3">
+          <h2 className="text-h3 text-r-text">Sorry, we are unable to find the page</h2>
+          <p className="max-w-xs leading-relaxed text-body-2 text-r-muted mx-auto">
+            {message || 'The share link may have expired or been removed.'}
+          </p>
+        </div>
+        <button
+          onClick={() => window.history.back()}
+          className="rounded-full px-8 py-3 text-sm font-medium transition-opacity hover:opacity-85"
+          style={{ backgroundColor: 'var(--color-r-btn)', color: 'var(--color-r-btn-text)' }}
+        >
+          Return home
+        </button>
       </div>
     </div>
   );

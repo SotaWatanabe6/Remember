@@ -796,7 +796,7 @@ function ShareModal({ onClose, memorialId }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-6" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-r-modal p-8" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md rounded-2xl p-8 bg-white" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-3 mb-8">
           <button onClick={onClose} className="text-r-text">
             <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
@@ -823,10 +823,14 @@ function ShareModal({ onClose, memorialId }) {
           </div>
         ))}
         <div className="flex justify-center gap-6 mt-8">
-          {['Message', 'Email', 'Instagram'].map((label) => (
+          {[
+            { label: 'Message', icon: <svg width="22" height="22" fill="none" stroke="white" strokeWidth="1.8" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg> },
+            { label: 'Email', icon: <svg width="22" height="22" fill="none" stroke="white" strokeWidth="1.8" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg> },
+            { label: 'Instagram', icon: <svg width="22" height="22" fill="none" stroke="white" strokeWidth="1.8" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" ry="5" strokeLinecap="round" strokeLinejoin="round"/><circle cx="12" cy="12" r="4" strokeLinecap="round" strokeLinejoin="round"/><circle cx="17.5" cy="6.5" r="0.5" fill="white"/></svg> },
+          ].map(({ label, icon }) => (
             <div key={label} className="flex flex-col items-center gap-2">
               <div className="w-14 h-12 rounded-xl flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity bg-r-shape">
-                <span className="text-caption font-medium" style={{ color: 'white' }}>{label[0]}</span>
+                {icon}
               </div>
               <span className="text-caption text-r-secondary">{label}</span>
             </div>
