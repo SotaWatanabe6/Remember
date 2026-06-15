@@ -33,20 +33,18 @@ function countByContributor(items = []) {
   }, {})
 }
 
-function enrichContributors(contributors = [], responses = [], photos = [], voices = []) {
-  const responseCounts = countByContributor(responses)
+function enrichContributors(contributors = [], stories = [], photos = [], voices = []) {
+  const storyCounts = countByContributor(stories)
   const photoCounts = countByContributor(photos)
   const voiceCounts = countByContributor(voices)
 
   return contributors.map((contributor) => {
-    const response_count = responseCounts[contributor.id] || 0
+    const story_count = storyCounts[contributor.id] || 0
     const photo_count = photoCounts[contributor.id] || 0
     const voice_count = voiceCounts[contributor.id] || 0
-    const story_count = response_count > 0 ? 1 : 0
 
     return {
       ...contributor,
-      response_count,
       story_count,
       photo_count,
       voice_count,
@@ -326,19 +324,19 @@ router.get('/:id/contributors', authMiddleware, async (req, res) => {
     }
 
     const [
-      { data: responses, error: responsesError },
+      { data: stories, error: storiesError },
       { data: photos, error: photosError },
       { data: voices, error: voicesError },
     ] = await Promise.all([
-      supabase.from('questionnaire_responses').select('id, contributor_id').in('contributor_id', contributorIds),
+      supabase.from('contributor_stories').select('id, contributor_id').in('contributor_id', contributorIds),
       supabase.from('media_assets').select('id, contributor_id').in('contributor_id', contributorIds),
       supabase.from('voice_recordings').select('id, contributor_id').in('contributor_id', contributorIds),
     ])
 
-    const countError = responsesError || photosError || voicesError
+    const countError = storiesError || photosError || voicesError
     if (countError) return res.status(400).json({ error: countError.message })
 
-    res.json({ contributors: enrichContributors(contributors, responses, photos, voices) })
+    res.json({ contributors: enrichContributors(contributors, stories, photos, voices) })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -361,6 +359,7 @@ router.get('/:id/contributors/:contributorId/submission', authMiddleware, async 
 
     const [
       { data: responses, error: responsesError },
+      { data: stories, error: storiesError },
       { data: photos, error: photosError },
       { data: voices, error: voicesError },
     ] = await Promise.all([
@@ -370,6 +369,12 @@ router.get('/:id/contributors/:contributorId/submission', authMiddleware, async 
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', req.params.id)
         .order('order_index', { ascending: true }),
+      supabase
+        .from('contributor_stories')
+        .select('id, client_story_id, title, body, created_at, updated_at')
+        .eq('contributor_id', contributor.id)
+        .eq('memorial_id', req.params.id)
+        .order('created_at', { ascending: true }),
       supabase
         .from('media_assets')
         .select('id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption, is_flagged, flagged_reason, created_at')
@@ -384,17 +389,18 @@ router.get('/:id/contributors/:contributorId/submission', authMiddleware, async 
         .order('created_at', { ascending: true }),
     ])
 
-    const detailError = responsesError || photosError || voicesError
+    const detailError = responsesError || storiesError || photosError || voicesError
     if (detailError) return res.status(400).json({ error: detailError.message })
 
     const photosWithUrls = await createSignedAssetUrls(photos, 'photo_url')
     const voicesWithUrls = await createSignedAssetUrls(voices, 'audio_url')
-    const [enrichedContributor] = enrichContributors([contributor], responses, photos, voices)
+    const [enrichedContributor] = enrichContributors([contributor], stories, photos, voices)
 
     res.json({
       contributor: enrichedContributor,
       photos: photosWithUrls,
       responses: responses || [],
+      stories: stories || [],
       voices: voicesWithUrls,
     })
   } catch (err) {
@@ -472,15 +478,17 @@ router.delete('/:id/contributors/:contributorId', authMiddleware, async (req, re
 
     const [
       { error: responseDeleteError },
+      { error: storyDeleteError },
       { error: photoDeleteError },
       { error: voiceDeleteError },
     ] = await Promise.all([
       supabase.from('questionnaire_responses').delete().eq('contributor_id', contributor.id).eq('memorial_id', req.params.id),
+      supabase.from('contributor_stories').delete().eq('contributor_id', contributor.id).eq('memorial_id', req.params.id),
       supabase.from('media_assets').delete().eq('contributor_id', contributor.id).eq('memorial_id', req.params.id),
       supabase.from('voice_recordings').delete().eq('contributor_id', contributor.id).eq('memorial_id', req.params.id),
     ])
 
-    const deleteError = responseDeleteError || photoDeleteError || voiceDeleteError
+    const deleteError = responseDeleteError || storyDeleteError || photoDeleteError || voiceDeleteError
     if (deleteError) return res.status(400).json({ error: deleteError.message })
 
     const { error } = await supabase

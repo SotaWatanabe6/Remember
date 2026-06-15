@@ -275,9 +275,9 @@ function VoiceSection({ contributor, voices, submittedDate, actions }) {
   );
 }
 
-function StorySection({ contributor, responses, submittedDate, actions }) {
-  const answeredResponses = responses.filter((response) => String(response.response_text || "").trim());
-  if (!answeredResponses.length) return null;
+function StorySection({ contributor, stories, submittedDate, actions }) {
+  const savedStories = stories.filter((story) => String(story.title || story.body || "").trim());
+  if (!savedStories.length) return null;
 
   return (
     <section className="rounded-[18px] border border-r-border bg-[#F6EFE7] p-6 md:p-7">
@@ -286,26 +286,27 @@ function StorySection({ contributor, responses, submittedDate, actions }) {
           <FileText className="mt-1 text-[#3F3A33]" size={28} />
           <div>
             <p className="text-[16px] leading-[20px] text-[#5F5A52]">
-              {getContributorName(contributor)} answered {answeredResponses.length} question{answeredResponses.length === 1 ? "" : "s"}
+              {getContributorName(contributor)} added {savedStories.length} stor{savedStories.length === 1 ? "y" : "ies"}
             </p>
             <p className="mt-3 text-[14px] leading-[18px] text-[#5F5A52]">Submitted {submittedDate}</p>
           </div>
         </div>
 
         <div className="space-y-6">
-          {answeredResponses.slice(0, 4).map((response) => (
-            <article key={response.id}>
-              <h3 className="text-[24px] leading-[30px] text-r-text [font-family:var(--font-family-display)]">
-                {response.question_text || "Story response"}
-              </h3>
-              <p className="mt-3 text-[18px] leading-[28px] text-[#5F5A52]">{response.response_text}</p>
+          {savedStories.map((story) => (
+            <article key={story.id || story.client_story_id}>
+              {story.title && (
+                <h3 className="text-[24px] leading-[30px] text-r-text [font-family:var(--font-family-display)]">
+                  {story.title}
+                </h3>
+              )}
+              {story.body && (
+                <p className={`${story.title ? "mt-3" : ""} text-[18px] leading-[28px] text-[#5F5A52]`}>
+                  {story.body}
+                </p>
+              )}
             </article>
           ))}
-          {answeredResponses.length > 4 && (
-            <p className="text-[15px] leading-5 text-[#5F5A52]">
-              {answeredResponses.length - 4} more response{answeredResponses.length - 4 === 1 ? "" : "s"} saved for generation.
-            </p>
-          )}
         </div>
 
         <div className="self-end">{actions}</div>
@@ -348,7 +349,7 @@ function ApprovalDetail({
   const currentContributor = detail?.contributor || contributor;
   const submittedDate = formatDate(currentContributor.submitted_at, "No date provided");
   const photos = detail?.photos || [];
-  const responses = detail?.responses || [];
+  const stories = detail?.stories || [];
   const voices = detail?.voices || [];
   const actions = (
     <ActionButtons
@@ -357,7 +358,7 @@ function ApprovalDetail({
       onDelete={onDelete}
     />
   );
-  const hasContent = photos.length || responses.length || voices.length;
+  const hasContent = photos.length || stories.length || voices.length;
 
   return (
     <div className="mx-auto flex flex-col gap-5">
@@ -403,7 +404,7 @@ function ApprovalDetail({
       )}
       <PhotoSection contributor={currentContributor} photos={photos} submittedDate={submittedDate} actions={actions} />
       <VoiceSection contributor={currentContributor} voices={voices} submittedDate={submittedDate} actions={actions} />
-      <StorySection contributor={currentContributor} responses={responses} submittedDate={submittedDate} actions={actions} />
+      <StorySection contributor={currentContributor} stories={stories} submittedDate={submittedDate} actions={actions} />
     </div>
   );
 }
