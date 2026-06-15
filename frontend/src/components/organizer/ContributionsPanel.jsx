@@ -154,16 +154,6 @@ function ContributorCard({ contributor }) {
         <span className="inline-flex min-h-[44px] items-center justify-center rounded-[14px] bg-r-shape px-5 text-[15px] leading-[18px] text-[#FBF9F6]">
           {getRelationship(contributor)}
         </span>
-        {Number(contributor.photo_count) > 0 && (
-          <span className="inline-flex min-h-[44px] items-center rounded-[14px] bg-[#E9DED0] px-4 text-[14px] text-r-secondary">
-            {contributor.photo_count} photos
-          </span>
-        )}
-        {Number(contributor.voice_count) > 0 && (
-          <span className="inline-flex min-h-[44px] items-center rounded-[14px] bg-[#E9DED0] px-4 text-[14px] text-r-secondary">
-            {contributor.voice_count} voice
-          </span>
-        )}
       </div>
     </article>
   );

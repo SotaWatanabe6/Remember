@@ -42,13 +42,15 @@ function enrichContributors(contributors = [], responses = [], photos = [], voic
     const response_count = responseCounts[contributor.id] || 0
     const photo_count = photoCounts[contributor.id] || 0
     const voice_count = voiceCounts[contributor.id] || 0
+    const story_count = response_count > 0 ? 1 : 0
 
     return {
       ...contributor,
       response_count,
+      story_count,
       photo_count,
       voice_count,
-      contribution_count: response_count + photo_count + voice_count,
+      contribution_count: story_count + photo_count + voice_count,
     }
   })
 }
