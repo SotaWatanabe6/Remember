@@ -351,6 +351,8 @@ function ApprovalDetail({
   const photos = detail?.photos || [];
   const stories = detail?.stories || [];
   const voices = detail?.voices || [];
+  const visibleContributionCount = photos.length + stories.length + voices.length;
+  const contributionCount = Math.max(Number(currentContributor.contribution_count) || 0, visibleContributionCount);
   const actions = (
     <ActionButtons
       disabled={actionPending}
@@ -371,7 +373,7 @@ function ApprovalDetail({
             <StatusBadge status={currentContributor.status} />
           </div>
           <p className="mt-4 text-[16px] leading-[20px] text-[#5F5A52]">
-            {getCountLabel(currentContributor.contribution_count)}
+            {getCountLabel(contributionCount)}
           </p>
           <p className="mt-3 text-[16px] leading-[20px] text-[#5F5A52]">
             Last submitted {submittedDate}

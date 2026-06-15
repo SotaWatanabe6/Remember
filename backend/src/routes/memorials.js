@@ -371,19 +371,19 @@ router.get('/:id/contributors/:contributorId/submission', authMiddleware, async 
         .order('order_index', { ascending: true }),
       supabase
         .from('contributor_stories')
-        .select('id, client_story_id, title, body, created_at, updated_at')
+        .select('id, contributor_id, client_story_id, title, body, created_at, updated_at')
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', req.params.id)
         .order('created_at', { ascending: true }),
       supabase
         .from('media_assets')
-        .select('id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption, is_flagged, flagged_reason, created_at')
+        .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption, is_flagged, flagged_reason, created_at')
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', req.params.id)
         .order('created_at', { ascending: true }),
       supabase
         .from('voice_recordings')
-        .select('id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, duration_seconds, contributor_title, transcript_text, key_quote, is_flagged, flagged_reason, created_at')
+        .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, duration_seconds, contributor_title, transcript_text, key_quote, is_flagged, flagged_reason, created_at')
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', req.params.id)
         .order('created_at', { ascending: true }),
