@@ -88,6 +88,70 @@ function StoryMemorialSummary({ memorial }) {
   );
 }
 
+// ─── Intro view (shown before Slideshow on first load) ────────────────────────
+
+function safeYear(dateStr) {
+  if (!dateStr) return null;
+  const y = new Date(dateStr).getFullYear();
+  return Number.isNaN(y) ? null : y;
+}
+
+function IntroView({ memorial, onStart }) {
+  const birthYear = safeYear(memorial?.date_of_birth);
+  const passingYear = safeYear(memorial?.date_of_passing);
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center px-6 pb-16">
+      <div className="flex flex-col items-center gap-6 w-full text-center">
+
+        {/* Portrait — large circle matching Figma */}
+        <div
+          className="w-[280px] h-[280px] rounded-full overflow-hidden flex-shrink-0"
+          style={{
+            backgroundImage: "repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%)",
+            backgroundSize: "20px 20px",
+          }}
+        >
+          {memorial?.cover_photo_url && (
+            <img src={memorial.cover_photo_url} alt={memorial?.subject_name || ''} className="w-full h-full object-cover" />
+          )}
+        </div>
+
+        {/* Name */}
+        <div>
+          <h1
+            className="text-[42px] font-normal leading-tight"
+            style={{ color: "#3A3027", fontFamily: "var(--font-family-display, Georgia, serif)" }}
+          >
+            {memorial?.subject_name || ''}
+          </h1>
+          {(birthYear || passingYear) && (
+            <p className="text-sm mt-2" style={{ color: "#9B8F80", letterSpacing: "0.04em" }}>
+              {birthYear ?? ''}{birthYear && passingYear ? ' - ' : ''}{passingYear ?? ''}
+            </p>
+          )}
+        </div>
+
+        {/* Biography */}
+        {(memorial?.bio || memorial?.biography) && (
+          <p className="text-base leading-relaxed max-w-[320px]" style={{ color: "#6B6051" }}>
+            {memorial.bio || memorial.biography}
+          </p>
+        )}
+
+        {/* Start button — wide pill, lowercase, matching Figma */}
+        <button
+          onClick={onStart}
+          className="w-full max-w-[380px] py-4 rounded-full text-base transition-all hover:opacity-90 active:scale-95"
+          style={{ backgroundColor: "#B5A88E", color: "#FAF7F2", fontWeight: 500, border: "none", cursor: "pointer" }}
+        >
+          Start
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SlideshowSection({ output, memorial }) {
   if (!output?.story || output.story.length === 0) {
     return (
@@ -457,6 +521,8 @@ export default function SharePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const [showIntro, setShowIntro] = useState(true);
+
   useEffect(() => {
     async function load() {
       try {
@@ -495,8 +561,6 @@ export default function SharePage() {
 
   return (
     <div className="min-h-screen w-full bg-r-bg flex flex-col pb-20">
-
-      {/* Nav — logo only */}
       <nav className="w-full flex items-center px-6 sm:px-8 py-5">
         <div className="flex items-center gap-2">
           <img src="/Logo.svg" alt="" width={36} height={36} aria-hidden="true" />
@@ -504,27 +568,24 @@ export default function SharePage() {
         </div>
       </nav>
 
-      {/* Content */}
       <main className="flex-1 px-6 sm:px-8 pb-8">
         {loading ? (
           <div className="flex justify-center py-32">
             <div className="h-8 w-8 animate-spin rounded-full border-2" style={{ borderColor: 'var(--color-r-border)', borderTopColor: 'var(--color-r-text)' }} />
           </div>
+        ) : showIntro ? (
+          <IntroView memorial={memorial} onStart={() => setShowIntro(false)} />
         ) : (
           <>
             {activeTab === 'Slideshow' && <SlideshowSection output={output} memorial={memorial} />}
-            {activeTab === 'Constellations' && (
-              <ConstellationsSection output={output} memorial={memorial} contributor={contributors} />
-            )}
+            {activeTab === 'Constellations' && <ConstellationsSection output={output} memorial={memorial} contributor={contributors} />}
             {activeTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} variant="viewer" />}
-            {activeTab === 'Photo Archive' && (
-              <PhotoArchiveSection output={output} contributors={contributors} />
-            )}
+            {activeTab === 'Photo Archive' && <PhotoArchiveSection output={output} contributors={contributors} />}
           </>
         )}
       </main>
 
-      <BottomNav active={activeTab} onChange={setActiveTab} />
+      {!showIntro && <BottomNav active={activeTab} onChange={setActiveTab} />}
     </div>
   );
 }
