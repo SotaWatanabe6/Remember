@@ -94,6 +94,70 @@ function StoryMemorialSummary({ memorial }) {
   );
 }
 
+// ─── Intro view (shown before Slideshow on first load) ────────────────────────
+
+function safeYear(dateStr) {
+  if (!dateStr) return null;
+  const y = new Date(dateStr).getFullYear();
+  return Number.isNaN(y) ? null : y;
+}
+
+function IntroView({ memorial, onStart }) {
+  const birthYear = safeYear(memorial?.date_of_birth);
+  const passingYear = safeYear(memorial?.date_of_passing);
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center px-6 pb-16">
+      <div className="flex flex-col items-center gap-6 w-full text-center">
+
+        {/* Portrait — large circle matching Figma */}
+        <div
+          className="w-[280px] h-[280px] rounded-full overflow-hidden flex-shrink-0"
+          style={{
+            backgroundImage: "repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%)",
+            backgroundSize: "20px 20px",
+          }}
+        >
+          {memorial?.cover_photo_url && (
+            <img src={memorial.cover_photo_url} alt={memorial?.subject_name || ''} className="w-full h-full object-cover" />
+          )}
+        </div>
+
+        {/* Name */}
+        <div>
+          <h1
+            className="text-[42px] font-normal leading-tight"
+            style={{ color: "#3A3027", fontFamily: "var(--font-family-display, Georgia, serif)" }}
+          >
+            {memorial?.subject_name || ''}
+          </h1>
+          {(birthYear || passingYear) && (
+            <p className="text-sm mt-2" style={{ color: "#9B8F80", letterSpacing: "0.04em" }}>
+              {birthYear ?? ''}{birthYear && passingYear ? ' - ' : ''}{passingYear ?? ''}
+            </p>
+          )}
+        </div>
+
+        {/* Biography */}
+        {(memorial?.bio || memorial?.biography) && (
+          <p className="text-base leading-relaxed max-w-[320px]" style={{ color: "#6B6051" }}>
+            {memorial.bio || memorial.biography}
+          </p>
+        )}
+
+        {/* Start button — wide pill, lowercase, matching Figma */}
+        <button
+          onClick={onStart}
+          className="w-full max-w-[380px] py-4 rounded-full text-base transition-all hover:opacity-90 active:scale-95"
+          style={{ backgroundColor: "#B5A88E", color: "#FAF7F2", fontWeight: 500, border: "none", cursor: "pointer" }}
+        >
+          Start
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SlideshowSection({ output, memorial }) {
   if (!output?.story || output.story.length === 0) {
     return (
@@ -114,8 +178,6 @@ function SlideshowSection({ output, memorial }) {
 // ─── Constellations ───────────────────────────────────────────────────────────
 
 function ConstellationsSection({ output, memorial, contributor }) {
-  const [page, setPage] = useState(1); // 1 = Themes, 2 = Relationships
-
   if (!output?.constellation) {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
@@ -126,42 +188,13 @@ function ConstellationsSection({ output, memorial, contributor }) {
       </div>
     );
   }
-
   return (
-    <div className="flex flex-col gap-4 py-4">
-      {/* Themes | Relationships sub-tab */}
-      <div className="flex items-center justify-between">
-        <div className="flex gap-8 border-b border-r-border">
-          {[{ label: 'Themes', page: 1 }, { label: 'Relationships', page: 2 }].map((item) => (
-            <button
-              key={item.label}
-              onClick={() => setPage(item.page)}
-              className={`pb-3 text-sm transition-colors relative ${
-                page === item.page ? 'text-r-text font-semibold' : 'text-r-muted hover:text-r-text'
-              }`}
-            >
-              {item.label}
-              {page === item.page && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-r-text" />
-              )}
-            </button>
-          ))}
-        </div>
-        {/* Sort dropdown per Figma */}
-        <FilterSelect
-          value="sort"
-          onChange={() => {}}
-          className="w-[180px]"
-        >
-          <option value="sort" disabled>Sort</option>
-        </FilterSelect>
-      </div>
+    <div className="py-4">
       <ConstellationGraph
         ai_output={output}
         memorial={memorial}
         contributor={contributor}
         relationships={output?.relationships ?? []}
-        page={page}
         width={1250}
         height={800}
       />
@@ -758,7 +791,7 @@ function ShareModal({ onClose, memorialId }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-6" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl p-8 bg-r-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md rounded-2xl p-8 bg-white" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-3 mb-8">
           <button onClick={onClose} className="text-r-text">
             <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
@@ -789,10 +822,14 @@ function ShareModal({ onClose, memorialId }) {
           </div>
         ))}
         <div className="flex justify-center gap-6 mt-8">
-          {['Message', 'Email', 'Instagram'].map((label) => (
+          {[
+            { label: 'Message', icon: <svg width="22" height="22" fill="none" stroke="white" strokeWidth="1.8" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg> },
+            { label: 'Email', icon: <svg width="22" height="22" fill="none" stroke="white" strokeWidth="1.8" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg> },
+            { label: 'Instagram', icon: <svg width="22" height="22" fill="none" stroke="white" strokeWidth="1.8" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" ry="5" strokeLinecap="round" strokeLinejoin="round"/><circle cx="12" cy="12" r="4" strokeLinecap="round" strokeLinejoin="round"/><circle cx="17.5" cy="6.5" r="0.5" fill="white"/></svg> },
+          ].map(({ label, icon }) => (
             <div key={label} className="flex flex-col items-center gap-2">
               <div className="w-14 h-12 rounded-xl flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity bg-r-shape">
-                <span className="text-caption font-medium" style={{ color: 'white' }}>{label[0]}</span>
+                {icon}
               </div>
               <span className="text-caption text-r-secondary">{label}</span>
             </div>
@@ -835,6 +872,8 @@ export default function MemorialOutputPage() {
   const [error, setError] = useState(null);
   const [showShare, setShowShare] = useState(false);
   const [contributors, setContributors] = useState([]);
+
+  const [showIntro, setShowIntro] = useState(true);
 
   useEffect(() => {
     if (!id) return;
@@ -885,8 +924,6 @@ export default function MemorialOutputPage() {
 
   return (
     <div className="min-h-screen w-full bg-r-bg flex flex-col pb-20">
-
-      {/* Nav — logo only, no back/share since this is the viewer output page */}
       <nav className="w-full flex items-center px-6 sm:px-8 py-5">
         <div className="flex items-center gap-2">
           <img src="/Logo.svg" alt="" width={36} height={36} aria-hidden="true" />
@@ -894,7 +931,6 @@ export default function MemorialOutputPage() {
         </div>
       </nav>
 
-      {/* Content */}
       <main className="flex-1 px-6 sm:px-8 pb-8">
         {loading ? (
           <div className="flex justify-center py-32">
@@ -902,22 +938,20 @@ export default function MemorialOutputPage() {
           </div>
         ) : error ? (
           <OutputError onRetry={load} />
+        ) : showIntro ? (
+          <IntroView memorial={memorial} onStart={() => setShowIntro(false)} />
         ) : (
           <>
             {activeTab === 'Slideshow' && <SlideshowSection output={output} memorial={memorial} />}
-            {activeTab === 'Constellations' && (
-              <ConstellationsSection output={output} memorial={memorial} contributor={contributors} />
-            )}
-            {/* {activeTab === 'Voices' && <VoicesSection voices={output?.voices} />} */}
+            {activeTab === 'Constellations' && <ConstellationsSection output={output} memorial={memorial} contributor={contributors} />}
             {activeTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} variant="viewer" />}
-            {activeTab === 'Photo Archive' && (
-              <PhotoArchiveSection output={output} contributors={contributors} />
-            )}
+            {activeTab === 'Photo Archive' && <PhotoArchiveSection output={output} contributors={contributors} />}
           </>
         )}
       </main>
 
-      <BottomNav active={activeTab} onChange={setActiveTab} />
+      {/* Bottom nav only visible after intro */}
+      {!showIntro && <BottomNav active={activeTab} onChange={setActiveTab} />}
       {showShare && <ShareModal onClose={() => setShowShare(false)} memorialId={id} />}
     </div>
   );

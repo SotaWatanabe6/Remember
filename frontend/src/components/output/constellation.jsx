@@ -131,7 +131,7 @@ export default function ConstellationGraph({
   }, [page]);
 
   useEffect(() => {
-    if (pathname.includes("output")){
+    if (pathname.includes("output") || pathname.includes("share")) {
       setCurrentPage("Viewer");
       if (tab=="Relationships") {
         loadPhotoContributor();

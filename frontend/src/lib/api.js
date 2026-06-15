@@ -379,6 +379,16 @@ function writeStoredVoice(token, recordings) {
   window.localStorage.setItem(`remember_voice:${token}`, JSON.stringify(recordings));
 }
 
+function readStoredStories(token) {
+  if (!isBrowser()) return [];
+  try { return JSON.parse(window.localStorage.getItem(`remember_stories:${token}`) || '[]'); } catch { return []; }
+}
+
+function writeStoredStories(token, stories) {
+  if (!isBrowser()) return;
+  window.localStorage.setItem(`remember_stories:${token}`, JSON.stringify(stories));
+}
+
 // Read-only — Sungjun's contributorService.js writes this key
 function readContributorSession(token) {
   if (!isBrowser()) return null;
@@ -1524,6 +1534,56 @@ export async function getContributorSummary(token) {
     photos,
     voice,
   };
+}
+
+export async function saveContributorStory(token, contributorToken, story) {
+  const storyTitle = String(story?.title || "").trim();
+  const storyBody = String(story?.body || "").trim();
+  const clientStoryId = story?.id || story?.client_story_id || `story-${Date.now()}`;
+
+  if (!storyTitle && !storyBody) {
+    return null;
+  }
+
+  const localStory = {
+    id: clientStoryId,
+    title: storyTitle,
+    body: storyBody,
+    created_at: story?.created_at || now(),
+  };
+
+  const existingStories = readStoredStories(token);
+  const nextStories = existingStories.some((item) => item.id === localStory.id)
+    ? existingStories.map((item) => (item.id === localStory.id ? { ...item, ...localStory } : item))
+    : [...existingStories, localStory];
+  writeStoredStories(token, nextStories);
+
+  if (!contributorToken || isLocalMockInviteToken(token)) {
+    return { story: localStory };
+  }
+
+  const storyPath = `/contribute/${encodeURIComponent(token)}/stories`;
+  const storyOptions = {
+    method: "POST",
+    body: JSON.stringify({
+      contributor_token: contributorToken,
+      client_story_id: localStory.id,
+      title: localStory.title,
+      body: localStory.body,
+    }),
+  };
+
+  try {
+    return await requestJson(storyPath, storyOptions);
+  } catch (error) {
+    if (error instanceof ApiRequestError && error.status === 404 && isLocalFrontendApiUrl()) {
+      return requestJson(storyPath, {
+        ...storyOptions,
+        baseUrl: LOCAL_BACKEND_API_URL,
+      });
+    }
+    throw error;
+  }
 }
 
 /**
