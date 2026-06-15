@@ -1,3 +1,5 @@
+//frontend/src/app/(viewer)/memorial/[id]/intro/page.jsx
+
 "use client";
 
 
