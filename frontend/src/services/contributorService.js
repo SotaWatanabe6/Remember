@@ -519,9 +519,7 @@ export async function getMemorialContributors(memorialId, token) {
   if (!memorialId) throw new Error("memorialId is required");
 
   const accessToken = token?.access_token || token || (await getAuthToken()) || "";
-  if (!accessToken) {
-    return { contributors: [] };
-  }
+  if (!accessToken) return { contributors: [] };
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15_000);
@@ -539,13 +537,13 @@ export async function getMemorialContributors(memorialId, token) {
       },
     );
 
-    if (!res.ok) throw new Error("Failed to fetch contributors");
+    if (!res.ok) throw new Error(`Failed to fetch contributors: ${res.status}`);
     return res.json();
-  } catch {
-    return { contributors: [] };
   } finally {
     clearTimeout(timeoutId);
   }
+  // DO NOT catch here — let manage/page.jsx loadContributors catch it
+  // so contributorsError gets set and the user sees a real error
 }
 
 async function organizerContributorRequest(path, token, options = {}) {

@@ -495,6 +495,9 @@ export default function ContributionsPanel({
       .sort((a, b) => new Date(b.submitted_at || 0) - new Date(a.submitted_at || 0));
   }, [contributors, searchQuery]);
 
+  console.log('all contributors:', contributors.map(c => ({ name: c.name, status: c.status })));
+  console.log('awaiting count:', awaitingContributors.length);
+
   const maxAwaitingIndex = Math.max(awaitingContributors.length - 1, 0);
   const activeIndex = Math.min(currentIndex, maxAwaitingIndex);
   const current = awaitingContributors[activeIndex] || null;
