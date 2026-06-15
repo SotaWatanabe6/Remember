@@ -76,25 +76,35 @@ async function runPipelines(memorialId, jobId) {
   try {
     await updateJob(jobId, 10, 'Gathering contributions...')
 
-    const { data: responses } = await supabase
-      .from('questionnaire_responses')
-      .select('*')
-      .eq('memorial_id', memorialId)
-    const { data: photos } = await supabase
-      .from('media_assets')
-      .select('*')
-      .eq('memorial_id', memorialId)
-      .order('created_at', { ascending: true })
-      .limit(MAX_GENERATION_PHOTOS)
-    const { data: recordings } = await supabase
-      .from('voice_recordings')
-      .select('*')
-      .eq('memorial_id', memorialId)
     const { data: contributors } = await supabase
       .from('contributors')
       .select('*')
       .eq('memorial_id', memorialId)
-      .eq('status', 'submitted')
+      .in('status', ['submitted', 'approved'])
+    const contributorIds = (contributors || []).map((contributor) => contributor.id)
+    const { data: responses } = contributorIds.length
+      ? await supabase
+        .from('questionnaire_responses')
+        .select('*')
+        .eq('memorial_id', memorialId)
+        .in('contributor_id', contributorIds)
+      : { data: [] }
+    const { data: photos } = contributorIds.length
+      ? await supabase
+        .from('media_assets')
+        .select('*')
+        .eq('memorial_id', memorialId)
+        .in('contributor_id', contributorIds)
+        .order('created_at', { ascending: true })
+        .limit(MAX_GENERATION_PHOTOS)
+      : { data: [] }
+    const { data: recordings } = contributorIds.length
+      ? await supabase
+        .from('voice_recordings')
+        .select('*')
+        .eq('memorial_id', memorialId)
+        .in('contributor_id', contributorIds)
+      : { data: [] }
     const { data: memorial, error: memorialError } = await supabase
       .from('memorials')
       .select('*')
@@ -354,7 +364,7 @@ router.post('/memorials/:id/generate', authMiddleware, async (req, res) => {
       .from('contributors')
       .select('id')
       .eq('memorial_id', req.params.id)
-      .eq('status', 'submitted')
+      .in('status', ['submitted', 'approved'])
 
     if (!contributors || contributors.length === 0) {
       return res.status(400).json({ error: 'At least one contributor must have submitted before generating' })
