@@ -418,7 +418,7 @@ export default function ContributionsPanel({
   error = null,
   onRetry,
   onContributorsChange,
-  initialView = "contributors",
+  initialView = "awaiting",
 }) {
   const usesExternalContributors = Array.isArray(contributorslist);
   const [internalContributors, setInternalContributors] = useState([]);
@@ -595,8 +595,8 @@ export default function ContributionsPanel({
             value={value}
             className="w-full lg:w-[360px]"
           >
-            <option value="contributors">Contributors</option>
             <option value="awaiting">Awaiting approval</option>
+            <option value="contributors">Contributors</option>
           </SelectControl>
 
           {value === "contributors" && (
