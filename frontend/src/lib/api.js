@@ -379,6 +379,16 @@ function writeStoredVoice(token, recordings) {
   window.localStorage.setItem(`remember_voice:${token}`, JSON.stringify(recordings));
 }
 
+function readStoredStories(token) {
+  if (!isBrowser()) return [];
+  try { return JSON.parse(window.localStorage.getItem(`remember_stories:${token}`) || '[]'); } catch { return []; }
+}
+
+function writeStoredStories(token, stories) {
+  if (!isBrowser()) return;
+  window.localStorage.setItem(`remember_stories:${token}`, JSON.stringify(stories));
+}
+
 // Read-only — Sungjun's contributorService.js writes this key
 function readContributorSession(token) {
   if (!isBrowser()) return null;
@@ -693,6 +703,48 @@ export async function getContributors(memorialId) {
   }
 }
 
+/**
+ * GET /contribute/:contributorid/photosUrls
+ * Returns all contributors photos for a memorial. Protected.
+ * Used by Mendrika's viewer page.
+ * TODO: Replace with real fetch() on Day 9.
+ */
+export async function getContributorsPhotos(contributorId) {
+  try {
+    const token = await getAuthToken();
+    const response = await fetch(`${API_URL}/contribute/${encodeURIComponent(contributorId)}/photoUrls`, {
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error('Failed to fetch photos from contributor');
+    return response.json();
+  } catch {
+    // Fallback to mock — prevents constellation page from crashing
+    await delay(MOCK_DELAY);
+    return { contributors: MOCK_CONTRIBUTORS };
+  }
+}
+/**
+ * GET /contribute/questionnaire-responses/:contributorid
+ * Returns all contributors response questionnary for a memorial. Protected.
+ * Used by Mendrika's viewer page.
+ * TODO: Replace with real fetch() on Day 9.
+ */
+export async function getContributorsResponse(contributorId) {
+  try {
+    const token = await getAuthToken();
+    console.log(token);
+    const response = await fetch(`${API_URL}/contribute/questionnaire-responses/${encodeURIComponent(contributorId)}`, {
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error('Failed to fetch response from contributor');
+    return response.json();
+  } catch {
+    // Fallback to mock — prevents constellation page from crashing
+    await delay(MOCK_DELAY);
+    return { contributors: MOCK_CONTRIBUTORS };
+  }
+}
+
 // ─── TEAM: SHARE LINK (confirm owner with team) ───────────────────────────────
 
 /**
@@ -907,12 +959,15 @@ export async function saveRelationship(token, relationshipInput) {
     };
   }
 
+  const session = JSON.parse(localStorage.getItem(`remember_contributor_session:${token}`) || '{}');
+
   return requestJson(`/contribute/${encodeURIComponent(token)}/relationship`, {
     method: "POST",
     body: JSON.stringify({
       contributor_token: relationshipInput.contributor_token,
       relationship_type: relationshipInput.relationship_type,
       relationship_label: relationshipInput.relationship_label ?? null,
+      is_anonymous: session?.is_anonymous ?? false,
     }),
   });
 }
@@ -1479,6 +1534,56 @@ export async function getContributorSummary(token) {
     photos,
     voice,
   };
+}
+
+export async function saveContributorStory(token, contributorToken, story) {
+  const storyTitle = String(story?.title || "").trim();
+  const storyBody = String(story?.body || "").trim();
+  const clientStoryId = story?.id || story?.client_story_id || `story-${Date.now()}`;
+
+  if (!storyTitle && !storyBody) {
+    return null;
+  }
+
+  const localStory = {
+    id: clientStoryId,
+    title: storyTitle,
+    body: storyBody,
+    created_at: story?.created_at || now(),
+  };
+
+  const existingStories = readStoredStories(token);
+  const nextStories = existingStories.some((item) => item.id === localStory.id)
+    ? existingStories.map((item) => (item.id === localStory.id ? { ...item, ...localStory } : item))
+    : [...existingStories, localStory];
+  writeStoredStories(token, nextStories);
+
+  if (!contributorToken || isLocalMockInviteToken(token)) {
+    return { story: localStory };
+  }
+
+  const storyPath = `/contribute/${encodeURIComponent(token)}/stories`;
+  const storyOptions = {
+    method: "POST",
+    body: JSON.stringify({
+      contributor_token: contributorToken,
+      client_story_id: localStory.id,
+      title: localStory.title,
+      body: localStory.body,
+    }),
+  };
+
+  try {
+    return await requestJson(storyPath, storyOptions);
+  } catch (error) {
+    if (error instanceof ApiRequestError && error.status === 404 && isLocalFrontendApiUrl()) {
+      return requestJson(storyPath, {
+        ...storyOptions,
+        baseUrl: LOCAL_BACKEND_API_URL,
+      });
+    }
+    throw error;
+  }
 }
 
 /**

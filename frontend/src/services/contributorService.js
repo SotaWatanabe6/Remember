@@ -11,7 +11,7 @@ import {
 } from "@/lib/api.js";
 import {
   CONTRIBUTOR_RELATIONSHIP_OPTIONS,
-  CONTRIBUTOR_RELATIONSHIP_OTHER,
+  CONTRIBUTOR_RELATIONSHIP_TYPES_REQUIRING_LABEL,
 } from "@/lib/contribute/relationshipOptions.js";
 import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS } from "@/lib/contribute/questionnaireQuestions.js";
 
@@ -255,6 +255,11 @@ export async function beginContributorDraft(inviteToken, contributorName) {
       inviteToken,
       memorialId: invite.memorialId,
       contributorName: trimmedContributorName,
+      // Backfill the deceased's name/photo onto the session so the
+      // questionnaire's localStorage-only fast path (getContributorQuestionnaireDraft)
+      // can resolve invite.deceased.name without a network call.
+      deceasedName: invite.deceased.name || storedSession.deceasedName || "",
+      deceasedPhotoUrl: invite.deceased.photoUrl ?? storedSession.deceasedPhotoUrl ?? null,
       updatedAt: now,
     };
 
@@ -289,6 +294,11 @@ export async function beginContributorDraft(inviteToken, contributorName) {
     contributorToken: contribution.contributorToken,
     contributorName: contribution.contributorName,
     status: contribution.status,
+    // Persist the deceased's name/photo so the questionnaire's localStorage-only
+    // fast path (getContributorQuestionnaireDraft) can resolve invite.deceased.name
+    // without a network call.
+    deceasedName: invite.deceased.name || "",
+    deceasedPhotoUrl: invite.deceased.photoUrl ?? null,
     createdAt: now,
     updatedAt: now,
   };
@@ -312,7 +322,7 @@ function hasCompletedRelationship(session) {
     return false;
   }
 
-  if (session.relationship_type === CONTRIBUTOR_RELATIONSHIP_OTHER) {
+  if (CONTRIBUTOR_RELATIONSHIP_TYPES_REQUIRING_LABEL.has(session.relationship_type)) {
     return Boolean(session.relationship_custom_label);
   }
 
@@ -362,17 +372,21 @@ export async function getContributorRelationshipDraft(inviteToken) {
 
 export async function saveContributorRelationship(
   inviteToken,
-  { relationshipType, relationshipCustomLabel = "" },
+  { relationshipType, relationshipLabel = "" },
 ) {
   const trimmedRelationshipType = relationshipType.trim();
-  const trimmedCustomLabel = relationshipCustomLabel.trim();
+  const trimmedLabel = relationshipLabel.trim();
 
   if (!CONTRIBUTOR_RELATIONSHIP_OPTIONS.includes(trimmedRelationshipType)) {
     throw new Error("Please choose a relationship.");
   }
 
-  if (trimmedRelationshipType === CONTRIBUTOR_RELATIONSHIP_OTHER && !trimmedCustomLabel) {
-    throw new Error("Please describe your relationship.");
+  if (CONTRIBUTOR_RELATIONSHIP_TYPES_REQUIRING_LABEL.has(trimmedRelationshipType) && !trimmedLabel) {
+    throw new Error(
+      trimmedRelationshipType === "Family"
+        ? "Please choose how you're related."
+        : "Please describe your relationship.",
+    );
   }
 
   const draft = await getContributorRelationshipDraft(inviteToken);
@@ -381,8 +395,7 @@ export async function saveContributorRelationship(
     throw new Error("Your contribution could not be found.");
   }
 
-  const relationship_custom_label =
-    trimmedRelationshipType === CONTRIBUTOR_RELATIONSHIP_OTHER ? trimmedCustomLabel : null;
+  const relationship_label = trimmedLabel || null;
 
   let savedRelationship;
 
@@ -390,7 +403,7 @@ export async function saveContributorRelationship(
     savedRelationship = await saveRelationship(inviteToken, {
       contributor_token: draft.session.contributorToken,
       relationship_type: trimmedRelationshipType,
-      relationship_label: relationship_custom_label,
+      relationship_label,
     });
   } catch (error) {
     console.error("Failed to save contributor relationship.", error);
@@ -400,8 +413,8 @@ export async function saveContributorRelationship(
   const updatedSession = {
     ...draft.session,
     relationship_type: savedRelationship?.contributor?.relationship_type ?? trimmedRelationshipType,
-    relationship_custom_label,
-    relationship_label: relationship_custom_label,
+    relationship_custom_label: relationship_label,
+    relationship_label,
     updatedAt: new Date().toISOString(),
   };
 
@@ -506,9 +519,7 @@ export async function getMemorialContributors(memorialId, token) {
   if (!memorialId) throw new Error("memorialId is required");
 
   const accessToken = token?.access_token || token || (await getAuthToken()) || "";
-  if (!accessToken) {
-    return { contributors: [] };
-  }
+  if (!accessToken) return { contributors: [] };
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15_000);
@@ -526,13 +537,78 @@ export async function getMemorialContributors(memorialId, token) {
       },
     );
 
-    if (!res.ok) throw new Error("Failed to fetch contributors");
+    if (!res.ok) throw new Error(`Failed to fetch contributors: ${res.status}`);
     return res.json();
-  } catch {
-    return { contributors: [] };
   } finally {
     clearTimeout(timeoutId);
   }
+  // DO NOT catch here — let manage/page.jsx loadContributors catch it
+  // so contributorsError gets set and the user sees a real error
+}
+
+async function organizerContributorRequest(path, token, options = {}) {
+  const accessToken = token?.access_token || token || (await getAuthToken()) || "";
+  if (!accessToken) {
+    throw new Error("You need to be signed in to manage contributors.");
+  }
+
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      ...(options.headers || {}),
+    },
+  });
+
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    data = null;
+  }
+
+  if (!res.ok) {
+    throw new Error(data?.error || data?.message || "Contributor request failed.");
+  }
+
+  return data;
+}
+
+export async function getMemorialContributorSubmission(memorialId, contributorId, token) {
+  if (!memorialId) throw new Error("memorialId is required");
+  if (!contributorId) throw new Error("contributorId is required");
+
+  return organizerContributorRequest(
+    `/memorials/${encodeURIComponent(memorialId)}/contributors/${encodeURIComponent(contributorId)}/submission`,
+    token,
+  );
+}
+
+export async function updateMemorialContributorStatus(memorialId, contributorId, status, token) {
+  if (!memorialId) throw new Error("memorialId is required");
+  if (!contributorId) throw new Error("contributorId is required");
+  if (!status) throw new Error("status is required");
+
+  return organizerContributorRequest(
+    `/memorials/${encodeURIComponent(memorialId)}/contributors/${encodeURIComponent(contributorId)}/status`,
+    token,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    },
+  );
+}
+
+export async function deleteMemorialContributor(memorialId, contributorId, token) {
+  if (!memorialId) throw new Error("memorialId is required");
+  if (!contributorId) throw new Error("contributorId is required");
+
+  return organizerContributorRequest(
+    `/memorials/${encodeURIComponent(memorialId)}/contributors/${encodeURIComponent(contributorId)}`,
+    token,
+    { method: "DELETE" },
+  );
 }
 
 export async function saveQuestionnaireResponse(inviteToken, response, options = {}) {

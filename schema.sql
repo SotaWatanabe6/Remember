@@ -52,6 +52,18 @@ CREATE TABLE questionnaire_responses (
   updated_at timestamptz DEFAULT now()
 );
 
+CREATE TABLE contributor_stories (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  memorial_id uuid REFERENCES memorials(id) ON DELETE CASCADE,
+  contributor_id uuid REFERENCES contributors(id) ON DELETE CASCADE,
+  client_story_id text,
+  title text,
+  body text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  UNIQUE (contributor_id, client_story_id)
+);
+
 CREATE TABLE media_assets (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   memorial_id uuid REFERENCES memorials(id) ON DELETE CASCADE,

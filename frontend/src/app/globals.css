@@ -84,7 +84,7 @@
   --color-r-border-focus: #B8AEA4;
 
   /* Buttons */
-  --color-r-btn:      #C4B49A;
+  --color-r-btn:      #D0BFAA;
   --color-r-btn-text: #5F5A52;
 
   /* Accents and status */
@@ -282,7 +282,7 @@
     line-height:    var(--text-h1-line-height);
     font-weight:    var(--font-weight-bold);
     color:          var(--color-r-text);
-    letter-spacing: -0.01em;
+    letter-spacing: 0;
   }
 
   /* =========================
@@ -370,6 +370,12 @@
 ───────────────────────────────────────────────────────────── */
 
 @layer utilities {
+  .font-display { font-family: var(--font-family-display); }
+  .font-body { font-family: var(--font-family-body); }
+
+  
+  .font-display { font-family: var(--font-family-display); }
+  .font-body    { font-family: var(--font-family-body); }
 
   /* Text color helpers */
   .on-dark        { color: #fbf9f6; }

@@ -221,7 +221,11 @@ router.post('/:token/relationship', async (req, res) => {
 
     const { data, error } = await supabase
       .from('contributors')
-      .update({ relationship_type, relationship_label: relationship_label || null })
+      .update({
+        relationship_type,
+        relationship_label: relationship_label || null,
+        is_anonymous: typeof req.body.is_anonymous === 'boolean' ? req.body.is_anonymous : false,
+      })
       .eq('id', contributor_token)
       .select()
       .single()
@@ -306,6 +310,65 @@ router.post('/:token/submit', async (req, res) => {
 
     if (error) return res.status(400).json({ error: error.message })
     res.json({ contributor: { id: data.id, status: data.status, submitted_at: data.submitted_at } })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// POST /contribute/:token/stories — save a freeform story contribution
+router.post('/:token/stories', async (req, res) => {
+  try {
+    const { contributor_token, client_story_id, title, body } = req.body
+    const storyTitle = String(title || '').trim()
+    const storyBody = String(body || '').trim()
+
+    if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
+    if (!storyTitle && !storyBody) return res.status(400).json({ error: 'Story title or body is required' })
+
+    const { data: invite, error: inviteError } = await supabase
+      .from('invite_links')
+      .select('id, memorial_id, is_active')
+      .eq('token', req.params.token)
+      .single()
+
+    if (inviteError || !invite || !invite.is_active) {
+      return res.status(410).json({ error: 'This link is no longer active.' })
+    }
+
+    const { data: contributor } = await supabase
+      .from('contributors')
+      .select('id, memorial_id')
+      .eq('id', contributor_token)
+      .single()
+
+    if (!contributor) return res.status(404).json({ error: 'Contributor not found' })
+    if (contributor.memorial_id !== invite.memorial_id) {
+      return res.status(403).json({ error: 'Contributor does not belong to this invitation.' })
+    }
+
+    const payload = {
+      memorial_id: contributor.memorial_id,
+      contributor_id: contributor.id,
+      client_story_id: client_story_id || null,
+      title: storyTitle || null,
+      body: storyBody || null,
+      updated_at: new Date().toISOString()
+    }
+
+    const storyQuery = client_story_id
+      ? supabase
+        .from('contributor_stories')
+        .upsert(payload, { onConflict: 'contributor_id,client_story_id' })
+      : supabase
+        .from('contributor_stories')
+        .insert(payload)
+
+    const { data, error } = await storyQuery
+      .select('id, client_story_id, title, body, created_at, updated_at')
+      .single()
+
+    if (error) return res.status(400).json({ error: error.message })
+    res.status(201).json({ story: data })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -524,6 +587,35 @@ router.post('/:token/photos', async (req, res) => {
   }
 })
 
+// PATCH /contribute/:token/photos/:assetId — update caption
+router.patch('/:token/photos/:assetId', async (req, res) => {
+  try {
+    const { contributor_token, caption } = req.body
+    if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
+
+    const { data: asset, error: assetError } = await supabase
+      .from('media_assets')
+      .select('id, contributor_id')
+      .eq('id', req.params.assetId)
+      .eq('contributor_id', contributor_token)
+      .single()
+
+    if (assetError || !asset) return res.status(404).json({ error: 'Photo not found' })
+
+    const { data, error } = await supabase
+      .from('media_assets')
+      .update({ caption: caption ?? null })
+      .eq('id', req.params.assetId)
+      .select('id, caption')
+      .single()
+
+    if (error) return res.status(400).json({ error: error.message })
+    res.json({ asset: data })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // DELETE /contribute/:token/photos/:assetId
 router.delete('/:token/photos/:assetId', async (req, res) => {
   try {
@@ -671,5 +763,88 @@ router.post('/:token/voice', async (req, res) => {
     res.status(err.status || 500).json({ error: err.message })
   }
 })
+
+// GET /contribute/:contributorid/photoUrls — list saved contributor photos on a memorial
+router.get('/:contributorid/photoUrls', async (req, res) => {
+  try {
+    const contributor_id = req.params.contributorid
+    console.log(contributor_id);
+    if (!contributor_id) return res.status(400).json({ error: 'contributor id is required' })
+    const { data: contributor } = await supabase
+      .from('contributors')
+      .select('id, memorial_id')
+      .eq('id', contributor_id)
+      .single()
+
+    if (!contributor) return res.status(404).json({ error: 'Contributor not found' })
+
+    const { data: photos, error } = await supabase
+      .from('media_assets')
+      .select('id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption, created_at')
+      .eq('contributor_id', contributor.id)
+      .eq('memorial_id', contributor.memorial_id)
+      .order('created_at', { ascending: true })
+
+    if (error) return res.status(400).json({ error: error.message })
+
+    const photosWithUrls = await Promise.all((photos || []).map(async (photo) => {
+      const { data } = await supabase.storage
+        .from(photo.storage_bucket || PHOTO_STORAGE_BUCKET)
+        .createSignedUrl(photo.storage_path, 60 * 60)
+
+      return {
+        ...photo,
+        url: data?.signedUrl || null,
+        photo_url: data?.signedUrl || null
+      }
+    }))
+
+    res.json({
+      photos: photosWithUrls,
+      count: photosWithUrls.length,
+      max_photos: MAX_CONTRIBUTOR_PHOTOS,
+      remaining: Math.max(MAX_CONTRIBUTOR_PHOTOS - photosWithUrls.length, 0)
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.get('/questionnaire-responses/:contributorid', async (req, res) => {
+  try {
+    const contributorId  = req.params.contributorid;
+
+    if (!contributorId) {
+      return res.status(400).json({
+        error: 'contributorId are required',
+      });
+    }
+
+    const { data, error } = await supabase
+      .from('questionnaire_responses')
+      .select('*')
+      .eq('contributor_id', contributorId)
+
+    if (error) {
+      console.error('Supabase error:', error);
+
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve questionnaire responses',
+        error: error.message,
+      });
+    }
+
+    return res.status(200).json({
+      data
+    });
+  } catch (err) {
+    console.error('Server error:', err);
+
+    return res.status(500).json({
+      error: 'Internal server error',
+    });
+  }
+});
 
 module.exports = router

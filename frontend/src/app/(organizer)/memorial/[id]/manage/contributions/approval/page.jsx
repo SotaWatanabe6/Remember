@@ -1,3 +1,5 @@
+import ContributionRoutePage from "@/components/organizer/ContributionRoutePage.jsx";
+
 export default function ContributionApproval() {
-  return null;
+  return <ContributionRoutePage initialView="awaiting" />;
 }
