@@ -373,7 +373,7 @@ function ContributionsTab({ memorialId, contributorslist, loading, error, onRetr
       error={error}
       onRetry={onRetry}
       onContributorsChange={onContributorsChange}
-      initialView="contributors"
+      initialView="awaiting"
     />
   );
 }
@@ -422,10 +422,10 @@ function Lightbox({ photo, onClose, onPrev, onNext }) {
 // ─── All Photos Section ───────────────────────────────────────────────────────
 
 function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
-  const PHOTOS_PER_PAGE = 6;
+  
   const [filterView, setFilterView] = useState('all');
   const [sortOrder, setSortOrder] = useState('recently_added');
-  const [page, setPage] = useState(1);
+  
   const [openAlbum, setOpenAlbum] = useState(null);
   const [lightboxPhoto, setLightboxPhoto] = useState(null);
   const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -459,9 +459,9 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
   );
   const isAlbumView = filterView === 'albums';
 
-  function handleFilterChange(val) { setFilterView(val); setOpenAlbum(null); setPage(1); setSortOrder('recently_added'); }
-  function handleAlbumClick(album) { setOpenAlbum(album); setPage(1); }
-  function handleBackToAlbums() { setOpenAlbum(null); setPage(1); }
+  function handleFilterChange(val) { setFilterView(val); setOpenAlbum(null); setSortOrder('recently_added'); }
+  function handleAlbumClick(album) { setOpenAlbum(album); }
+  function handleBackToAlbums() { setOpenAlbum(null); }
 
   function sortPhotos(photos) {
     return [...photos].sort((a, b) => {
@@ -480,8 +480,7 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
   else if (isAlbumView) itemsForPagination = sortAlbums(albumList);
   else itemsForPagination = sortPhotos(allPhotos);
 
-  const totalPages = Math.max(1, Math.ceil(itemsForPagination.length / PHOTOS_PER_PAGE));
-  const paginatedItems = itemsForPagination.slice((page - 1) * PHOTOS_PER_PAGE, page * PHOTOS_PER_PAGE);
+  const paginatedItems = itemsForPagination;
 
   function openLightbox(photo, index) { setLightboxPhoto(photo); setLightboxIndex(index); }
   function prevPhoto() { const i = (lightboxIndex - 1 + paginatedItems.length) % paginatedItems.length; setLightboxIndex(i); setLightboxPhoto(paginatedItems[i]); }
@@ -494,37 +493,20 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
   return (
     <div className="flex flex-col gap-5">
 
-      {/* Top bar — back to albums (when inside an album) + photo pagination */}
-      <div className="flex items-center justify-between gap-4">
+      {/* Back to albums header */}
+      {openAlbum && (
         <div className="flex items-center gap-3">
-          {openAlbum && (
-            <button onClick={handleBackToAlbums} className="flex items-center gap-1.5 text-r-secondary text-sm hover:text-r-text transition-colors">
-              <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              Albums
-            </button>
-          )}
-          {openAlbum && (
-            <span
-              className="text-[24px] font-medium italic text-r-text"
-              style={{ fontFamily: 'var(--font-family-display)' }}
-            >
-              {openAlbum.album_name}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          <PrevArrow onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} />
-          <span
-            className="text-2xl font-medium text-r-text min-w-[64px] text-center"
-            style={{ fontFamily: 'var(--font-family-display)' }}
-          >
-            {page} / {totalPages}
+          <button onClick={handleBackToAlbums} className="flex items-center gap-1.5 text-r-secondary text-sm hover:text-r-text transition-colors">
+            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            Albums
+          </button>
+          <span className="text-[24px] font-medium italic text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
+            {openAlbum.album_name}
           </span>
-          <NextArrow onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} />
         </div>
-      </div>
+      )}
 
       {/* Filter + Sort */}
       {!openAlbum && (
@@ -533,14 +515,14 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
             <option value="all">All photos</option>
             <option value="albums">Albums</option>
           </FilterSelect>
-          <FilterSelect value={sortOrder} onChange={(e) => { setSortOrder(e.target.value); setPage(1); }} className="w-[207px]">
+          <FilterSelect value={sortOrder} onChange={(e) => { setSortOrder(e.target.value); }} className="w-[207px]">
             {sortOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
           </FilterSelect>
         </div>
       )}
       {openAlbum && (
         <div className="flex justify-end">
-          <FilterSelect value={sortOrder} onChange={(e) => { setSortOrder(e.target.value); setPage(1); }} className="w-[207px]">
+          <FilterSelect value={sortOrder} onChange={(e) => { setSortOrder(e.target.value); }} className="w-[207px]">
             {sortOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
           </FilterSelect>
         </div>
@@ -550,7 +532,8 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
       {isAlbumView && !openAlbum && (
         albumList.length === 0
           ? <div className="flex flex-col items-center justify-center py-16 text-center"><p className="text-base font-medium text-r-text">No albums yet</p><p className="text-sm text-r-secondary mt-1 max-w-xs">AI-named albums are created after Generate runs.</p></div>
-          : <div className="grid grid-cols-3 gap-5">
+          : <div className="max-h-[600px] overflow-y-auto pr-1">
+              <div className="grid grid-cols-3 gap-5">
               {paginatedItems.map((album, index) => (
                 <button key={album.album_name || index} onClick={() => handleAlbumClick(album)}
                   className="group relative rounded-2xl overflow-hidden border border-r-border bg-r-card text-left cursor-pointer hover:opacity-90 transition-opacity" style={{ aspectRatio: '4/3' }}>
@@ -564,6 +547,7 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
                 </button>
               ))}
             </div>
+            </div>
       )}
 
       {/* Photos grid */}
@@ -575,7 +559,8 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
                 {openAlbum ? 'This album has no photos assigned yet.' : 'Photos will appear here once contributors have submitted and the memorial has been generated.'}
               </p>
             </div>
-          : <div className="grid grid-cols-3 gap-5">
+          : <div className="max-h-[600px] overflow-y-auto pr-1">
+              <div className="grid grid-cols-3 gap-5">
               {paginatedItems.map((photo, index) => (
                 <button key={photo.id || index} onClick={() => openLightbox(photo, index)}
                   className="group relative w-full overflow-hidden rounded-2xl bg-r-card" style={{ aspectRatio: '4/3' }}>
@@ -590,6 +575,7 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
                   </div>
                 </button>
               ))}
+            </div>
             </div>
       )}
 

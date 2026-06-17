@@ -261,7 +261,7 @@ export default function StorySlideshow({
     : `Story photo contributed by ${slide.contributorName}`;
   const slideTransition = shouldReduceMotion ? { duration: 0 } : { duration: 0.35, ease: 'easeInOut' };
   const quote = getSlideQuote(slide);
-  const aiTag = slide.themeLabel || 'AI tag';
+  // const aiTag = slide.themeLabel || 'AI tag';
   const containerClassName = framed
     ? 'rounded-[10px] border border-r-muted bg-transparent p-5 sm:p-[50px]'
     : 'bg-transparent';
@@ -298,18 +298,16 @@ export default function StorySlideshow({
             )}
 
             <div
-              className="absolute inset-x-0 bottom-0 h-[43%] bg-gradient-to-t from-[#6c7c5b] via-[#6c7c5b]/60 to-transparent"
+              className="absolute inset-x-0 bottom-0 h-[55%] bg-gradient-to-t from-black/75 via-black/40 to-transparent"
               aria-hidden="true"
             />
 
             <div className="absolute inset-x-0 bottom-0 z-10 px-6 pb-7 pt-20 sm:px-[37px] sm:pb-[37px]">
-              <div className="flex max-w-[433px] flex-col items-start gap-[30px]">
-                <p className="font-display text-[22px] font-medium italic leading-[1.08] text-r-text sm:text-[24px]">
+              <div className="flex max-w-[433px] flex-col items-start">
+                <p className="font-display text-[22px] font-medium italic leading-[1.08] text-white sm:text-[24px]" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.8), 0 2px 12px rgba(0,0,0,0.6)' }}>
                   &ldquo;{quote}&rdquo;
                 </p>
-                <span className="inline-flex h-[50px] min-w-[128px] items-center justify-center rounded-[14px] bg-[#e3e0dd] px-8 text-center text-[12px] font-normal leading-none text-r-secondary">
-                  {aiTag}
-                </span>
+                
               </div>
             </div>
           </motion.div>
