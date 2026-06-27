@@ -171,10 +171,8 @@ function PrimaryContributorButton({ children, className = "", ...props }) {
 
 function formatYear(value) {
   if (!value) return "";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return String(date.getFullYear());
+  const year = parseInt(String(value).split('T')[0].split('-')[0], 10);
+  return Number.isFinite(year) && year > 1800 ? String(year) : "";
 }
 
 function getMemorialYears(memorial) {

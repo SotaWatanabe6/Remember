@@ -50,7 +50,7 @@ const LIFE_STAGE_MID_AGE = {
 
 function resolveMemorialBirthYear(memorial) {
   if (!memorial?.date_of_birth) return null
-  const year = new Date(memorial.date_of_birth).getFullYear()
+  const year = parseInt(String(memorial.date_of_birth).split('-')[0], 10)
   return Number.isFinite(year) && year > 1800 && year < 2100 ? year : null
 }
 
@@ -165,9 +165,14 @@ function buildMemoryCorpus(responses, contributors, subjectName, memorial) {
 
 function formatMemorialDate(value) {
   if (!value) return null
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return String(value)
-  return parsed.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  // Split the date string directly to avoid UTC midnight timezone shift
+  const parts = String(value).split('T')[0].split('-')
+  if (parts.length < 3) return String(value)
+  const [year, month, day] = parts.map(Number)
+  if (!year || !month || !day) return String(value)
+  const date = new Date(year, month - 1, day) // month - 1 because JS months are 0-indexed
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 }
 
 function buildMemorialFacts(memorial, subjectName) {

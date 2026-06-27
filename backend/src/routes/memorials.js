@@ -111,18 +111,20 @@ router.post('/cover-photo', authMiddleware, async (req, res) => {
 // POST /memorials — create a new memorial
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { subject_name, date_of_birth, date_of_passing, cover_photo_url } = req.body
-    if (!subject_name) {
-      return res.status(400).json({ error: 'subject_name is required' })
-    }
+    const { subject_name, date_of_birth, date_of_passing, cover_photo_url, biography, nickname } = req.body
+    if (!subject_name) return res.status(400).json({ error: 'subject_name is required' })
+    if (!date_of_birth) return res.status(400).json({ error: 'date_of_birth is required' })
+    if (!cover_photo_url) return res.status(400).json({ error: 'cover_photo_url is required' })
 
     const { data, error } = await supabase
       .from('memorials')
       .insert({
         user_id: req.user.sub,
         subject_name,
+        nickname: nickname || null,
         date_of_birth: date_of_birth || null,
         date_of_passing: date_of_passing || null,
+        biography: biography || null,
         cover_photo_url: cover_photo_url || null,
         status: 'collecting'
       })
@@ -146,8 +148,29 @@ router.get('/', authMiddleware, async (req, res) => {
       .order('created_at', { ascending: false })
 
     if (error) return res.status(400).json({ error: error.message })
+
+    const memorialIds = (data || []).map((m) => m.id)
+
+    const { data: contributorRows } = memorialIds.length
+      ? await supabase
+          .from('contributors')
+          .select('memorial_id')
+          .in('memorial_id', memorialIds)
+      : { data: [] }
+
+    const countByMemorial = (contributorRows || []).reduce((acc, row) => {
+      acc[row.memorial_id] = (acc[row.memorial_id] || 0) + 1
+      return acc
+    }, {})
+
     const enriched = await enrichMemorialsForClient(supabase, data || [])
-    res.json({ memorials: enriched })
+
+    const withCounts = enriched.map((m) => ({
+      ...m,
+      contributor_count: countByMemorial[m.id] ?? 0,
+    }))
+
+    res.json({ memorials: withCounts })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

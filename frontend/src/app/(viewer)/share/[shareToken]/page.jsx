@@ -92,8 +92,8 @@ function StoryMemorialSummary({ memorial }) {
 
 function safeYear(dateStr) {
   if (!dateStr) return null;
-  const y = new Date(dateStr).getFullYear();
-  return Number.isNaN(y) ? null : y;
+  const y = parseInt(String(dateStr).split('T')[0].split('-')[0], 10);
+  return Number.isFinite(y) && y > 1800 ? y : null;
 }
 
 function IntroView({ memorial, onStart }) {

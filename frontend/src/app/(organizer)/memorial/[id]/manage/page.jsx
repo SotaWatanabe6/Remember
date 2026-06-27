@@ -113,8 +113,8 @@ function FilterSelect({ value, onChange, children, className = "" }) {
 
 function MemorialHeader({ memorial, inviteToken, onShare }) {
   const status = getManageStatus(memorial?.status);
-  const birthYear = memorial?.date_of_birth ? new Date(memorial.date_of_birth).getFullYear() : "";
-  const passingYear = memorial?.date_of_passing ? new Date(memorial.date_of_passing).getFullYear() : "";
+  const birthYear = memorial?.date_of_birth? parseInt(String(memorial.date_of_birth).split('-')[0], 10) : ""
+  const passingYear = memorial?.date_of_passing? parseInt(String(memorial.date_of_passing).split('-')[0], 10) : ""
 
   return (
     <div className="grid gap-8 lg:grid-cols-[240px_1fr_220px] lg:items-start">
@@ -251,7 +251,6 @@ function TabError({ title, message, onRetry }) {
 // ─── Archive Tab (Blessing's redesigned search bar + card hover overlay) ──────
 
 function ArchiveTab({ contributors, output }) {
-  const [query, setQuery] = useState('');
 
   const allPhotos = [];
   const albums = Array.isArray(output?.photos)
@@ -263,46 +262,11 @@ function ArchiveTab({ contributors, output }) {
   const allVoices = (output?.voices || []).map((v) => ({ type: 'voice', ...v }));
   const allItems = [...allPhotos, ...allVoices];
 
-  const filtered = query.trim()
-    ? allItems.filter((item) => {
-        const text = [
-          item.caption,
-          item.contributor_name,
-          item.contributor_title,
-          item.key_quote,
-          item.transcript_text,
-        ].filter(Boolean).join(' ').toLowerCase();
-        return text.includes(query.toLowerCase());
-      })
-    : allItems;
-
   return (
     <div className="flex flex-col gap-10 pt-8">
-      {/* Search + Filter + Sort row (Blessing's 4-column grid design) */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[56px_1fr_236px_236px]">
-        <div className="flex items-center justify-center text-r-text">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2l1.84 5.66H20l-4.99 3.62 1.91 5.88L12 13.54 7.08 17.16l1.91-5.88L4 7.66h6.16L12 2z"/>
-          </svg>
-        </div>
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Show me happy memories"
-          className="h-[72px] rounded-[18px] border border-r-border bg-r-card px-6 text-[20px] leading-[20px] text-r-secondary placeholder:text-r-muted focus:outline-none focus:ring-2 focus:ring-r-border"
-        />
-        <button type="button" className="flex h-[72px] items-center justify-between rounded-[18px] border border-r-border bg-r-card px-6 text-[24px] leading-[24px] text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
-          <span>Filter</span>
-          <span className="size-0 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-r-text" />
-        </button>
-        <button type="button" className="flex h-[72px] items-center justify-between rounded-[18px] border border-r-border bg-r-card px-6 text-[24px] leading-[24px] text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
-          <span>Sort</span>
-          <span className="size-0 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-r-text" />
-        </button>
-      </div>
+      {/* Search + Filter + Sort row (Removed the search, filter and sort feature) */}
 
-      {filtered.length === 0 ? (
+      {allItems.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <p className="text-r-text text-base font-medium">
             {allItems.length === 0 ? 'No contributions yet' : 'No results found'}
@@ -315,7 +279,7 @@ function ArchiveTab({ contributors, output }) {
         </div>
       ) : (
         <div className="grid grid-cols-3 gap-4">
-          {filtered.map((item, i) => (
+          {allItems.map((item, i) => (
             <div key={item.id || i} className="group rounded-xl overflow-hidden border border-r-border bg-r-card">
               {item.type === 'photo' && (
                 item.url
