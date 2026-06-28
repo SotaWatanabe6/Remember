@@ -109,12 +109,23 @@ function FilterSelect({ value, onChange, children, className = "" }) {
   );
 }
 
+function formatMemorialDate(value) {
+  if (!value) return '';
+  const parts = String(value).split('T')[0].split('-');
+  if (parts.length < 3) return '';
+  const [year, month, day] = parts.map(Number);
+  if (!year || !month || !day) return '';
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+    month: 'long', day: 'numeric', year: 'numeric',
+  });
+}
+
 // ─── Memorial Header (Blessing's layout + my inviteToken + MemorialCoverImage) ──
 
 function MemorialHeader({ memorial, inviteToken, onShare }) {
   const status = getManageStatus(memorial?.status);
-  const birthYear = memorial?.date_of_birth? parseInt(String(memorial.date_of_birth).split('-')[0], 10) : ""
-  const passingYear = memorial?.date_of_passing? parseInt(String(memorial.date_of_passing).split('-')[0], 10) : ""
+  const birthDate = formatMemorialDate(memorial?.date_of_birth)
+  const passingDate = formatMemorialDate(memorial?.date_of_passing)
 
   return (
     <div className="grid gap-8 lg:grid-cols-[240px_1fr_220px] lg:items-start">
@@ -140,7 +151,7 @@ function MemorialHeader({ memorial, inviteToken, onShare }) {
           {memorial?.subject_name || ''}
         </h1>
         <p className="mt-4 text-[16px] leading-[16px] text-r-secondary">
-          {birthYear}{birthYear && passingYear ? " - " : ""}{passingYear}
+          {birthDate}{birthDate && passingDate ? " - " : ""}{passingDate}
         </p>
         <p className="mt-6 max-w-[520px] text-[20px] leading-[26px] text-r-secondary">
           {memorial?.bio || ''}

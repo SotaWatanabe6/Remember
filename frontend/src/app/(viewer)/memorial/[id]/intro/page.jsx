@@ -9,10 +9,21 @@ import { useParams, useRouter } from 'next/navigation';
 import { getMemorialById } from '@/lib/api';
 import LandingNav from "@/components/landing/LandingNav.jsx";
 
-function safeYear(dateStr) {
-  if (!dateStr) return null;
-  const y = parseInt(String(dateStr).split('T')[0].split('-')[0], 10);
-  return Number.isFinite(y) && y > 1800 ? y : null;
+// function safeYear(dateStr) {
+//   if (!dateStr) return null;
+//   const y = parseInt(String(dateStr).split('T')[0].split('-')[0], 10);
+//   return Number.isFinite(y) && y > 1800 ? y : null;
+// }
+
+function formatMemorialDate(value) {
+  if (!value) return '';
+  const parts = String(value).split('T')[0].split('-');
+  if (parts.length < 3) return '';
+  const [year, month, day] = parts.map(Number);
+  if (!year || !month || !day) return '';
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+    month: 'long', day: 'numeric', year: 'numeric',
+  });
 }
 
 export default function ViewerIntroPage() {
@@ -39,8 +50,8 @@ export default function ViewerIntroPage() {
     load();
   }, [id]);
 
-  const birthYear = safeYear(memorial?.date_of_birth);
-  const passingYear = safeYear(memorial?.date_of_passing);
+  const birthDate = formatMemorialDate(memorial?.date_of_birth);
+  const passingDate = formatMemorialDate(memorial?.date_of_passing);
 
   return (
     <div className="min-h-screen p-(--page-pad-x) flex flex-col">
@@ -73,14 +84,12 @@ export default function ViewerIntroPage() {
             >
               {memorial?.subject_name || ''}
             </h1>
-            {(birthYear || passingYear) && (
+            {(birthDate || passingDate) && (
               <p
                 className="text-sm mt-1"
                 style={{ color: "#9B8F80", fontFamily: "system-ui, sans-serif", letterSpacing: "0.04em" }}
               >
-                {birthYear ?? ''}
-                {birthYear && passingYear ? ' - ' : ''}
-                {passingYear ?? ''}
+                {birthDate}{birthDate && passingDate ? ' - ' : ''}{passingDate}
               </p>
             )}
           </div>

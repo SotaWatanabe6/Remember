@@ -62,20 +62,22 @@ function BottomNav({ active, onChange }) {
 
 // ─── Slideshow ────────────────────────────────────────────────────────────────
 
-function formatMemorialYear(value) {
+function formatMemorialDate(value) {
   if (!value) return '';
-  const year = parseInt(String(value).split('T')[0].split('-')[0], 10);
-  if (Number.isFinite(year) && year > 1800) return String(year);
-  const yearMatch = String(value).match(/\b\d{4}\b/);
-  return yearMatch?.[0] || '';
+  const parts = String(value).split('T')[0].split('-');
+  if (parts.length < 3) return '';
+  const [year, month, day] = parts.map(Number);
+  if (!year || !month || !day) return '';
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+    month: 'long', day: 'numeric', year: 'numeric',
+  });
 }
 
 function getMemorialYears(memorial) {
-  const birthYear = formatMemorialYear(memorial?.date_of_birth || memorial?.birth_date);
-  const passingYear = formatMemorialYear(memorial?.date_of_passing || memorial?.death_date);
-
-  if (birthYear && passingYear) return `${birthYear} - ${passingYear}`;
-  return birthYear || passingYear;
+  const birthDate = formatMemorialDate(memorial?.date_of_birth || memorial?.birth_date);
+  const passingDate = formatMemorialDate(memorial?.date_of_passing || memorial?.death_date);
+  if (birthDate && passingDate) return `${birthDate} - ${passingDate}`;
+  return birthDate || passingDate;
 }
 
 function StoryMemorialSummary({ memorial }) {
@@ -94,15 +96,9 @@ function StoryMemorialSummary({ memorial }) {
 
 // ─── Intro view (shown before Slideshow on first load) ────────────────────────
 
-function safeYear(dateStr) {
-  if (!dateStr) return null;
-  const y = parseInt(String(dateStr).split('T')[0].split('-')[0], 10);
-  return Number.isFinite(y) && y > 1800 ? y : null;
-}
-
 function IntroView({ memorial, onStart }) {
-  const birthYear = safeYear(memorial?.date_of_birth);
-  const passingYear = safeYear(memorial?.date_of_passing);
+  const birthDate = formatMemorialDate(memorial?.date_of_birth);
+  const passingDate = formatMemorialDate(memorial?.date_of_passing);
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-6 pb-16">
@@ -129,9 +125,9 @@ function IntroView({ memorial, onStart }) {
           >
             {memorial?.subject_name || ''}
           </h1>
-          {(birthYear || passingYear) && (
+          {(birthDate || passingDate) && (
             <p className="text-sm mt-2" style={{ color: "#9B8F80", letterSpacing: "0.04em" }}>
-              {birthYear ?? ''}{birthYear && passingYear ? ' - ' : ''}{passingYear ?? ''}
+              {birthDate}{birthDate && passingDate ? ' - ' : ''}{passingDate}
             </p>
           )}
         </div>
