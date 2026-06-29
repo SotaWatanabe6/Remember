@@ -181,7 +181,7 @@ export default function ReviewPage() {
 
   return (
     <main className="min-h-screen bg-r-bg text-r-text flex flex-col">
-      <ContributorNav backHref={`/contribute/${inviteToken}/story`} />
+      <ContributorNav backHref={`/contribute/${inviteToken}/voice`} />
 
       <div className="flex-1 px-6 sm:px-[50px] pt-6 pb-16">
         <div className="mx-auto flex w-full max-w-[680px] flex-col gap-6">
@@ -234,8 +234,8 @@ export default function ReviewPage() {
             )}
           </SectionCard>
 
-          <SectionCard title="Stories">
-            {stories.length > 0 ? (
+          {stories.length > 0 ? (
+            <SectionCard title="Stories">
               <div className="flex flex-col gap-4">
                 {stories.map((story) => (
                   <div key={story.id} className="flex flex-col gap-1">
@@ -246,10 +246,8 @@ export default function ReviewPage() {
                   </div>
                 ))}
               </div>
-            ) : (
-              <p className="text-caption text-r-muted">No stories added. You can submit without a story.</p>
-            )}
-          </SectionCard>
+            </SectionCard>
+          ) : null}
 
           {submitError && (
             <p className="rounded-2xl px-4 py-3 text-center text-caption" style={{ backgroundColor: '#F5DDD6', color: 'var(--color-r-danger)' }} role="alert">
