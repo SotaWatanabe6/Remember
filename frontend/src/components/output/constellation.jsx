@@ -15,6 +15,32 @@ function capitalizeFirstLetter(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+function toTitleCase(value) {
+  return String(value || '')
+    .trim()
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function getNodeLabelLines(label, maxLineLength = 14) {
+  const words = String(label || 'No theme').trim().split(/\s+/).filter(Boolean);
+  const lines = [];
+
+  words.forEach((word) => {
+    const currentLine = lines[lines.length - 1] || '';
+    const nextLine = currentLine ? `${currentLine} ${word}` : word;
+
+    if (!currentLine || nextLine.length <= maxLineLength || lines.length >= 2) {
+      lines[lines.length - 1] = nextLine;
+    } else {
+      lines.push(word);
+    }
+  });
+
+  return lines.length ? lines : ['No theme'];
+}
+
 const familyRelationship = [
   "Family",
   "Parent",
@@ -63,7 +89,7 @@ function buildRelationshipGraph(contributors, centerId, centerName, relationship
     const relData = relationships.find((r) => r.type === relType) || {};
     return {
       id: c.id,
-      name: c.name || 'Contributor',
+      name: toTitleCase(c.name || 'Contributor'),
       relationship_type: c.relationship_label ? c.relationship_label : capitalizeFirstLetter(c.relationship_type) || 'Other',
       prominence: 0.7,
       summary: relData.summary || '',
@@ -119,42 +145,34 @@ export default function ConstellationGraph({
   const [quoteNode, setQuoteNode] = useState('No quote available for this contributor.');
   
   const [tab, setTab] = useState(page==1 ? "Themes":"Relationships");
+  const currentPage = pathname.includes("output") || pathname.includes("share") ? "Viewer" : "Organizer";
   const [hiddenContributors, setHiddenContributors] = useState({});
   const [hiddenRelationshipType, setHiddenRelationshipType] = useState({
     ...Object.fromEntries(otherRelationship.map(key => [key, false])),
     ...Object.fromEntries(familyRelationship.map(key => [key, false])),
   });
   const [hiddenThemes, setHiddenThemes] = useState({});
-  const [currentPage, setCurrentPage] = useState("Viewer");
-  useEffect(() => {
-    setTab(page==1 ? "Themes":"Relationships")  
-  }, [page]);
 
   useEffect(() => {
-    if (pathname.includes("output") || pathname.includes("share")) {
-      setCurrentPage("Viewer");
-      if (tab=="Relationships") {
-        loadPhotoContributor();
-      }
-    }
-    else {
-      setCurrentPage("Organizer");
-    }
     async function loadPhotoContributor() {
-      if (selectedNode) {      
-        const photos = await getContributorsPhotos(selectedNode.id);
-        const finalphotos = photos.photos.map(user => user.photo_url); 
-        if(finalphotos){
-          setPhotoCarroussel(finalphotos);
-        }
-        const { data } = await getContributorsResponse(selectedNode.id);
-        const quotes = data.find(item => item.order_index === 3 && item.response_text!="" );
-        if (quotes){
-          setQuoteNode(quotes.response_text);
-        }
+      if (currentPage !== "Viewer" || tab !== "Relationships" || !selectedNode) {
+        return;
+      }
+
+      const photos = await getContributorsPhotos(selectedNode.id);
+      const finalphotos = (photos.photos || []).map(user => user.photo_url);
+      if(finalphotos){
+        setPhotoCarroussel(finalphotos);
+      }
+      const { data } = await getContributorsResponse(selectedNode.id);
+      const quotes = data.find(item => item.order_index === 3 && item.response_text!="" );
+      if (quotes){
+        setQuoteNode(quotes.response_text);
       }
     }
-  },[currentPage, pathname,selectedNode,tab]);
+
+    loadPhotoContributor();
+  },[currentPage, selectedNode,tab]);
 
   const handleThemesChange = (nodeId) => {
     setHiddenThemes((prev) => ({
@@ -402,11 +420,6 @@ export default function ConstellationGraph({
           }
       });
     }
-    function truncate(text, maxLength = 10) {
-      return text.length > maxLength
-        ? text.slice(0, maxLength) + "..."
-        : text;
-    }
     let label = svg
     .append("g")
     .selectAll("text")
@@ -414,14 +427,28 @@ export default function ConstellationGraph({
     .enter()
     .append("text")
     .filter(d => d.relationship_type !== "Memorial" || memorial_fill!="url(#img-pattern)")
-    .text((d) =>truncate(d.name, 12) || " No theme ")
     .attr("font-size", 14)
     .style("font-family", "var(--font-family-body)")
     .style("font-weight", "var(--font-weight-regular)")
     .attr("x", d => d.x)
     .attr("y", d => d.y)
     .attr("text-anchor", "middle")   
-    .attr("dominant-baseline", "middle");
+    .attr("dominant-baseline", "middle")
+    .style("pointer-events", "none");
+
+    label.each(function(d) {
+      const text = d3.select(this);
+      const lines = getNodeLabelLines(d.name || d.label, 14);
+      const lineHeight = 1.15;
+      const startOffset = -((lines.length - 1) * lineHeight) / 2;
+
+      lines.forEach((line, index) => {
+        text.append("tspan")
+          .attr("x", d.x)
+          .attr("dy", index === 0 ? `${startOffset}em` : `${lineHeight}em`)
+          .text(line);
+      });
+    });
 
     simulation.on("tick", () => {
       link
@@ -432,7 +459,11 @@ export default function ConstellationGraph({
 
       node.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
 
-      label.attr("x", (d) => d.x).attr("y", (d) => d.y);
+      label
+        .attr("x", (d) => d.x)
+        .attr("y", (d) => d.y)
+        .selectAll("tspan")
+        .attr("x", function() { return d3.select(this.parentNode).datum().x; });
     });
     
     // Add smooth transition when nodes enter

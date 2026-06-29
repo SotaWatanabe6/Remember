@@ -728,6 +728,7 @@ function OutputsTab({ memorial, contributors, canGenerate, disabledMessage, gene
       )}
       {(currentSection.key === 'constellation-themes' || currentSection.key === 'constellation-relationships') && (
         <ConstellationGraph
+          key={constellationPage}
           ai_output={output}
           memorial={memorial}
           contributor={contributors}
