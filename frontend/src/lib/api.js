@@ -959,15 +959,13 @@ export async function saveRelationship(token, relationshipInput) {
     };
   }
 
-  const session = JSON.parse(localStorage.getItem(`remember_contributor_session:${token}`) || '{}');
-
   return requestJson(`/contribute/${encodeURIComponent(token)}/relationship`, {
     method: "POST",
     body: JSON.stringify({
       contributor_token: relationshipInput.contributor_token,
       relationship_type: relationshipInput.relationship_type,
       relationship_label: relationshipInput.relationship_label ?? null,
-      is_anonymous: session?.is_anonymous ?? false,
+      is_anonymous: false,
     }),
   });
 }

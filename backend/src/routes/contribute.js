@@ -224,7 +224,7 @@ router.post('/:token/relationship', async (req, res) => {
       .update({
         relationship_type,
         relationship_label: relationship_label || null,
-        is_anonymous: typeof req.body.is_anonymous === 'boolean' ? req.body.is_anonymous : false,
+        is_anonymous: false,
       })
       .eq('id', contributor_token)
       .select()

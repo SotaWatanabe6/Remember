@@ -318,7 +318,7 @@ export function ContributorOnboardingBrief({ inviteToken }) {
         <PrimaryContributorButton
           type="button"
           className="mt-[100px] max-sm:mt-16"
-          onClick={() => router.push(`/contribute/${inviteToken}/privacy`)}
+          onClick={() => router.push(`/contribute/${inviteToken}/public-contributor`)}
         >
           Continue
         </PrimaryContributorButton>
