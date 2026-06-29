@@ -14,6 +14,8 @@ import {
   saveQuestionnaireResponse,
 } from "@/services/contributorService.js";
 
+const QUESTIONNAIRE_DRAFT_STORAGE_PREFIX = "remember_questionnaire_draft";
+
 const questionnaireErrorCopy = {
   invalid: {
     title: "This invitation link is not available",
@@ -137,6 +139,45 @@ function buildLastSavedAnswers(responses) {
   }, {});
 }
 
+function getQuestionnaireDraftStorageKey(inviteToken, contributorId) {
+  return `${QUESTIONNAIRE_DRAFT_STORAGE_PREFIX}:${inviteToken}:${contributorId}`;
+}
+
+function readStoredQuestionnaireDraft(inviteToken, contributorId) {
+  if (typeof window === "undefined" || !inviteToken || !contributorId) {
+    return {};
+  }
+
+  try {
+    const stored = window.localStorage.getItem(getQuestionnaireDraftStorageKey(inviteToken, contributorId));
+    if (!stored) return {};
+
+    const parsed = JSON.parse(stored);
+    return parsed && typeof parsed === "object" ? parsed.answers ?? {} : {};
+  } catch (error) {
+    console.warn("Unable to load saved questionnaire draft.", error);
+    return {};
+  }
+}
+
+function storeQuestionnaireDraft(inviteToken, contributorId, answersByQuestion) {
+  if (typeof window === "undefined" || !inviteToken || !contributorId) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      getQuestionnaireDraftStorageKey(inviteToken, contributorId),
+      JSON.stringify({
+        answers: answersByQuestion,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+  } catch (error) {
+    console.warn("Unable to save questionnaire draft.", error);
+  }
+}
+
 function getResumeQuestionIndex(answersByQuestion) {
   const firstUnansweredIndex = CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.findIndex((question) => {
     const answer = answersByQuestion[question.id]?.answer_text ?? "";
@@ -233,7 +274,15 @@ export default function QuestionnaireFlow({ inviteToken }) {
           return;
         }
 
-        const restoredAnswers = buildAnswersByQuestion(savedResponses);
+        const localAnswers = readStoredQuestionnaireDraft(
+          inviteToken,
+          questionnaireDraft.session.contributorId,
+        );
+        const serverAnswers = buildAnswersByQuestion(savedResponses);
+        const restoredAnswers = {
+          ...localAnswers,
+          ...serverAnswers,
+        };
         setAnswers(restoredAnswers);
         lastSavedAnswersRef.current = buildLastSavedAnswers(savedResponses);
 
@@ -394,6 +443,10 @@ export default function QuestionnaireFlow({ inviteToken }) {
       ...currentAnswers,
       [questionId]: nextAnswer,
     }));
+    storeQuestionnaireDraft(inviteToken, draft?.session?.contributorId, {
+      ...answersRef.current,
+      [questionId]: nextAnswer,
+    });
     queueSave(questionId, nextAnswer);
   };
 
@@ -417,6 +470,10 @@ export default function QuestionnaireFlow({ inviteToken }) {
       ...currentAnswers,
       [questionId]: nextAnswer,
     }));
+    storeQuestionnaireDraft(inviteToken, draft?.session?.contributorId, {
+      ...answersRef.current,
+      [questionId]: nextAnswer,
+    });
 
     if (nextAnswer.answer_text) {
       queueSave(questionId, nextAnswer);
@@ -444,9 +501,13 @@ export default function QuestionnaireFlow({ inviteToken }) {
         ...currentAnswers,
         [questionId]: nextAnswer,
       }));
+      storeQuestionnaireDraft(inviteToken, draft?.session?.contributorId, {
+        ...answersRef.current,
+        [questionId]: nextAnswer,
+      });
       queueSave(questionId, nextAnswer, 1200);
     },
-    [queueSave],
+    [draft?.session?.contributorId, inviteToken, queueSave],
   );
 
   const handleToggleListening = () => {

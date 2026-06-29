@@ -205,6 +205,18 @@ function getFirstName(name) {
   return name.trim().split(/\s+/)[0] || name;
 }
 
+function getStoredContributorName(inviteToken) {
+  if (typeof window === "undefined") return "";
+
+  try {
+    const sessionKey = `remember_contributor_session:${inviteToken}`;
+    const session = JSON.parse(localStorage.getItem(sessionKey) || "{}");
+    return session?.display_name || session?.contributorName || session?.contributor_name || "";
+  } catch {
+    return "";
+  }
+}
+
 export default function ContributorInviteLanding({ inviteToken }) {
   const router = useRouter();
   const { invite, isValidating } = useContributorInvite(inviteToken);
@@ -318,7 +330,7 @@ export function ContributorOnboardingBrief({ inviteToken }) {
 export function PublicContributorPage({ inviteToken }) {
   const router = useRouter();
   const { invite, isValidating } = useContributorInvite(inviteToken);
-  const [contributorName, setContributorName] = useState("");
+  const [contributorName, setContributorName] = useState(() => getStoredContributorName(inviteToken));
   const [nameError, setNameError] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
