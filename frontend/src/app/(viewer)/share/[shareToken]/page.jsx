@@ -444,22 +444,40 @@ function PhotoArchiveSection({ output, contributors }) {
   const [contributorFilter, setContributorFilter] = useState('all');
   const albums = normalizePhotos(output?.photos);
   const allPhotos = albums.flatMap((album) => (album.photos || []).map((p) => ({ ...p, album_name: album.album_name })));
-  const sortedPhotos = [...allPhotos].sort((a, b) => {
+  const contributorNames = [...new Set(allPhotos.map((photo) => photo.contributor_name).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: 'base' })
+  );
+  const contributorFilteredPhotos = contributorFilter === 'all'
+    ? allPhotos
+    : allPhotos.filter((photo) => photo.contributor_name === contributorFilter);
+  const sortedPhotos = [...contributorFilteredPhotos].sort((a, b) => {
     if (sort === 'oldest') return new Date(a.taken_at || 0) - new Date(b.taken_at || 0);
     return new Date(b.taken_at || 0) - new Date(a.taken_at || 0);
   });
+  function handleViewChange(nextView) {
+    setView(nextView);
+    setContributorFilter('all');
+  }
   return (
     <div>
       <h2 className="text-[40px] font-medium italic text-r-text mb-6" style={{ fontFamily: 'var(--font-family-display)' }}>
         Photo archive
       </h2>
       <div className="flex items-center justify-between mb-6 gap-4">
-        <FilterSelect value={view} onChange={(val) => setView(val)} className="flex-1 max-w-[320px]">
+        <FilterSelect value={view} onChange={handleViewChange} className="flex-1 max-w-[320px]">
           <option value="all_photos">All Photos</option>
           <option value="albums">Albums</option>
           <option value="contributors">Contributors</option>
         </FilterSelect>
         <div className="flex items-center gap-3">
+          {view === 'all_photos' && contributorNames.length > 0 && (
+            <FilterSelect value={contributorFilter} onChange={setContributorFilter} className="w-[220px]">
+              <option value="all">All contributors</option>
+              {contributorNames.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </FilterSelect>
+          )}
           {view === 'contributors' && (
             <FilterSelect value={contributorFilter} onChange={setContributorFilter} className="w-[180px]">
               <option value="all">Filter</option>

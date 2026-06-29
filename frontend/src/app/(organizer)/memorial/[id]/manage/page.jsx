@@ -424,6 +424,7 @@ function Lightbox({ photo, onClose, onPrev, onNext }) {
 function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
   
   const [filterView, setFilterView] = useState('all');
+  const [contributorFilter, setContributorFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState('recently_added');
   
   const [openAlbum, setOpenAlbum] = useState(null);
@@ -457,9 +458,20 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
   const allPhotos = albumList.flatMap((album) =>
     (album.photos || []).map((p) => ({ ...p, album_name: album.album_name }))
   );
+  const contributorNames = [...new Set(allPhotos.map((photo) => photo.contributor_name).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: 'base' })
+  );
+  const filteredAllPhotos = contributorFilter === 'all'
+    ? allPhotos
+    : allPhotos.filter((photo) => photo.contributor_name === contributorFilter);
   const isAlbumView = filterView === 'albums';
 
-  function handleFilterChange(val) { setFilterView(val); setOpenAlbum(null); setSortOrder('recently_added'); }
+  function handleFilterChange(val) {
+    setFilterView(val);
+    setOpenAlbum(null);
+    setContributorFilter('all');
+    setSortOrder('recently_added');
+  }
   function handleAlbumClick(album) { setOpenAlbum(album); }
   function handleBackToAlbums() { setOpenAlbum(null); }
 
@@ -478,7 +490,7 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
   let itemsForPagination = [];
   if (openAlbum) itemsForPagination = sortPhotos(openAlbum.photos || []);
   else if (isAlbumView) itemsForPagination = sortAlbums(albumList);
-  else itemsForPagination = sortPhotos(allPhotos);
+  else itemsForPagination = sortPhotos(filteredAllPhotos);
 
   const paginatedItems = itemsForPagination;
 
@@ -515,9 +527,19 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
             <option value="all">All photos</option>
             <option value="albums">Albums</option>
           </FilterSelect>
-          <FilterSelect value={sortOrder} onChange={(e) => { setSortOrder(e.target.value); }} className="w-[207px]">
-            {sortOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-          </FilterSelect>
+          <div className="flex items-center gap-3">
+            {!isAlbumView && contributorNames.length > 0 ? (
+              <FilterSelect value={contributorFilter} onChange={(e) => setContributorFilter(e.target.value)} className="w-[220px]">
+                <option value="all">All contributors</option>
+                {contributorNames.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </FilterSelect>
+            ) : null}
+            <FilterSelect value={sortOrder} onChange={(e) => { setSortOrder(e.target.value); }} className="w-[207px]">
+              {sortOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+            </FilterSelect>
+          </div>
         </div>
       )}
       {openAlbum && (
@@ -556,7 +578,11 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
           ? <div className="flex flex-col items-center justify-center py-16 text-center">
               <p className="text-base font-medium text-r-text">{openAlbum ? 'No photos in this album' : 'No photos yet'}</p>
               <p className="text-sm text-r-secondary mt-1 max-w-xs">
-                {openAlbum ? 'This album has no photos assigned yet.' : 'Photos will appear here once contributors have submitted and the memorial has been generated.'}
+                {openAlbum
+                  ? 'This album has no photos assigned yet.'
+                  : contributorFilter === 'all'
+                    ? 'Photos will appear here once contributors have submitted and the memorial has been generated.'
+                    : 'No photos match this contributor filter.'}
               </p>
             </div>
           : <div className="max-h-[600px] overflow-y-auto pr-1">

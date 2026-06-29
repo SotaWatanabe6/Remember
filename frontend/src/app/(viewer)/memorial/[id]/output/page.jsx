@@ -654,11 +654,22 @@ function PhotoArchiveSection({ output, contributors }) {
 
   const albums = normalizePhotos(output?.photos);
   const allPhotos = albums.flatMap((album) => (album.photos || []).map((p) => ({ ...p, album_name: album.album_name })));
+  const contributorNames = [...new Set(allPhotos.map((photo) => photo.contributor_name).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: 'base' })
+  );
+  const contributorFilteredPhotos = contributorFilter === 'all'
+    ? allPhotos
+    : allPhotos.filter((photo) => photo.contributor_name === contributorFilter);
 
-  const sortedPhotos = [...allPhotos].sort((a, b) => {
+  const sortedPhotos = [...contributorFilteredPhotos].sort((a, b) => {
     if (sort === 'oldest') return new Date(a.taken_at || 0) - new Date(b.taken_at || 0);
     return new Date(b.taken_at || 0) - new Date(a.taken_at || 0);
   });
+
+  function handleViewChange(nextView) {
+    setView(nextView);
+    setContributorFilter('all');
+  }
 
   return (
     <div>
@@ -673,7 +684,7 @@ function PhotoArchiveSection({ output, contributors }) {
       <div className="flex items-center justify-between mb-6 gap-4">
         <FilterSelect
           value={view}
-          onChange={(val) => setView(val)}
+          onChange={handleViewChange}
           className="flex-1 max-w-[320px]"
         >
           <option value="all_photos">All Photos</option>
@@ -682,6 +693,18 @@ function PhotoArchiveSection({ output, contributors }) {
         </FilterSelect>
 
         <div className="flex items-center gap-3">
+          {view === 'all_photos' && contributorNames.length > 0 && (
+            <FilterSelect
+              value={contributorFilter}
+              onChange={setContributorFilter}
+              className="w-[220px]"
+            >
+              <option value="all">All contributors</option>
+              {contributorNames.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </FilterSelect>
+          )}
           {view === 'contributors' && (
             <FilterSelect
               value={contributorFilter}
