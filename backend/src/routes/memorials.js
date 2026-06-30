@@ -124,13 +124,15 @@ router.post('/', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'subject_name is required' })
     }
 
+    const biographyText = String(biography || '').trim()
+
     const memorialPayload = {
       user_id: req.user.sub,
       subject_name,
       nickname: nickname || null,
       date_of_birth: date_of_birth || null,
       date_of_passing: date_of_passing || null,
-      biography: biography || null,
+      biography: biographyText || null,
       related_people: Array.isArray(related_people) ? related_people : [],
       cover_photo_url: cover_photo_url || null,
       status: 'collecting'

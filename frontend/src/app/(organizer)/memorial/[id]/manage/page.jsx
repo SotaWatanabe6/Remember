@@ -29,13 +29,26 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function normalizeMemorialForView(memorial) {
   if (!memorial) return null;
+  const biography =
+    memorial.biography ||
+    memorial.bio ||
+    memorial.description ||
+    memorial.profile ||
+    memorial.brief_biography ||
+    memorial.short_description ||
+    "";
+
   return {
     id: memorial.id,
     subject_name: memorial.subject_name || memorial.deceased_name,
     cover_photo_url: memorial.cover_photo_url || memorial.profile_photo_url || null,
     date_of_birth: memorial.date_of_birth || memorial.birth_date || null,
     date_of_passing: memorial.date_of_passing || memorial.death_date || null,
-    bio: memorial.brief_biography || memorial.short_description || memorial.biography || null,
+    bio: biography,
+    biography,
+    description: memorial.description || biography,
+    brief_biography: memorial.brief_biography || biography,
+    short_description: memorial.short_description || biography,
     status: memorial.status || null,
   };
 }
@@ -115,6 +128,7 @@ function MemorialHeader({ memorial, inviteToken, onShare }) {
   const status = getManageStatus(memorial?.status);
   const birthYear = memorial?.date_of_birth ? new Date(memorial.date_of_birth).getFullYear() : "";
   const passingYear = memorial?.date_of_passing ? new Date(memorial.date_of_passing).getFullYear() : "";
+  const biography = memorial?.bio || memorial?.biography || "";
 
   return (
     <div className="grid gap-8 lg:grid-cols-[240px_1fr_220px] lg:items-start">
@@ -142,9 +156,11 @@ function MemorialHeader({ memorial, inviteToken, onShare }) {
         <p className="mt-4 text-[16px] leading-[16px] text-r-secondary">
           {birthYear}{birthYear && passingYear ? " - " : ""}{passingYear}
         </p>
-        <p className="mt-6 max-w-[520px] text-[20px] leading-[26px] text-r-secondary">
-          {memorial?.bio || ''}
-        </p>
+        {biography ? (
+          <p className="mt-4 max-w-[433px] text-[20px] leading-[26px] text-r-secondary">
+            {biography}
+          </p>
+        ) : null}
         {memorial?.status && (
           <span className={`mt-6 inline-block rounded-full px-5 py-2 text-sm font-medium ${status.className}`}>
             {status.label}
