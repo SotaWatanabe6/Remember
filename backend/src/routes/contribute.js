@@ -144,12 +144,29 @@ router.get('/:token', async (req, res) => {
 
     const { data: memorial } = await supabase
       .from('memorials')
-      .select('id, subject_name, cover_photo_url, date_of_birth, date_of_passing, biography')
+      .select('*')
       .eq('id', invite.memorial_id)
       .single()
 
+    const biography =
+      memorial?.biography ||
+      memorial?.bio ||
+      memorial?.description ||
+      memorial?.brief_biography ||
+      memorial?.short_description ||
+      ''
+
     res.json({
-      memorial,
+      memorial: memorial
+        ? {
+          ...memorial,
+          biography,
+          bio: biography,
+          description: memorial.description || biography,
+          brief_biography: memorial.brief_biography || biography,
+          short_description: memorial.short_description || biography,
+        }
+        : null,
       invite: {
         token: invite.token,
         is_active: invite.is_active,

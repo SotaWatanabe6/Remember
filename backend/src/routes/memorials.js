@@ -111,21 +111,34 @@ router.post('/cover-photo', authMiddleware, async (req, res) => {
 // POST /memorials — create a new memorial
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { subject_name, date_of_birth, date_of_passing, cover_photo_url } = req.body
+    const {
+      subject_name,
+      nickname,
+      date_of_birth,
+      date_of_passing,
+      biography,
+      related_people,
+      cover_photo_url,
+    } = req.body
     if (!subject_name) {
       return res.status(400).json({ error: 'subject_name is required' })
     }
 
+    const memorialPayload = {
+      user_id: req.user.sub,
+      subject_name,
+      nickname: nickname || null,
+      date_of_birth: date_of_birth || null,
+      date_of_passing: date_of_passing || null,
+      biography: biography || null,
+      related_people: Array.isArray(related_people) ? related_people : [],
+      cover_photo_url: cover_photo_url || null,
+      status: 'collecting'
+    }
+
     const { data, error } = await supabase
       .from('memorials')
-      .insert({
-        user_id: req.user.sub,
-        subject_name,
-        date_of_birth: date_of_birth || null,
-        date_of_passing: date_of_passing || null,
-        cover_photo_url: cover_photo_url || null,
-        status: 'collecting'
-      })
+      .insert(memorialPayload)
       .select()
       .single()
 
