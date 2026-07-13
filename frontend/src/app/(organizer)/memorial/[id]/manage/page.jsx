@@ -37,6 +37,7 @@ function normalizeMemorialForView(memorial) {
     date_of_passing: memorial.date_of_passing || memorial.death_date || null,
     bio: memorial.brief_biography || memorial.short_description || memorial.biography || null,
     status: memorial.status || null,
+    generated_at: memorial.generated_at || null,
   };
 }
 
@@ -160,6 +161,16 @@ function MemorialHeader({ memorial, inviteToken, onShare }) {
           <span className={`mt-6 inline-block rounded-full px-5 py-2 text-sm font-medium ${status.className}`}>
             {status.label}
           </span>
+        )}
+        {memorial?.status === 'complete' && memorial?.generated_at && (
+          <p className="mt-2 text-sm leading-5 text-r-secondary">
+            Generated on{' '}
+            {new Date(memorial.generated_at).toLocaleDateString('en-US', {
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric',
+            })}
+          </p>
         )}
       </div>
 
@@ -644,6 +655,7 @@ function OutputsTab({ memorial, contributors, canGenerate, disabledMessage, gene
           {currentSection.label}
         </h2>
         <div className="flex items-center gap-4">
+          {memorial?.status !== 'complete' && (
           <button
             onClick={onGenerate}
             disabled={!canGenerate || generating}
@@ -652,6 +664,7 @@ function OutputsTab({ memorial, contributors, canGenerate, disabledMessage, gene
           >
             {generating ? 'Generating…' : 'Generate'}
           </button>
+        )}
           <div className="flex items-center gap-3">
             <PrevArrow
               onClick={() => setSectionIndex((i) => Math.max(0, i - 1))}
@@ -802,6 +815,50 @@ function ShareModal({ onClose, memorialId }) {
   );
 }
 
+// Add this right above: export default function MemorialOutputPage() {
+function GenerateConfirmModal({ onConfirm, onCancel, subjectName }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-6"
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl bg-white p-8 flex flex-col gap-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex flex-col gap-3">
+          <h2
+            className="text-[28px] font-medium leading-[34px] text-r-text"
+            style={{ fontFamily: 'var(--font-family-display)' }}
+          >
+            Generate {subjectName}'s memorial?
+          </h2>
+          <p className="text-base leading-6 text-r-secondary">
+            This will create the Story, Constellation, Voices, and Photo Archive from all submitted contributions. Generation cannot be undone or re-run once complete.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="w-full rounded-full py-4 text-base font-medium text-r-btn-text transition hover:opacity-85 border-none"
+            style={{ backgroundColor: 'var(--color-r-btn)' }}
+          >
+            Generate memorial
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="w-full rounded-full py-4 text-base font-medium text-r-text transition hover:opacity-70 border border-r-border bg-transparent"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Page (my structure — full-width nav, 960px content, inviteToken) ─────────
 
 export default function MemorialOutputPage() {
@@ -813,6 +870,7 @@ export default function MemorialOutputPage() {
   const [contributorsLoading, setContributorsLoading] = useState(true);
   const [contributorsError, setContributorsError] = useState(null);
   const [showShare, setShowShare] = useState(false);
+  const [showGenerateConfirm, setShowGenerateConfirm] = useState(false)
   const [contributors, setContributors] = useState([]);
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState(null);
@@ -906,6 +964,15 @@ export default function MemorialOutputPage() {
     } finally { if (!keepGenerating) setGenerating(false); }
   }, [generating, loadOutput, memorialId]);
 
+  const handleGenerateClick = useCallback(() => {
+    setShowGenerateConfirm(true)
+  }, [])
+
+  const handleGenerateConfirm = useCallback(() => {
+    setShowGenerateConfirm(false)
+    handleGenerate()
+  }, [handleGenerate])
+
   useEffect(() => {
     if (!id || output || !generating) return undefined;
     let cancelled = false;
@@ -987,7 +1054,7 @@ export default function MemorialOutputPage() {
                 generationError={generationError}
                 generationJob={generationJob}
                 generating={generating}
-                onGenerate={handleGenerate}
+                onGenerate={handleGenerateClick}
                 output={output}
                 loading={outputLoading}
                 error={outputError}
@@ -999,6 +1066,14 @@ export default function MemorialOutputPage() {
       </div>
 
       {showShare && <ShareModal onClose={() => setShowShare(false)} memorialId={id} />}
+
+      {showGenerateConfirm && (
+        <GenerateConfirmModal
+          subjectName={memorial?.subject_name || 'this memorial'}
+          onConfirm={handleGenerateConfirm}
+          onCancel={() => setShowGenerateConfirm(false)}
+        />
+      )}
     </main>
   );
 }

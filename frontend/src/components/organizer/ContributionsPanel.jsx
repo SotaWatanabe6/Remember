@@ -15,6 +15,10 @@ import {
 } from "lucide-react";
 import {
   deleteMemorialContributor,
+  deleteContributorPhoto,
+  deleteContributorVoice,
+  deleteContributorResponse,
+  deleteContributorStory,
   getMemorialContributorSubmission,
   getMemorialContributors,
   updateMemorialContributorStatus,
@@ -184,8 +188,22 @@ function ActionButtons({ disabled, onApprove, onDelete }) {
   );
 }
 
-function PhotoSection({ contributor, photos, submittedDate, actions }) {
-  if (!photos.length) return null;
+function DeleteItemButton({ onDelete, label = "Delete" }) {
+  return (
+    <button
+      type="button"
+      onClick={onDelete}
+      className="flex items-center gap-1.5 text-[13px] text-[#C96E43] transition hover:opacity-70"
+      aria-label={label}
+    >
+      <Trash2 size={14} strokeWidth={2} />
+      {label}
+    </button>
+  )
+}
+
+function PhotoSection({ contributor, photos, submittedDate, actions, onDeletePhoto }) {
+  if (!photos.length) return null
 
   return (
     <section className="rounded-[18px] border border-r-border bg-[#F6EFE7] p-6 md:p-7">
@@ -205,7 +223,7 @@ function PhotoSection({ contributor, photos, submittedDate, actions }) {
         <div>
           <div className="grid max-w-[620px] grid-cols-2 gap-4 sm:grid-cols-3">
             {photos.map((photo) => (
-              <figure key={photo.id} className="overflow-hidden rounded-[8px] bg-[#D8C8AF]">
+              <figure key={photo.id} className="group overflow-hidden rounded-[8px] bg-[#D8C8AF]">
                 {photo.photo_url || photo.url ? (
                   <img
                     src={photo.photo_url || photo.url}
@@ -218,18 +236,24 @@ function PhotoSection({ contributor, photos, submittedDate, actions }) {
                 {photo.caption && (
                   <figcaption className="px-3 py-2 text-[13px] leading-4 text-[#5F5A52]">{photo.caption}</figcaption>
                 )}
+                <div className="flex justify-end px-3 pb-2">
+                  <DeleteItemButton
+                    label="Remove"
+                    onDelete={() => onDeletePhoto?.(photo.id)}
+                  />
+                </div>
               </figure>
             ))}
           </div>
-          <div className="mt-6 flex justify-end">{actions}</div>
+          {/* <div className="mt-6 flex justify-end">{actions}</div> */}
         </div>
       </div>
     </section>
-  );
+  )
 }
 
-function VoiceSection({ contributor, voices, submittedDate, actions }) {
-  if (!voices.length) return null;
+function VoiceSection({ contributor, voices, submittedDate, actions, onDeleteVoice }) {
+  if (!voices.length) return null
 
   return (
     <section className="rounded-[18px] border border-r-border bg-[#F6EFE7] p-6 md:p-7">
@@ -246,14 +270,20 @@ function VoiceSection({ contributor, voices, submittedDate, actions }) {
 
         <div className="space-y-6">
           {voices.map((voice) => (
-            <article key={voice.id}>
-              <h3 className="text-[26px] leading-[30px] text-r-text [font-family:var(--font-family-display)]">
-                {voice.contributor_title || voice.file_name || "Voice recording"}
-              </h3>
+            <article key={voice.id} className="flex flex-col gap-3">
+              <div className="flex items-start justify-between gap-4">
+                <h3 className="text-[26px] leading-[30px] text-r-text [font-family:var(--font-family-display)]">
+                  {voice.contributor_title || voice.file_name || "Voice recording"}
+                </h3>
+                <DeleteItemButton
+                  label="Remove"
+                  onDelete={() => onDeleteVoice?.(voice.id)}
+                />
+              </div>
               {voice.audio_url || voice.url ? (
-                <audio controls src={voice.audio_url || voice.url} className="mt-4 w-full max-w-[520px]" />
+                <audio controls src={voice.audio_url || voice.url} className="w-full max-w-[520px]" />
               ) : (
-                <div className="mt-4 flex items-center gap-5">
+                <div className="flex items-center gap-5">
                   <span className="flex size-[48px] items-center justify-center rounded-full bg-[#3F3A33] text-[#F6EFE7]">
                     <Play size={20} fill="currentColor" />
                   </span>
@@ -261,7 +291,7 @@ function VoiceSection({ contributor, voices, submittedDate, actions }) {
                 </div>
               )}
               {(voice.key_quote || voice.transcript_text) && (
-                <p className="mt-5 max-w-[760px] text-[18px] italic leading-[28px] text-[#5F5A52]">
+                <p className="max-w-[760px] text-[18px] italic leading-[28px] text-[#5F5A52]">
                   &quot;{voice.key_quote || voice.transcript_text}&quot;
                 </p>
               )}
@@ -269,13 +299,53 @@ function VoiceSection({ contributor, voices, submittedDate, actions }) {
           ))}
         </div>
 
-        <div className="self-end">{actions}</div>
+        {/* <div className="self-end">{actions}</div> */}
       </div>
     </section>
-  );
+  )
 }
 
-function StorySection({ contributor, stories, submittedDate, actions }) {
+function ResponsesSection({ contributor, responses, submittedDate, actions, onDeleteResponse }) {
+  const savedResponses = responses.filter((r) => String(r.answer_text || '').trim())
+  if (!savedResponses.length) return null
+
+  return (
+    <section className="rounded-[18px] border border-r-border bg-[#F6EFE7] p-6 md:p-7">
+      <div className="grid gap-7 lg:grid-cols-[260px_1fr_auto]">
+        <div className="flex items-start gap-4">
+          <FileText className="mt-1 text-[#3F3A33]" size={28} />
+          <div>
+            <p className="text-[16px] leading-[20px] text-[#5F5A52]">
+              {getContributorName(contributor)} answered {savedResponses.length} question{savedResponses.length === 1 ? '' : 's'}
+            </p>
+            <p className="mt-3 text-[14px] leading-[18px] text-[#5F5A52]">Submitted {submittedDate}</p>
+          </div>
+        </div>
+        <div className="space-y-6">
+          {savedResponses.map((response) => (
+            <article key={response.id} className="flex flex-col gap-2">
+              <div className="flex items-start justify-between gap-4">
+                <p className="text-[14px] font-medium leading-[18px] text-[#5F5A52]">
+                  {response.question_text || response.question_id || 'Question'}
+                </p>
+                <DeleteItemButton
+                  label="Remove"
+                  onDelete={() => onDeleteResponse?.(response.id)}
+                />
+              </div>
+              <p className="text-[18px] leading-[28px] text-r-text">
+                {response.answer_text}
+              </p>
+            </article>
+          ))}
+        </div>
+        {/* <div className="self-end">{actions}</div> */}
+      </div>
+    </section>
+  )
+}
+
+function StorySection({ contributor, stories, submittedDate, onDeleteStory }) {
   const savedStories = stories.filter((story) => String(story.title || story.body || "").trim());
   if (!savedStories.length) return null;
 
@@ -294,22 +364,26 @@ function StorySection({ contributor, stories, submittedDate, actions }) {
 
         <div className="space-y-6">
           {savedStories.map((story) => (
-            <article key={story.id || story.client_story_id}>
-              {story.title && (
-                <h3 className="text-[24px] leading-[30px] text-r-text [font-family:var(--font-family-display)]">
-                  {story.title}
-                </h3>
-              )}
+            <article key={story.id || story.client_story_id} className="flex flex-col gap-2">
+              <div className="flex items-start justify-between gap-4">
+                {story.title && (
+                  <h3 className="text-[24px] leading-[30px] text-r-text [font-family:var(--font-family-display)]">
+                    {story.title}
+                  </h3>
+                )}
+                <DeleteItemButton
+                  label="Remove"
+                  onDelete={() => onDeleteStory?.(story.id)}
+                />
+              </div>
               {story.body && (
-                <p className={`${story.title ? "mt-3" : ""} text-[18px] leading-[28px] text-[#5F5A52]`}>
+                <p className="text-[18px] leading-[28px] text-[#5F5A52]">
                   {story.body}
                 </p>
               )}
             </article>
           ))}
         </div>
-
-        <div className="self-end">{actions}</div>
       </div>
     </section>
   );
@@ -323,6 +397,10 @@ function ApprovalDetail({
   actionPending,
   onApprove,
   onDelete,
+  onDeletePhoto,
+  onDeleteVoice,
+  onDeleteResponse,
+  onDeleteStory,
   onRetry,
 }) {
   if (!contributor) {
@@ -351,7 +429,8 @@ function ApprovalDetail({
   const photos = detail?.photos || [];
   const stories = detail?.stories || [];
   const voices = detail?.voices || [];
-  const visibleContributionCount = photos.length + stories.length + voices.length;
+  const responses = detail?.responses || [];
+  const visibleContributionCount = photos.length + stories.length + voices.length + responses.length;
   const contributionCount = Math.max(Number(currentContributor.contribution_count) || 0, visibleContributionCount);
   const actions = (
     <ActionButtons
@@ -360,7 +439,7 @@ function ApprovalDetail({
       onDelete={onDelete}
     />
   );
-  const hasContent = photos.length || stories.length || voices.length;
+  const hasContent = photos.length || stories.length || voices.length || responses.length;
 
   return (
     <div className="mx-auto flex flex-col gap-5">
@@ -404,9 +483,34 @@ function ApprovalDetail({
           message="This contributor submitted, but no photos, stories, or voice recordings were found."
         />
       )}
-      <PhotoSection contributor={currentContributor} photos={photos} submittedDate={submittedDate} actions={actions} />
-      <VoiceSection contributor={currentContributor} voices={voices} submittedDate={submittedDate} actions={actions} />
-      <StorySection contributor={currentContributor} stories={stories} submittedDate={submittedDate} actions={actions} />
+      <PhotoSection
+        contributor={currentContributor}
+        photos={photos}
+        submittedDate={submittedDate}
+        // actions={actions}
+        onDeletePhoto={onDeletePhoto}
+      />
+      <VoiceSection
+        contributor={currentContributor}
+        voices={voices}
+        submittedDate={submittedDate}
+        // actions={actions}
+        onDeleteVoice={onDeleteVoice}
+      />
+      <StorySection
+        contributor={currentContributor}
+        stories={stories}
+        submittedDate={submittedDate}
+        // actions={actions}
+        onDeleteStory={onDeleteStory}
+      />
+      <ResponsesSection
+        contributor={currentContributor}
+        responses={responses}
+        submittedDate={submittedDate}
+        // actions={actions}
+        onDeleteResponse={onDeleteResponse}
+      />
     </div>
   );
 }
@@ -544,6 +648,78 @@ export default function ContributionsPanel({
     if (!awaitingContributors.length) return 0;
     return prev === awaitingContributors.length - 1 ? 0 : prev + 1;
   });
+
+  const handleDeletePhoto = useCallback(async (assetId) => {
+    if (!memorialId || !currentContributorId || actionPending) return
+    const confirmed = window.confirm("Remove this photo? This cannot be undone.")
+    if (!confirmed) return
+    setActionPending(true)
+    try {
+      await deleteContributorPhoto(memorialId, currentContributorId, assetId)
+      setSubmissionDetail((detail) => detail
+        ? { ...detail, photos: detail.photos.filter((p) => p.id !== assetId) }
+        : detail
+      )
+    } catch (err) {
+      setDetailError(err instanceof Error ? err.message : "Failed to remove photo")
+    } finally {
+      setActionPending(false)
+    }
+  }, [actionPending, currentContributorId, memorialId])
+
+  const handleDeleteVoice = useCallback(async (recordingId) => {
+    if (!memorialId || !currentContributorId || actionPending) return
+    const confirmed = window.confirm("Remove this voice recording? This cannot be undone.")
+    if (!confirmed) return
+    setActionPending(true)
+    try {
+      await deleteContributorVoice(memorialId, currentContributorId, recordingId)
+      setSubmissionDetail((detail) => detail
+        ? { ...detail, voices: detail.voices.filter((v) => v.id !== recordingId) }
+        : detail
+      )
+    } catch (err) {
+      setDetailError(err instanceof Error ? err.message : "Failed to remove voice recording")
+    } finally {
+      setActionPending(false)
+    }
+  }, [actionPending, currentContributorId, memorialId])
+
+  const handleDeleteResponse = useCallback(async (responseId) => {
+    if (!memorialId || !currentContributorId || actionPending) return
+    const confirmed = window.confirm("Remove this response? This cannot be undone.")
+    if (!confirmed) return
+    setActionPending(true)
+    try {
+      await deleteContributorResponse(memorialId, currentContributorId, responseId)
+      setSubmissionDetail((detail) => detail
+        ? { ...detail, responses: detail.responses.filter((r) => r.id !== responseId) }
+        : detail
+      )
+    } catch (err) {
+      setDetailError(err instanceof Error ? err.message : "Failed to remove response")
+    } finally {
+      setActionPending(false)
+    }
+  }, [actionPending, currentContributorId, memorialId])
+
+  const handleDeleteStory = useCallback(async (storyId) => {
+  if (!memorialId || !currentContributorId || actionPending) return
+  const confirmed = window.confirm("Remove this story? This cannot be undone.")
+  if (!confirmed) return
+  setActionPending(true)
+  try {
+    await deleteContributorStory(memorialId, currentContributorId, storyId)
+    setSubmissionDetail((detail) => detail
+      ? { ...detail, stories: detail.stories.filter((s) => s.id !== storyId) }
+      : detail
+    )
+  } catch (err) {
+    setDetailError(err instanceof Error ? err.message : "Failed to remove story")
+  } finally {
+    setActionPending(false)
+  }
+}, [actionPending, currentContributorId, memorialId])
 
   const handleApprove = useCallback(async () => {
     if (!memorialId || !currentContributorId || actionPending) return;
@@ -699,6 +875,10 @@ export default function ContributionsPanel({
           actionPending={actionPending}
           onApprove={handleApprove}
           onDelete={handleDelete}
+          onDeletePhoto={handleDeletePhoto}
+          onDeleteVoice={handleDeleteVoice}
+          onDeleteResponse={handleDeleteResponse}
+          onDeleteStory={handleDeleteStory}
           onRetry={loadSubmissionDetail}
         />
       )}
