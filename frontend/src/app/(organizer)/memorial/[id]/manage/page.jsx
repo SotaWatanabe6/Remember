@@ -123,7 +123,7 @@ function formatMemorialDate(value) {
 
 // ─── Memorial Header (Blessing's layout + my inviteToken + MemorialCoverImage) ──
 
-function MemorialHeader({ memorial, inviteToken, onShare }) {
+function MemorialHeader({ memorial, inviteToken, onShare, contributorCount, submittedCount, canGenerate, generating, onGenerateClick }) {
   const status = getManageStatus(memorial?.status);
   const birthDate = formatMemorialDate(memorial?.date_of_birth)
   const passingDate = formatMemorialDate(memorial?.date_of_passing)
@@ -157,6 +157,14 @@ function MemorialHeader({ memorial, inviteToken, onShare }) {
         <p className="mt-6 max-w-[520px] text-[20px] leading-[26px] text-r-secondary">
           {memorial?.bio || ''}
         </p>
+        {typeof contributorCount === 'number' && (
+          <p className="mt-4 text-[15px] leading-[20px] text-r-secondary">
+            {contributorCount} contributor{contributorCount === 1 ? '' : 's'} invited
+            {typeof submittedCount === 'number' && (
+              <> · {submittedCount} submitted</>
+            )}
+          </p>
+        )}
         {memorial?.status && (
           <span className={`mt-6 inline-block rounded-full px-5 py-2 text-sm font-medium ${status.className}`}>
             {status.label}
@@ -183,12 +191,23 @@ function MemorialHeader({ memorial, inviteToken, onShare }) {
           >
             Upload Memories
           </Link>
+          {memorial?.status === 'complete' ? (
           <Link
             href={memorial?.id ? `/memorial/${memorial.id}/output` : '#'}
             className="rounded-full bg-r-btn px-6 py-5 text-center text-[18px] leading-[20px] text-r-btn-text transition hover:opacity-85"
           >
             View Memorial
           </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={onGenerateClick}
+            disabled={!canGenerate || generating}
+            className="rounded-full bg-r-btn px-6 py-5 text-center text-[18px] leading-[20px] text-r-btn-text transition hover:opacity-85 disabled:opacity-45 disabled:cursor-not-allowed border-none"
+          >
+            {generating ? 'Generating…' : 'Generate'}
+          </button>
+        )}
         </div>
         <div className="flex items-center justify-end gap-10 text-r-text">
           <button type="button" onClick={onShare} className="transition hover:opacity-70" aria-label="Share memorial">
@@ -815,7 +834,7 @@ function ShareModal({ onClose, memorialId }) {
   );
 }
 
-// Add this right above: export default function MemorialOutputPage() {
+
 function GenerateConfirmModal({ onConfirm, onCancel, subjectName }) {
   return (
     <div
@@ -1031,7 +1050,15 @@ export default function MemorialOutputPage() {
       {/* Content constrained to 960px */}
       <div className="flex-1 px-6 sm:px-[50px] pb-16">
         <div className="mx-auto flex w-full max-w-[960px] flex-col gap-8">
-          <MemorialHeader memorial={memorial} inviteToken={inviteToken} onShare={() => setShowShare(true)} />
+          <MemorialHeader
+            memorial={memorial}
+            inviteToken={inviteToken}
+            onShare={() => setShowShare(true)}
+            contributorCount={contributors.length}
+            submittedCount={submittedContributionCount}
+            canGenerate={canGenerate}
+            generating={generating}
+            onGenerateClick={handleGenerateClick} />
           <TabBar active={activeTab} onChange={setActiveTab} />
           <div>
             {activeTab === 'Archive' && <ArchiveTab contributors={contributors} output={output} />}
