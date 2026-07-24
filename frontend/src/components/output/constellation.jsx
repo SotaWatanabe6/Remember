@@ -146,6 +146,7 @@ export default function ConstellationGraph({
   
   const [tab, setTab] = useState(page==1 ? "Themes":"Relationships");
   const currentPage = pathname.includes("output") || pathname.includes("share") ? "Viewer" : "Organizer";
+  const showRelationshipLabels = currentPage === "Organizer";
   const [hiddenContributors, setHiddenContributors] = useState({});
   const [hiddenRelationshipType, setHiddenRelationshipType] = useState({
     ...Object.fromEntries(otherRelationship.map(key => [key, false])),
@@ -655,12 +656,14 @@ export default function ConstellationGraph({
                         <p className="text-sm text-stone-600 leading-relaxed mb-7 font-sans">
                           {selectedNode.summary || "No summary available for now."}
                         </p>
-                        <button 
-                          className="transition-colors px-10 py-4 rounded-full text-[#4A443E]"
-                          style={{ backgroundColor: categoriesColor[selectedNode.relationship_type] || "#b1bc93" }}
-                        >
-                          {selectedNode.relationship_type}
-                        </button>
+                        {showRelationshipLabels ? (
+                          <button
+                            className="transition-colors px-10 py-4 rounded-full text-[#4A443E]"
+                            style={{ backgroundColor: categoriesColor[selectedNode.relationship_type] || "#b1bc93" }}
+                          >
+                            {selectedNode.relationship_type}
+                          </button>
+                        ) : null}
                       </div>                        
                     )
                   }
@@ -673,7 +676,7 @@ export default function ConstellationGraph({
         <div className={`relative h-full w-full rounded-sm p-10 ${currentPage === "Organizer" ? "bg-white border border-gray-300" : ""}`}>
 
           <svg ref={ref} ></svg>
-          {tab === "Relationships" &&  (
+          {showRelationshipLabels && tab === "Relationships" &&  (
           <div className="absolute bottom-4 left-4 inline-flex flex-col gap-3 rounded-2xl border border-gray-300 bg-white px-6 py-5 shadow-sm">
               <h3 className="font-semibold text-[#5C4A3A] tracking-wide text-sm uppercase mb-1">Legend</h3>
               <ul className="flex flex-col gap-2.5">
