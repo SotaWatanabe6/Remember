@@ -36,12 +36,22 @@ function FilterSelect({ value, onChange, children, className = "" }) {
 
 // ─── Bottom Nav ───────────────────────────────────────────────────────────────
 
-const NAV_TABS = ['Slideshow', 'Constellations', 'Voices', 'Photo Archive'];
+const BASE_NAV_TABS = ['Slideshow', 'Constellations', 'Photo Archive'];
 
-function BottomNav({ active, onChange }) {
+function hasVoiceRecordings(output) {
+  return Array.isArray(output?.voices) && output.voices.length > 0;
+}
+
+function getOutputTabs(output) {
+  return hasVoiceRecordings(output)
+    ? ['Slideshow', 'Constellations', 'Voices', 'Photo Archive']
+    : BASE_NAV_TABS;
+}
+
+function BottomNav({ active, onChange, tabs }) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 flex bg-r-bg border-t border-r-border">
-      {NAV_TABS.map((tab) => (
+      {tabs.map((tab) => (
         <button
           key={tab}
           onClick={() => onChange(tab)}
@@ -550,6 +560,8 @@ export default function SharePage() {
   const [error, setError] = useState(null);
 
   const [showIntro, setShowIntro] = useState(true);
+  const visibleTabs = getOutputTabs(output);
+  const activeOutputTab = visibleTabs.includes(activeTab) ? activeTab : 'Slideshow';
 
   useEffect(() => {
     async function load() {
@@ -605,15 +617,15 @@ export default function SharePage() {
           <IntroView memorial={memorial} onStart={() => setShowIntro(false)} />
         ) : (
           <>
-            {activeTab === 'Slideshow' && <SlideshowSection output={output} memorial={memorial} />}
-            {activeTab === 'Constellations' && <ConstellationsSection output={output} memorial={memorial} contributor={contributors} />}
-            {activeTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} variant="viewer" />}
-            {activeTab === 'Photo Archive' && <PhotoArchiveSection output={output} contributors={contributors} />}
+            {activeOutputTab === 'Slideshow' && <SlideshowSection output={output} memorial={memorial} />}
+            {activeOutputTab === 'Constellations' && <ConstellationsSection output={output} memorial={memorial} contributor={contributors} />}
+            {activeOutputTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} variant="viewer" />}
+            {activeOutputTab === 'Photo Archive' && <PhotoArchiveSection output={output} contributors={contributors} />}
           </>
         )}
       </main>
 
-      {!showIntro && <BottomNav active={activeTab} onChange={setActiveTab} />}
+      {!showIntro && <BottomNav active={activeOutputTab} onChange={setActiveTab} tabs={visibleTabs} />}
     </div>
   );
 }
