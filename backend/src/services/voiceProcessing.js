@@ -69,8 +69,8 @@ A contributor named ${contributorName || 'someone'} recorded this voice memo:
 
 Return JSON only:
 {
-  "intro_line": "One short narrator line (max 12 words) the documentary host says BEFORE playing the clip, e.g. Grandma loved sunshine — inspired by the memo, not verbatim.",
-  "key_quote": "The most memorable phrase from the memo (max 25 words, can be lightly edited for clarity)",
+  "intro_line": "One short narrator line (max 12 words) naming something specific and concrete the contributor actually said — a habit, phrase, place, or detail. Never a generic label like 'A memory shared' or 'A cherished routine'. Example: 'Grandma always kept sunflowers on the porch.'",
+  "key_quote": "The most memorable phrase from the memo, lightly polished only — fix spelling/filler words, never change vocabulary or wording (max 25 words)",
   "clip_start_seconds": number (start of the best 3-12 second excerpt),
   "clip_end_seconds": number (end of excerpt, must be after start and within memo length),
   "ai_category": "Everyday Love|Joy|Wisdom|Humor|memory"
