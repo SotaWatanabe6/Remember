@@ -562,15 +562,34 @@ export async function createMemorial({
     });
   }
 
+  const subjectName = subject_name?.trim() || "";
+  const nicknameText = (nickname || "").trim();
+  const biographyText = (biography || "").trim();
+  const missingFields = [
+    [subjectName, "subject name"],
+    [nicknameText, "nickname"],
+    [date_of_birth, "year of birth"],
+    [date_of_passing, "year of passing"],
+    [biographyText, "brief biography"],
+  ]
+    .filter(([value]) => !value)
+    .map(([, label]) => label);
+
+  if (missingFields.length) {
+    throw new ApiRequestError(`Please complete: ${missingFields.join(", ")}.`, {
+      code: "missing_required_profile_fields",
+    });
+  }
+
   return requestJson("/memorials", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({
-      subject_name: subject_name?.trim() || "",
-      nickname: (nickname || "").trim(),
-      date_of_birth: date_of_birth ?? null,
-      date_of_passing: date_of_passing ?? null,
-      biography: (biography || "").trim(),
+      subject_name: subjectName,
+      nickname: nicknameText,
+      date_of_birth,
+      date_of_passing,
+      biography: biographyText,
       related_people: related_people ?? [],
       cover_photo_url: cover_photo_url ?? null,
     }),

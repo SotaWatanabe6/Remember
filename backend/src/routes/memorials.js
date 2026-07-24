@@ -120,19 +120,33 @@ router.post('/', authMiddleware, async (req, res) => {
       related_people,
       cover_photo_url,
     } = req.body
-    if (!subject_name) {
-      return res.status(400).json({ error: 'subject_name is required' })
-    }
-
+    const subjectName = String(subject_name || '').trim()
+    const nicknameText = String(nickname || '').trim()
     const biographyText = String(biography || '').trim()
+    const requiredFields = [
+      [subjectName, 'subject_name'],
+      [nicknameText, 'nickname'],
+      [date_of_birth, 'date_of_birth'],
+      [date_of_passing, 'date_of_passing'],
+      [biographyText, 'biography'],
+    ]
+    const missingFields = requiredFields
+      .filter(([value]) => !value)
+      .map(([, field]) => field)
+
+    if (missingFields.length) {
+      return res.status(400).json({
+        error: `Missing required memorial profile fields: ${missingFields.join(', ')}`,
+      })
+    }
 
     const memorialPayload = {
       user_id: req.user.sub,
-      subject_name,
-      nickname: nickname || null,
-      date_of_birth: date_of_birth || null,
-      date_of_passing: date_of_passing || null,
-      biography: biographyText || null,
+      subject_name: subjectName,
+      nickname: nicknameText,
+      date_of_birth,
+      date_of_passing,
+      biography: biographyText,
       related_people: Array.isArray(related_people) ? related_people : [],
       cover_photo_url: cover_photo_url || null,
       status: 'collecting'

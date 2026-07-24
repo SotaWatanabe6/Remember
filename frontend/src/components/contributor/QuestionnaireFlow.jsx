@@ -201,6 +201,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isNavigating, setIsNavigating] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [answerError, setAnswerError] = useState("");
   const [speechSupported] = useState(
     () =>
       typeof window !== "undefined" &&
@@ -439,6 +440,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
       answer_text: answerText,
     };
 
+    setAnswerError("");
     setAnswers((currentAnswers) => ({
       ...currentAnswers,
       [questionId]: nextAnswer,
@@ -546,7 +548,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
     setIsListening(true);
   };
 
-  const moveToQuestion = async (nextIndex) => {
+  const moveToQuestion = async (nextIndex, { requireCurrentAnswer = true } = {}) => {
     if (nextIndex < 0) {
       setStep("intro");
       return;
@@ -556,18 +558,25 @@ export default function QuestionnaireFlow({ inviteToken }) {
       return;
     }
 
+    const answerSnapshot = answersRef.current[currentQuestion.id] ?? createEmptyAnswer();
+    if (requireCurrentAnswer && !String(answerSnapshot.answer_text || "").trim()) {
+      setAnswerError("Please answer this question before continuing.");
+      return;
+    }
+
     setIsNavigating(true);
     stopListening();
     window.clearTimeout(saveTimerRef.current);
     const didSave = await saveAnswer(
       currentQuestion.id,
-      answersRef.current[currentQuestion.id] ?? createEmptyAnswer(),
+      answerSnapshot,
       { force: true },
     );
     if (!didSave) {
       setIsNavigating(false);
       return;
     }
+    setAnswerError("");
     setCurrentIndex(nextIndex);
     setIsNavigating(false);
   };
@@ -581,9 +590,15 @@ export default function QuestionnaireFlow({ inviteToken }) {
     setIsNavigating(true);
     stopListening();
     window.clearTimeout(saveTimerRef.current);
+    const answerSnapshot = answersRef.current[currentQuestion.id] ?? createEmptyAnswer();
+    if (!String(answerSnapshot.answer_text || "").trim()) {
+      setAnswerError("Please answer this question before continuing.");
+      setIsNavigating(false);
+      return;
+    }
     const didSave = await saveAnswer(
       currentQuestion.id,
-      answersRef.current[currentQuestion.id] ?? createEmptyAnswer(),
+      answerSnapshot,
       { force: true },
     );
     if (!didSave) {
@@ -604,7 +619,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
       return;
     }
 
-    moveToQuestion(currentIndex - 1);
+    moveToQuestion(currentIndex - 1, { requireCurrentAnswer: false });
   };
 
   useEffect(() => {
@@ -683,6 +698,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
                 autosaveStatus={autosaveStatus}
                 isListening={isListening}
                 speechSupported={speechSupported}
+                error={answerError}
                 onAnswerChange={handleAnswerChange}
                 onAnswerBlur={handleAnswerBlur}
                 onModeChange={handleModeChange}

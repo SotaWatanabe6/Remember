@@ -56,14 +56,27 @@ function UploadIcon() {
   );
 }
 
-function TextField({ id, label, labelClass = labelClassName, ...props }) {
+function TextField({ id, label, labelClass = labelClassName, error, ...props }) {
+  const errorId = error ? `${id}-error` : undefined;
+
   return (
     <div className="flex w-full flex-col gap-[10px]">
       <label htmlFor={id} className={labelClass}>
         {label}
       </label>
 
-      <input id={id} className={fieldClassName} {...props} />
+      <input
+        id={id}
+        aria-invalid={Boolean(error)}
+        aria-describedby={errorId}
+        className={fieldClassName}
+        {...props}
+      />
+      {error ? (
+        <p id={errorId} className="text-sm leading-5 text-r-danger">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -73,8 +86,11 @@ function SelectField({
   label,
   options,
   labelClass = labelClassName,
+  error,
   ...props
 }) {
+  const errorId = error ? `${id}-error` : undefined;
+
   return (
     <div className="flex w-full flex-col gap-[10px]">
       <label htmlFor={id} className={labelClass}>
@@ -84,6 +100,8 @@ function SelectField({
       <div className="relative">
         <select
           id={id}
+          aria-invalid={Boolean(error)}
+          aria-describedby={errorId}
           className={`${fieldClassName} appearance-none pr-14 ${
             props.value ? "text-[#5F5A52]" : "text-[#5F5A52]"
           }`}
@@ -101,6 +119,11 @@ function SelectField({
           className="pointer-events-none absolute right-5 top-1/2 size-0 -translate-y-1/2 border-l-[11px] border-r-[11px] border-t-[18px] border-l-transparent border-r-transparent border-t-[#4A4742]"
         />
       </div>
+      {error ? (
+        <p id={errorId} className="text-sm leading-5 text-r-danger">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -110,6 +133,7 @@ export default function MemorialCreateForm() {
   const fileInputRef = useRef(null);
 
   const [remembered, setRemembered] = useState(initialRemembered);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -119,6 +143,10 @@ export default function MemorialCreateForm() {
     setRemembered((current) => ({
       ...current,
       [name]: value,
+    }));
+    setFieldErrors((current) => ({
+      ...current,
+      [name]: "",
     }));
   };
 
@@ -146,6 +174,21 @@ export default function MemorialCreateForm() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
+    const nextFieldErrors = {};
+
+    if (!remembered.firstName.trim()) nextFieldErrors.firstName = "First name is required.";
+    if (!remembered.lastName.trim()) nextFieldErrors.lastName = "Last name is required.";
+    if (!remembered.nickName.trim()) nextFieldErrors.nickName = "Nickname is required.";
+    if (!remembered.yearOfBirth) nextFieldErrors.yearOfBirth = "Year of birth is required.";
+    if (!remembered.yearOfPassing) nextFieldErrors.yearOfPassing = "Year of passing is required.";
+    if (!remembered.briefBiography.trim()) nextFieldErrors.briefBiography = "Brief biography is required.";
+
+    if (Object.keys(nextFieldErrors).length) {
+      setFieldErrors(nextFieldErrors);
+      setError("Please complete all required profile fields.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     const safetyTimer = setTimeout(() => {
@@ -233,6 +276,8 @@ export default function MemorialCreateForm() {
             onChange={updateField}
             placeholder="John"
             disabled={isSubmitting}
+            required
+            error={fieldErrors.firstName}
           />
 
           <TextField
@@ -244,6 +289,8 @@ export default function MemorialCreateForm() {
             onChange={updateField}
             placeholder="Smith"
             disabled={isSubmitting}
+            required
+            error={fieldErrors.lastName}
           />
 
           <TextField
@@ -255,6 +302,8 @@ export default function MemorialCreateForm() {
             onChange={updateField}
             placeholder="Smith"
             disabled={isSubmitting}
+            required
+            error={fieldErrors.nickName}
           />
         </div>
 
@@ -313,6 +362,8 @@ export default function MemorialCreateForm() {
           onChange={updateField}
           options={yearSelectOptions}
           disabled={isSubmitting}
+          required
+          error={fieldErrors.yearOfBirth}
         />
 
         <SelectField
@@ -323,6 +374,8 @@ export default function MemorialCreateForm() {
           onChange={updateField}
           options={yearSelectOptions}
           disabled={isSubmitting}
+          required
+          error={fieldErrors.yearOfPassing}
         />
       </div>
 
@@ -339,7 +392,15 @@ export default function MemorialCreateForm() {
           placeholder="Please share a few words about who they were, what they loved, and any other details you feel is important to preserve their memory. This will be visible to viewers of the contribution and memorial page."
           className="min-h-[272px] w-full resize-none rounded-[18px] border border-r-border bg-[#F6EFE7] px-5 py-4 font-family-body text-[20px] leading-[30px] text-[#5F5A52] outline-none transition placeholder:text-[#5F5A52] focus:border-r-border-focus focus:ring-2 focus:ring-r-border/30 disabled:opacity-50"
           disabled={isSubmitting}
+          required
+          aria-invalid={Boolean(fieldErrors.briefBiography)}
+          aria-describedby={fieldErrors.briefBiography ? "brief-biography-error" : undefined}
         />
+        {fieldErrors.briefBiography ? (
+          <p id="brief-biography-error" className="text-sm leading-5 text-r-danger">
+            {fieldErrors.briefBiography}
+          </p>
+        ) : null}
       </div>
       <div className="flex flex-col items-center gap-4 pt-[8px]">
         {error && (
