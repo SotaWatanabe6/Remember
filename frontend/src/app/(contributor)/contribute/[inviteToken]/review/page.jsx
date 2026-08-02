@@ -7,6 +7,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { deletePhoto, deleteVoice, getContributorSummary, saveContributorStory, submitContribution } from '@/lib/api.js';
+import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS } from '@/lib/contribute/questionnaireQuestions.js';
 
 function ContributorNav({ backHref }) {
   return (
@@ -156,14 +157,32 @@ export default function ReviewPage() {
     try {
       const session = JSON.parse(localStorage.getItem(`remember_contributor_session:${inviteToken}`) || '{}');
       const contributorToken = session?.contributorToken || session?.contributorId;
-      if (contributorToken) {
-        await Promise.all(
-          stories
-            .filter((story) => String(story?.title || story?.body || '').trim())
-            .map((story) => saveContributorStory(inviteToken, contributorToken, story)),
-        );
-        await submitContribution(inviteToken, contributorToken);
+      if (!contributorToken) {
+        throw new Error('Please enter your contributor profile information before submitting.');
       }
+
+      const allResponses = JSON.parse(localStorage.getItem(`remember_questionnaire_responses:${inviteToken}`) || '{}');
+      const contributorResponses = Object.values(allResponses[session?.contributorId] || {});
+      const answeredIndexes = new Set(
+        contributorResponses
+          .filter((response) => String(response?.response_text || response?.answer_text || '').trim())
+          .map((response) => Number(response.question_order ?? response.order_index))
+          .filter((orderIndex) => Number.isInteger(orderIndex)),
+      );
+      const hasAllQuestionnaireAnswers = CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.every((_, index) => (
+        answeredIndexes.has(index + 1)
+      ));
+
+      if (!hasAllQuestionnaireAnswers) {
+        throw new Error('Please answer all questionnaire questions before submitting.');
+      }
+
+      await Promise.all(
+        stories
+          .filter((story) => String(story?.title || story?.body || '').trim())
+          .map((story) => saveContributorStory(inviteToken, contributorToken, story)),
+      );
+      await submitContribution(inviteToken, contributorToken);
       router.push(`/contribute/${inviteToken}/submitted`);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Could not submit. Please try again.');
@@ -181,7 +200,7 @@ export default function ReviewPage() {
 
   return (
     <main className="min-h-screen bg-r-bg text-r-text flex flex-col">
-      <ContributorNav backHref={`/contribute/${inviteToken}/story`} />
+      <ContributorNav backHref={`/contribute/${inviteToken}/voice`} />
 
       <div className="flex-1 px-6 sm:px-[50px] pt-6 pb-16">
         <div className="mx-auto flex w-full max-w-[680px] flex-col gap-6">
@@ -234,8 +253,8 @@ export default function ReviewPage() {
             )}
           </SectionCard>
 
-          <SectionCard title="Stories">
-            {stories.length > 0 ? (
+          {stories.length > 0 ? (
+            <SectionCard title="Stories">
               <div className="flex flex-col gap-4">
                 {stories.map((story) => (
                   <div key={story.id} className="flex flex-col gap-1">
@@ -246,10 +265,8 @@ export default function ReviewPage() {
                   </div>
                 ))}
               </div>
-            ) : (
-              <p className="text-caption text-r-muted">No stories added. You can submit without a story.</p>
-            )}
-          </SectionCard>
+            </SectionCard>
+          ) : null}
 
           {submitError && (
             <p className="rounded-2xl px-4 py-3 text-center text-caption" style={{ backgroundColor: '#F5DDD6', color: 'var(--color-r-danger)' }} role="alert">

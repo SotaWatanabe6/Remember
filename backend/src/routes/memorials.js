@@ -111,21 +111,49 @@ router.post('/cover-photo', authMiddleware, async (req, res) => {
 // POST /memorials — create a new memorial
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { subject_name, date_of_birth, date_of_passing, cover_photo_url } = req.body
-    if (!subject_name) {
-      return res.status(400).json({ error: 'subject_name is required' })
+    const {
+      subject_name,
+      nickname,
+      date_of_birth,
+      date_of_passing,
+      biography,
+      related_people,
+      cover_photo_url,
+    } = req.body
+    const subjectName = String(subject_name || '').trim()
+    const nicknameText = String(nickname || '').trim()
+    const biographyText = String(biography || '').trim()
+    const coverPhotoUrl = String(cover_photo_url || '').trim()
+    const requiredFields = [
+      [subjectName, 'subject_name'],
+      [date_of_birth, 'date_of_birth'],
+      [coverPhotoUrl, 'cover_photo_url'],
+    ]
+    const missingFields = requiredFields
+      .filter(([value]) => !value)
+      .map(([, field]) => field)
+
+    if (missingFields.length) {
+      return res.status(400).json({
+        error: `Missing required memorial profile fields: ${missingFields.join(', ')}`,
+      })
+    }
+
+    const memorialPayload = {
+      user_id: req.user.sub,
+      subject_name: subjectName,
+      nickname: nicknameText || null,
+      date_of_birth,
+      date_of_passing: date_of_passing || null,
+      biography: biographyText || null,
+      related_people: Array.isArray(related_people) ? related_people : [],
+      cover_photo_url: coverPhotoUrl,
+      status: 'collecting'
     }
 
     const { data, error } = await supabase
       .from('memorials')
-      .insert({
-        user_id: req.user.sub,
-        subject_name,
-        date_of_birth: date_of_birth || null,
-        date_of_passing: date_of_passing || null,
-        cover_photo_url: cover_photo_url || null,
-        status: 'collecting'
-      })
+      .insert(memorialPayload)
       .select()
       .single()
 
@@ -146,8 +174,29 @@ router.get('/', authMiddleware, async (req, res) => {
       .order('created_at', { ascending: false })
 
     if (error) return res.status(400).json({ error: error.message })
+
+    const memorialIds = (data || []).map((m) => m.id)
+
+    const { data: contributorRows } = memorialIds.length
+      ? await supabase
+          .from('contributors')
+          .select('memorial_id')
+          .in('memorial_id', memorialIds)
+      : { data: [] }
+
+    const countByMemorial = (contributorRows || []).reduce((acc, row) => {
+      acc[row.memorial_id] = (acc[row.memorial_id] || 0) + 1
+      return acc
+    }, {})
+
     const enriched = await enrichMemorialsForClient(supabase, data || [])
-    res.json({ memorials: enriched })
+
+    const withCounts = enriched.map((m) => ({
+      ...m,
+      contributor_count: countByMemorial[m.id] ?? 0,
+    }))
+
+    res.json({ memorials: withCounts })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -164,8 +213,23 @@ router.get('/:id', authMiddleware, async (req, res) => {
       .single()
 
     if (error) return res.status(404).json({ error: 'Memorial not found' })
+
+    // Fetch the completed generation date from ai_jobs
+    let generatedAt = null
+    if (data.status === 'complete') {
+      const { data: job } = await supabase
+        .from('ai_jobs')
+        .select('completed_at')
+        .eq('memorial_id', data.id)
+        .eq('status', 'complete')
+        .order('completed_at', { ascending: false })
+        .limit(1)
+        .single()
+      generatedAt = job?.completed_at || null
+    }
+
     const enriched = await enrichMemorialForClient(supabase, data)
-    res.json({ memorial: enriched })
+    res.json({ memorial: { ...enriched, generated_at: generatedAt } })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -498,6 +562,134 @@ router.delete('/:id/contributors/:contributorId', authMiddleware, async (req, re
       .eq('memorial_id', req.params.id)
 
     if (error) return res.status(400).json({ error: error.message })
+    res.json({ deleted: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// DELETE /memorials/:id/contributors/:contributorId/photos/:assetId
+router.delete('/:id/contributors/:contributorId/photos/:assetId', authMiddleware, async (req, res) => {
+  try {
+    const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
+    if (!memorial) return res.status(403).json({ error: 'Not authorized' })
+
+    const { data: asset, error: assetError } = await supabase
+      .from('media_assets')
+      .select('id, storage_path, storage_bucket, contributor_id')
+      .eq('id', req.params.assetId)
+      .eq('contributor_id', req.params.contributorId)
+      .eq('memorial_id', req.params.id)
+      .single()
+
+    if (assetError || !asset) return res.status(404).json({ error: 'Photo not found' })
+
+    const { error: storageError } = await supabase.storage
+      .from(asset.storage_bucket || 'memorial-assets')
+      .remove([asset.storage_path])
+
+    if (storageError) return res.status(400).json({ error: storageError.message })
+
+    const { error: deleteError } = await supabase
+      .from('media_assets')
+      .delete()
+      .eq('id', asset.id)
+
+    if (deleteError) return res.status(400).json({ error: deleteError.message })
+
+    res.json({ deleted: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// DELETE /memorials/:id/contributors/:contributorId/voices/:recordingId
+router.delete('/:id/contributors/:contributorId/voices/:recordingId', authMiddleware, async (req, res) => {
+  try {
+    const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
+    if (!memorial) return res.status(403).json({ error: 'Not authorized' })
+
+    const { data: recording, error: recordingError } = await supabase
+      .from('voice_recordings')
+      .select('id, storage_path, storage_bucket, contributor_id')
+      .eq('id', req.params.recordingId)
+      .eq('contributor_id', req.params.contributorId)
+      .eq('memorial_id', req.params.id)
+      .single()
+
+    if (recordingError || !recording) return res.status(404).json({ error: 'Voice recording not found' })
+
+    const { error: storageError } = await supabase.storage
+      .from(recording.storage_bucket || 'memorial-assets')
+      .remove([recording.storage_path])
+
+    if (storageError) return res.status(400).json({ error: storageError.message })
+
+    const { error: deleteError } = await supabase
+      .from('voice_recordings')
+      .delete()
+      .eq('id', recording.id)
+
+    if (deleteError) return res.status(400).json({ error: deleteError.message })
+
+    res.json({ deleted: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// DELETE /memorials/:id/contributors/:contributorId/responses/:responseId
+router.delete('/:id/contributors/:contributorId/responses/:responseId', authMiddleware, async (req, res) => {
+  try {
+    const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
+    if (!memorial) return res.status(403).json({ error: 'Not authorized' })
+
+    const { data: response, error: responseError } = await supabase
+      .from('questionnaire_responses')
+      .select('id, contributor_id')
+      .eq('id', req.params.responseId)
+      .eq('contributor_id', req.params.contributorId)
+      .eq('memorial_id', req.params.id)
+      .single()
+
+    if (responseError || !response) return res.status(404).json({ error: 'Response not found' })
+
+    const { error: deleteError } = await supabase
+      .from('questionnaire_responses')
+      .delete()
+      .eq('id', response.id)
+
+    if (deleteError) return res.status(400).json({ error: deleteError.message })
+
+    res.json({ deleted: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// DELETE /memorials/:id/contributors/:contributorId/stories/:storyId
+router.delete('/:id/contributors/:contributorId/stories/:storyId', authMiddleware, async (req, res) => {
+  try {
+    const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
+    if (!memorial) return res.status(403).json({ error: 'Not authorized' })
+
+    const { data: story, error: storyError } = await supabase
+      .from('contributor_stories')
+      .select('id, contributor_id')
+      .eq('id', req.params.storyId)
+      .eq('contributor_id', req.params.contributorId)
+      .eq('memorial_id', req.params.id)
+      .single()
+
+    if (storyError || !story) return res.status(404).json({ error: 'Story not found' })
+
+    const { error: deleteError } = await supabase
+      .from('contributor_stories')
+      .delete()
+      .eq('id', story.id)
+
+    if (deleteError) return res.status(400).json({ error: deleteError.message })
+
     res.json({ deleted: true })
   } catch (err) {
     res.status(500).json({ error: err.message })

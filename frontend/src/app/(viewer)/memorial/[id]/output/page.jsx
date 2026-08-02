@@ -37,12 +37,22 @@ function FilterSelect({ value, onChange, children, className = "" }) {
 
 // ─── Bottom Nav ───────────────────────────────────────────────────────────────
 
-const NAV_TABS = ['Slideshow', 'Constellations', 'Voices', 'Photo Archive'];
+const BASE_NAV_TABS = ['Slideshow', 'Constellations', 'Photo Archive'];
 
-function BottomNav({ active, onChange }) {
+function hasVoiceRecordings(output) {
+  return Array.isArray(output?.voices) && output.voices.length > 0;
+}
+
+function getOutputTabs(output) {
+  return hasVoiceRecordings(output)
+    ? ['Slideshow', 'Constellations', 'Voices', 'Photo Archive']
+    : BASE_NAV_TABS;
+}
+
+function BottomNav({ active, onChange, tabs }) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 flex bg-r-bg border-t border-r-border">
-      {NAV_TABS.map((tab) => (
+      {tabs.map((tab) => (
         <button
           key={tab}
           onClick={() => onChange(tab)}
@@ -62,22 +72,22 @@ function BottomNav({ active, onChange }) {
 
 // ─── Slideshow ────────────────────────────────────────────────────────────────
 
-function formatMemorialYear(value) {
+function formatMemorialDate(value) {
   if (!value) return '';
-
-  const date = new Date(value);
-  if (!Number.isNaN(date.getTime())) return String(date.getFullYear());
-
-  const yearMatch = String(value).match(/\b\d{4}\b/);
-  return yearMatch?.[0] || '';
+  const parts = String(value).split('T')[0].split('-');
+  if (parts.length < 3) return '';
+  const [year, month, day] = parts.map(Number);
+  if (!year || !month || !day) return '';
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+    month: 'long', day: 'numeric', year: 'numeric',
+  });
 }
 
 function getMemorialYears(memorial) {
-  const birthYear = formatMemorialYear(memorial?.date_of_birth || memorial?.birth_date);
-  const passingYear = formatMemorialYear(memorial?.date_of_passing || memorial?.death_date);
-
-  if (birthYear && passingYear) return `${birthYear} - ${passingYear}`;
-  return birthYear || passingYear;
+  const birthDate = formatMemorialDate(memorial?.date_of_birth || memorial?.birth_date);
+  const passingDate = formatMemorialDate(memorial?.date_of_passing || memorial?.death_date);
+  if (birthDate && passingDate) return `${birthDate} - ${passingDate}`;
+  return birthDate || passingDate;
 }
 
 function StoryMemorialSummary({ memorial }) {
@@ -96,15 +106,9 @@ function StoryMemorialSummary({ memorial }) {
 
 // ─── Intro view (shown before Slideshow on first load) ────────────────────────
 
-function safeYear(dateStr) {
-  if (!dateStr) return null;
-  const y = new Date(dateStr).getFullYear();
-  return Number.isNaN(y) ? null : y;
-}
-
 function IntroView({ memorial, onStart }) {
-  const birthYear = safeYear(memorial?.date_of_birth);
-  const passingYear = safeYear(memorial?.date_of_passing);
+  const birthDate = formatMemorialDate(memorial?.date_of_birth);
+  const passingDate = formatMemorialDate(memorial?.date_of_passing);
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-6 pb-16">
@@ -131,9 +135,9 @@ function IntroView({ memorial, onStart }) {
           >
             {memorial?.subject_name || ''}
           </h1>
-          {(birthYear || passingYear) && (
+          {(birthDate || passingDate) && (
             <p className="text-sm mt-2" style={{ color: "#9B8F80", letterSpacing: "0.04em" }}>
-              {birthYear ?? ''}{birthYear && passingYear ? ' - ' : ''}{passingYear ?? ''}
+              {birthDate}{birthDate && passingDate ? ' - ' : ''}{passingDate}
             </p>
           )}
         </div>
@@ -654,11 +658,22 @@ function PhotoArchiveSection({ output, contributors }) {
 
   const albums = normalizePhotos(output?.photos);
   const allPhotos = albums.flatMap((album) => (album.photos || []).map((p) => ({ ...p, album_name: album.album_name })));
+  const contributorNames = [...new Set(allPhotos.map((photo) => photo.contributor_name).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: 'base' })
+  );
+  const contributorFilteredPhotos = contributorFilter === 'all'
+    ? allPhotos
+    : allPhotos.filter((photo) => photo.contributor_name === contributorFilter);
 
-  const sortedPhotos = [...allPhotos].sort((a, b) => {
+  const sortedPhotos = [...contributorFilteredPhotos].sort((a, b) => {
     if (sort === 'oldest') return new Date(a.taken_at || 0) - new Date(b.taken_at || 0);
     return new Date(b.taken_at || 0) - new Date(a.taken_at || 0);
   });
+
+  function handleViewChange(nextView) {
+    setView(nextView);
+    setContributorFilter('all');
+  }
 
   return (
     <div>
@@ -673,7 +688,7 @@ function PhotoArchiveSection({ output, contributors }) {
       <div className="flex items-center justify-between mb-6 gap-4">
         <FilterSelect
           value={view}
-          onChange={(val) => setView(val)}
+          onChange={handleViewChange}
           className="flex-1 max-w-[320px]"
         >
           <option value="all_photos">All Photos</option>
@@ -682,6 +697,18 @@ function PhotoArchiveSection({ output, contributors }) {
         </FilterSelect>
 
         <div className="flex items-center gap-3">
+          {view === 'all_photos' && contributorNames.length > 0 && (
+            <FilterSelect
+              value={contributorFilter}
+              onChange={setContributorFilter}
+              className="w-[220px]"
+            >
+              <option value="all">All contributors</option>
+              {contributorNames.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </FilterSelect>
+          )}
           {view === 'contributors' && (
             <FilterSelect
               value={contributorFilter}
@@ -874,6 +901,8 @@ export default function MemorialOutputPage() {
   const [contributors, setContributors] = useState([]);
 
   const [showIntro, setShowIntro] = useState(true);
+  const visibleTabs = getOutputTabs(output);
+  const activeOutputTab = visibleTabs.includes(activeTab) ? activeTab : 'Slideshow';
 
   useEffect(() => {
     if (!id) return;
@@ -942,16 +971,16 @@ export default function MemorialOutputPage() {
           <IntroView memorial={memorial} onStart={() => setShowIntro(false)} />
         ) : (
           <>
-            {activeTab === 'Slideshow' && <SlideshowSection output={output} memorial={memorial} />}
-            {activeTab === 'Constellations' && <ConstellationsSection output={output} memorial={memorial} contributor={contributors} />}
-            {activeTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} variant="viewer" />}
-            {activeTab === 'Photo Archive' && <PhotoArchiveSection output={output} contributors={contributors} />}
+            {activeOutputTab === 'Slideshow' && <SlideshowSection output={output} memorial={memorial} />}
+            {activeOutputTab === 'Constellations' && <ConstellationsSection output={output} memorial={memorial} contributor={contributors} />}
+            {activeOutputTab === 'Voices' && <VoicesTab output={output} voices={output?.voices} variant="viewer" />}
+            {activeOutputTab === 'Photo Archive' && <PhotoArchiveSection output={output} contributors={contributors} />}
           </>
         )}
       </main>
 
       {/* Bottom nav only visible after intro */}
-      {!showIntro && <BottomNav active={activeTab} onChange={setActiveTab} />}
+      {!showIntro && <BottomNav active={activeOutputTab} onChange={setActiveTab} tabs={visibleTabs} />}
       {showShare && <ShareModal onClose={() => setShowShare(false)} memorialId={id} />}
     </div>
   );

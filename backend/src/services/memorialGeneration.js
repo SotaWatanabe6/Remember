@@ -50,7 +50,7 @@ const LIFE_STAGE_MID_AGE = {
 
 function resolveMemorialBirthYear(memorial) {
   if (!memorial?.date_of_birth) return null
-  const year = new Date(memorial.date_of_birth).getFullYear()
+  const year = parseInt(String(memorial.date_of_birth).split('-')[0], 10)
   return Number.isFinite(year) && year > 1800 && year < 2100 ? year : null
 }
 
@@ -165,9 +165,14 @@ function buildMemoryCorpus(responses, contributors, subjectName, memorial) {
 
 function formatMemorialDate(value) {
   if (!value) return null
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return String(value)
-  return parsed.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  // Split the date string directly to avoid UTC midnight timezone shift
+  const parts = String(value).split('T')[0].split('-')
+  if (parts.length < 3) return String(value)
+  const [year, month, day] = parts.map(Number)
+  if (!year || !month || !day) return String(value)
+  const date = new Date(year, month - 1, day) // month - 1 because JS months are 0-indexed
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 }
 
 function buildMemorialFacts(memorial, subjectName) {
@@ -428,6 +433,7 @@ STRICT RULES:
 - Labels: plain and descriptive (e.g. "At the kitchen table", "Summer outdoors", "Family gatherings")
 - Summary: 1–2 neutral sentences describing what kinds of photos are in this album
 - matching_keywords: visual tags and settings from the photos in this group
+- Album names must stay general and never assert an unconfirmed specific detail — use "Outdoors" instead of "At the beach", or "A celebration" instead of "Christmas dinner", unless that specific detail was explicitly confirmed by a contributor or organizer.
 
 Photo analyses:
 ${JSON.stringify(photoSummaries, null, 2)}
@@ -965,7 +971,8 @@ OUTPUT RULES (critical):
 - Every slide MUST have slide_type "photo" and a photo_id from the catalog.
 - Do NOT create intro, chapter, perspective, closing, voice, or text-only slides.
 - Use photo analysis only for broad tone, era, and sequencing. Do not state or imply that a questionnaire memory happened in, is shown by, or is directly connected to a specific photo unless the source data explicitly says so.
-- The description should feel appropriate beside the photo, but it must stand on its own as remembrance language. Avoid phrases like "in this photo", "this moment shows", "here we see", or "surrounded by family" unless those facts are explicitly supported.
+- The vision_description and tags fields exist only to help you sequence photos and judge era/mood. Do not mention any specific object, clothing, physical action, expression, or person that appears in vision_description or tags unless a contributor's questionnaire text independently mentions that same detail. If a visual detail is not corroborated by contributor text, leave it out of photo_description entirely.
+- The description should feel appropriate beside the photo, but it must stand on its own as remembrance language. Do not use phrases that assert the photo depicts the caption's content — no "in this photo", "this moment shows", "here we see", "surrounded by", or similar — unless that detail is independently confirmed by contributor text. Write photo_description as remembrance language that can stand on its own next to any photo from that era, not as a caption describing what is visually happening.
 - photo_description: 2–4 warm, specific, conversational third-person sentences about ${subjectName} when there is enough questionnaire or organizer biography detail to ground the description. Anchor descriptions in concrete source details when available: habits, sayings, quirks, routines, places, roles, accomplishments, repeated memories, or small human details. It should feel like a close friend giving a memorial toast: human, grounded, undecorated, and never AI-written.
 - The first slide should use the organizer-selected memorial photo and function as the opening: include birth/passing context when available and quickly ground the viewer in who ${subjectName} was — their personality, what they loved, or the kind of presence they had.
 - Middle slides should move through ${subjectName}'s life organically. Tell the ${subjectName}'s life by drawing specific stories from the questionnaire responses. Cover their life stories based on the following examples but is not limited to - character, quirks, relationships, roles, significant moments, accomplishments, and repeated details contributors mentioned - without forcing a fixed order.
@@ -975,12 +982,14 @@ OUTPUT RULES (critical):
 - If no contributor phrase clearly fits a slide, set matched_quote to null. Do not invent, paraphrase, or polish a quote into something the contributor did not say.
 - If matched_quote is present, contributor_name and relationship_type must identify the contributor who wrote that phrase.
 - Synthesize all contributors into one cohesive voice across the slideshow. Third person only.
+- Do not preserve the sentence shape of individual contributor answers or attribution lines within the flowing narration (e.g. "one person said", "her daughter recalled"). Blend corroborating details from multiple contributors into a single observation. Attribution belongs only in contributor_name / matched_quote metadata, not in the prose itself, unless a direct quote is being used.
 - Prefer specific details over general statements. Avoid broad claims like "they were kind" or "they loved family" unless paired with a concrete example from the responses. If multiple contributors said something similar, surface that convergence directly.
 - Do not fabricate details, repeat the same descriptive language across slides, overwrite grief, manufacture emotion, or use sympathy-card filler such as "a life well-lived", "touched many hearts", or "left a lasting impression".
 - Do not include specific timelines or ages about the ${subjectName} in the description.
 - Don't assume relationships of anyone in the photo regardless of the contributor relationship type.
 - Do not include descriptions for the sake of having them. If there are not enough questionnaire responses to give every photo a distinct grounded description, associate multiple adjacent photos with one grounded description by reusing the same photo_description where appropriate.
 - If a photo cannot be associated with a grounded description without inventing or overgeneralizing, set photo_description to an empty string, matched_quote to null, contributor_name to null, and relationship_type to null.
+- Light polish only: correct spelling, stray punctuation, filler words ("um", "uh", "like"), false starts, and repeated words from talking out loud. Never change vocabulary, tone, register, sentence structure, or word choice. If a contributor wrote or said something plainly, awkwardly, or informally, preserve that voice exactly.
 
 Photos (LOCKED order — first photo is organizer-selected when present, then youngest to oldest; use photo_id exactly):
 ${JSON.stringify(photoCatalog.map((p) => ({
@@ -1089,6 +1098,8 @@ RULES:
 - Neutral tone — no flowery language, no inference beyond the text
 - Each quote should help someone discover something specific about this person
 - Max 40 words each
+- Light polish only: fix spelling, stray punctuation, and filler words. Never change vocabulary, tone, or wording.
+- Only select quotes that make sense standalone, without surrounding context — a quote that depends on preceding narration to land should not be selected for a node.
 
 Return JSON: { "quotes": [{ "text": "...", "contributor_name": "...", "relationship_type": "..." }] }`,
       }],
@@ -1167,23 +1178,20 @@ function pickBestConstellationTheme(photo, themes) {
   return scored[0]?.id || themes[0].id
 }
 
-function averageThemeYear(theme, photoById) {
-  const years = (theme.photo_ids || [])
-    .map((id) => Number(resolvePhotoYear(photoById[id] || {})))
-    .filter((y) => Number.isFinite(y))
-  if (!years.length) return 9999
-  return years.reduce((sum, y) => sum + y, 0) / years.length
-}
+// function averageThemeYear(theme, photoById) {
+//   const years = (theme.photo_ids || [])
+//     .map((id) => Number(resolvePhotoYear(photoById[id] || {})))
+//     .filter((y) => Number.isFinite(y))
+//   if (!years.length) return 9999
+//   return years.reduce((sum, y) => sum + y, 0) / years.length
+// }
 
-function buildConstellationEdges(themes, photoById) {
-  if (themes.length < 2) return []
-  const ordered = [...themes].sort(
-    (a, b) => averageThemeYear(a, photoById) - averageThemeYear(b, photoById),
-  )
-  return ordered.slice(0, -1).map((theme, index) => ({
-    source: theme.id,
-    target: ordered[index + 1].id,
-    relationship_type: 'chapter',
+function buildConstellationEdges(themes, centerNodeId = 'center') {
+  if (!themes.length) return []
+  return themes.map((theme) => ({
+    source: centerNodeId,
+    target: theme.id,
+    relationship_type: 'theme',
     weight: 0.5 + Math.min(0.4, (theme.photo_ids?.length || 0) / 20),
   }))
 }
@@ -1340,7 +1348,7 @@ Return JSON only:
     }))
     .sort((a, b) => b.photo_count - a.photo_count)
 
-  const edges = buildConstellationEdges(activeThemes, photoById)
+  const edges = buildConstellationEdges(activeThemes)
 
   return {
     themes: activeThemes,

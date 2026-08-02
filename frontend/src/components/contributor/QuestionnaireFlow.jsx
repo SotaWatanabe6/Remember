@@ -14,6 +14,8 @@ import {
   saveQuestionnaireResponse,
 } from "@/services/contributorService.js";
 
+const QUESTIONNAIRE_DRAFT_STORAGE_PREFIX = "remember_questionnaire_draft";
+
 const questionnaireErrorCopy = {
   invalid: {
     title: "This invitation link is not available",
@@ -137,6 +139,45 @@ function buildLastSavedAnswers(responses) {
   }, {});
 }
 
+function getQuestionnaireDraftStorageKey(inviteToken, contributorId) {
+  return `${QUESTIONNAIRE_DRAFT_STORAGE_PREFIX}:${inviteToken}:${contributorId}`;
+}
+
+function readStoredQuestionnaireDraft(inviteToken, contributorId) {
+  if (typeof window === "undefined" || !inviteToken || !contributorId) {
+    return {};
+  }
+
+  try {
+    const stored = window.localStorage.getItem(getQuestionnaireDraftStorageKey(inviteToken, contributorId));
+    if (!stored) return {};
+
+    const parsed = JSON.parse(stored);
+    return parsed && typeof parsed === "object" ? parsed.answers ?? {} : {};
+  } catch (error) {
+    console.warn("Unable to load saved questionnaire draft.", error);
+    return {};
+  }
+}
+
+function storeQuestionnaireDraft(inviteToken, contributorId, answersByQuestion) {
+  if (typeof window === "undefined" || !inviteToken || !contributorId) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      getQuestionnaireDraftStorageKey(inviteToken, contributorId),
+      JSON.stringify({
+        answers: answersByQuestion,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+  } catch (error) {
+    console.warn("Unable to save questionnaire draft.", error);
+  }
+}
+
 function getResumeQuestionIndex(answersByQuestion) {
   const firstUnansweredIndex = CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.findIndex((question) => {
     const answer = answersByQuestion[question.id]?.answer_text ?? "";
@@ -160,6 +201,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isNavigating, setIsNavigating] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [answerError, setAnswerError] = useState("");
   const [speechSupported] = useState(
     () =>
       typeof window !== "undefined" &&
@@ -233,7 +275,15 @@ export default function QuestionnaireFlow({ inviteToken }) {
           return;
         }
 
-        const restoredAnswers = buildAnswersByQuestion(savedResponses);
+        const localAnswers = readStoredQuestionnaireDraft(
+          inviteToken,
+          questionnaireDraft.session.contributorId,
+        );
+        const serverAnswers = buildAnswersByQuestion(savedResponses);
+        const restoredAnswers = {
+          ...localAnswers,
+          ...serverAnswers,
+        };
         setAnswers(restoredAnswers);
         lastSavedAnswersRef.current = buildLastSavedAnswers(savedResponses);
 
@@ -390,10 +440,15 @@ export default function QuestionnaireFlow({ inviteToken }) {
       answer_text: answerText,
     };
 
+    setAnswerError("");
     setAnswers((currentAnswers) => ({
       ...currentAnswers,
       [questionId]: nextAnswer,
     }));
+    storeQuestionnaireDraft(inviteToken, draft?.session?.contributorId, {
+      ...answersRef.current,
+      [questionId]: nextAnswer,
+    });
     queueSave(questionId, nextAnswer);
   };
 
@@ -417,6 +472,10 @@ export default function QuestionnaireFlow({ inviteToken }) {
       ...currentAnswers,
       [questionId]: nextAnswer,
     }));
+    storeQuestionnaireDraft(inviteToken, draft?.session?.contributorId, {
+      ...answersRef.current,
+      [questionId]: nextAnswer,
+    });
 
     if (nextAnswer.answer_text) {
       queueSave(questionId, nextAnswer);
@@ -444,9 +503,13 @@ export default function QuestionnaireFlow({ inviteToken }) {
         ...currentAnswers,
         [questionId]: nextAnswer,
       }));
+      storeQuestionnaireDraft(inviteToken, draft?.session?.contributorId, {
+        ...answersRef.current,
+        [questionId]: nextAnswer,
+      });
       queueSave(questionId, nextAnswer, 1200);
     },
-    [queueSave],
+    [draft?.session?.contributorId, inviteToken, queueSave],
   );
 
   const handleToggleListening = () => {
@@ -485,7 +548,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
     setIsListening(true);
   };
 
-  const moveToQuestion = async (nextIndex) => {
+  const moveToQuestion = async (nextIndex, { requireCurrentAnswer = true } = {}) => {
     if (nextIndex < 0) {
       setStep("intro");
       return;
@@ -495,18 +558,25 @@ export default function QuestionnaireFlow({ inviteToken }) {
       return;
     }
 
+    const answerSnapshot = answersRef.current[currentQuestion.id] ?? createEmptyAnswer();
+    if (requireCurrentAnswer && !String(answerSnapshot.answer_text || "").trim()) {
+      setAnswerError("Please answer this question before continuing.");
+      return;
+    }
+
     setIsNavigating(true);
     stopListening();
     window.clearTimeout(saveTimerRef.current);
     const didSave = await saveAnswer(
       currentQuestion.id,
-      answersRef.current[currentQuestion.id] ?? createEmptyAnswer(),
+      answerSnapshot,
       { force: true },
     );
     if (!didSave) {
       setIsNavigating(false);
       return;
     }
+    setAnswerError("");
     setCurrentIndex(nextIndex);
     setIsNavigating(false);
   };
@@ -520,9 +590,15 @@ export default function QuestionnaireFlow({ inviteToken }) {
     setIsNavigating(true);
     stopListening();
     window.clearTimeout(saveTimerRef.current);
+    const answerSnapshot = answersRef.current[currentQuestion.id] ?? createEmptyAnswer();
+    if (!String(answerSnapshot.answer_text || "").trim()) {
+      setAnswerError("Please answer this question before continuing.");
+      setIsNavigating(false);
+      return;
+    }
     const didSave = await saveAnswer(
       currentQuestion.id,
-      answersRef.current[currentQuestion.id] ?? createEmptyAnswer(),
+      answerSnapshot,
       { force: true },
     );
     if (!didSave) {
@@ -543,7 +619,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
       return;
     }
 
-    moveToQuestion(currentIndex - 1);
+    moveToQuestion(currentIndex - 1, { requireCurrentAnswer: false });
   };
 
   useEffect(() => {
@@ -622,6 +698,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
                 autosaveStatus={autosaveStatus}
                 isListening={isListening}
                 speechSupported={speechSupported}
+                error={answerError}
                 onAnswerChange={handleAnswerChange}
                 onAnswerBlur={handleAnswerBlur}
                 onModeChange={handleModeChange}

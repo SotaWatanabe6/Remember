@@ -123,8 +123,6 @@ export default function StoryPage() {
     setSaving(true);
     setError('');
     try {
-      const storiesKey = `remember_stories:${inviteToken}`;
-      const existing = JSON.parse(localStorage.getItem(storiesKey) || '[]');
       const session = JSON.parse(localStorage.getItem(`remember_contributor_session:${inviteToken}`) || '{}');
       const contributorToken = session?.contributorToken || session?.contributorId;
       const newStory = {
@@ -135,8 +133,6 @@ export default function StoryPage() {
       };
       if (newStory.title || newStory.body) {
         await saveContributorStory(inviteToken, contributorToken, newStory);
-      } else {
-        localStorage.setItem(storiesKey, JSON.stringify([...existing, newStory]));
       }
       router.push(`/contribute/${inviteToken}/review`);
     } catch (err) {

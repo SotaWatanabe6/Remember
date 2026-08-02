@@ -121,6 +121,18 @@ function getInitialSelection(relationshipType) {
   return "";
 }
 
+function getMemorialBiography(memorial) {
+  return (
+    memorial?.biography ??
+    memorial?.bio ??
+    memorial?.description ??
+    memorial?.profile ??
+    memorial?.brief_biography ??
+    memorial?.short_description ??
+    ""
+  ).trim();
+}
+
 export default function RelationshipSelector({ inviteToken }) {
   const router = useRouter();
   const [draft, setDraft] = useState(null);
@@ -244,6 +256,7 @@ export default function RelationshipSelector({ inviteToken }) {
   }
 
   const subjectName = draft.invite?.deceased?.name || "them";
+  const biography = getMemorialBiography(draft.invite?.memorial);
 
   return (
     <main className="min-h-screen bg-r-bg text-r-text flex flex-col">
@@ -259,6 +272,11 @@ export default function RelationshipSelector({ inviteToken }) {
             <p className="text-xl leading-[26px] text-r-secondary">
               Select your connection to {subjectName} below.
             </p>
+            {biography ? (
+              <p className="rounded-2xl border border-r-border bg-r-card/40 px-5 py-4 text-base leading-7 text-r-secondary">
+                {biography}
+              </p>
+            ) : null}
           </div>
 
           {!isSubPanelOpen ? (

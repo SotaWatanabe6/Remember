@@ -11,11 +11,14 @@ export default function QuestionCard({
   autosaveStatus,
   isListening,
   speechSupported,
+  error,
   onAnswerChange,
   onAnswerBlur,
   onModeChange,
   onToggleListening,
 }) {
+  const errorId = error ? `question-answer-${question.id}-error` : undefined;
+
   return (
     <section className="flex flex-col gap-8">
       <div className="text-center">
@@ -49,9 +52,17 @@ export default function QuestionCard({
             }}
             placeholder="This is an example of an answer the user would give. It would either be a typed out answer or this would be the transcript of the audio recorded by the user."
             rows={6}
+            required
+            aria-invalid={Boolean(error)}
+            aria-describedby={errorId}
             className="min-h-[180px] w-full resize-y rounded-2xl bg-transparent px-5 py-4 text-body-2 text-r-text outline-none transition placeholder:text-r-muted"
             style={{ border: "1px solid var(--color-r-border)" }}
           />
+          {error ? (
+            <p id={errorId} className="text-sm leading-5 text-r-danger" role="alert">
+              {error}
+            </p>
+          ) : null}
 
           <AutosaveStatus status={autosaveStatus} />
         </div>
