@@ -3,7 +3,7 @@
 // src/app/(contributor)/contribute/[inviteToken]/upload/page.jsx
 
 import { useRouter, useParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 
 function ContributorNav({ backHref }) {
@@ -25,10 +25,22 @@ function ContributorNav({ backHref }) {
 }
 
 const MEDIA_TYPES = [
-  { id: 'photo', label: 'Photo' },
-  { id: 'audio', label: 'Audio' },
-  { id: 'story', label: 'Story (text)' },
+  { id: 'photo', label: 'Photos' },
+  { id: 'audio', label: 'Voices' },
 ];
+
+function getStoredMemorialSubjectName(inviteToken) {
+  if (typeof window === 'undefined') return '';
+
+  try {
+    const session = JSON.parse(
+      localStorage.getItem(`remember_contributor_session:${inviteToken}`) || '{}'
+    );
+    return session?.memorialSubjectName || '';
+  } catch {
+    return '';
+  }
+}
 
 export default function UploadSelectorPage() {
   const router = useRouter();
@@ -37,18 +49,9 @@ export default function UploadSelectorPage() {
   function handleSelect(type) {
     if (type === 'photo') router.push(`/contribute/${inviteToken}/photos`);
     if (type === 'audio') router.push(`/contribute/${inviteToken}/voice`);
-    if (type === 'story') router.push(`/contribute/${inviteToken}/story`);
   }
 
-  const [deceasedName, setDeceasedName] = useState('');
-  useEffect(() => {
-    try {
-      const session = JSON.parse(
-        localStorage.getItem(`remember_contributor_session:${inviteToken}`) || '{}'
-      );
-      if (session?.memorialSubjectName) setDeceasedName(session.memorialSubjectName);
-    } catch {}
-  }, [inviteToken]);
+  const [deceasedName] = useState(() => getStoredMemorialSubjectName(inviteToken));
 
   return (
     <main className="min-h-screen bg-r-bg text-r-text flex flex-col">
@@ -66,7 +69,7 @@ export default function UploadSelectorPage() {
         </div>
 
         {/* Cards — full width, no max-width constraint */}
-        <div className="w-full grid grid-cols-3 gap-4">
+        <div className="grid w-full max-w-[760px] grid-cols-1 gap-4 sm:grid-cols-2">
           {MEDIA_TYPES.map((type) => (
             <button
               key={type.id}

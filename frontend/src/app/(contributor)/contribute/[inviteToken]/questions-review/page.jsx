@@ -2,10 +2,11 @@
 
 // frontend/src/app/(contributor)/contribute/[inviteToken]/questions-review/page.jsx
 
-import { useEffect, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { saveResponses } from '@/lib/api.js';
+import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS } from '@/lib/contribute/questionnaireQuestions.js';
 
 function ContributorNav({ backHref }) {
   return (
@@ -27,10 +28,17 @@ function ContributorNav({ backHref }) {
 function EditableAnswerCard({ question, answer, questionId, onEdit }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(answer);
+  const [error, setError] = useState('');
 
   async function handleSave() {
     const trimmed = value.trim();
+    if (!trimmed) {
+      setError('Questionnaire answers are required.');
+      return;
+    }
+
     setEditing(false);
+    setError('');
     if (trimmed !== answer) await onEdit(questionId, question, trimmed);
   }
 
@@ -48,8 +56,11 @@ function EditableAnswerCard({ question, answer, questionId, onEdit }) {
       {editing ? (
         <div className="mt-3 flex flex-col gap-2">
           <textarea autoFocus value={value} onChange={(e) => setValue(e.target.value)} rows={4}
+            required
+            aria-invalid={Boolean(error)}
             className="w-full rounded-xl px-4 py-3 text-body-2 text-r-text bg-transparent focus:outline-none resize-none"
             style={{ border: '1px solid var(--color-r-border-focus)' }} />
+          {error ? <p className="text-sm leading-5 text-r-danger">{error}</p> : null}
           <div className="flex gap-2">
             <button onClick={() => { setValue(answer); setEditing(false); }}
               className="rounded-full px-4 py-2 text-caption text-r-secondary bg-transparent transition-opacity hover:opacity-70"
@@ -67,52 +78,104 @@ function EditableAnswerCard({ question, answer, questionId, onEdit }) {
   );
 }
 
+function readQuestionnaireReviewDraft(inviteToken) {
+  if (typeof window === 'undefined') {
+    return { session: null, responses: [] };
+  }
+
+  try {
+    const session = JSON.parse(localStorage.getItem(`remember_contributor_session:${inviteToken}`) || '{}');
+    const contributorId = session?.contributorId;
+    if (!contributorId) return { session, responses: [] };
+
+    const allResponses = JSON.parse(localStorage.getItem(`remember_questionnaire_responses:${inviteToken}`) || '{}');
+    const mine = allResponses[contributorId] ?? {};
+    const responses = CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.map((question, index) => {
+      const saved = mine[question.id] || Object.values(mine).find((response) => (
+        response.question_id === question.id ||
+        response.question_order === index + 1 ||
+        response.order_index === index + 1
+      ));
+      return {
+        ...(saved || {}),
+        question_id: question.id,
+        question_text: saved?.question_text || question.prompt,
+        question_order: index + 1,
+        order_index: index + 1,
+        response_text: saved?.response_text || saved?.answer_text || '',
+        answer_text: saved?.answer_text || saved?.response_text || '',
+      };
+    });
+
+    return { session, responses };
+  } catch {
+    return { session: null, responses: [] };
+  }
+}
+
 export default function QuestionsReviewPage() {
   const router = useRouter();
   const { inviteToken } = useParams();
-  const [responses, setResponses] = useState([]);
-
-  useEffect(() => {
-    try {
-      const session = JSON.parse(localStorage.getItem(`remember_contributor_session:${inviteToken}`) || '{}');
-      const contributorId = session?.contributorId;
-      if (!contributorId) return;
-      const allResponses = JSON.parse(localStorage.getItem(`remember_questionnaire_responses:${inviteToken}`) || '{}');
-      const mine = allResponses[contributorId] ?? {};
-      const sorted = Object.values(mine)
-        .sort((a, b) => (a.question_order ?? 0) - (b.question_order ?? 0))
-        .filter((r) => r.question_text || r.question_id);
-      setResponses(sorted);
-    } catch {}
-  }, [inviteToken]);
+  const [initialDraft] = useState(() => readQuestionnaireReviewDraft(inviteToken));
+  const [responses, setResponses] = useState(() => initialDraft.responses);
+  const [continueError, setContinueError] = useState('');
+  const sessionRef = useRef(initialDraft.session);
 
   async function handleEdit(questionId, questionText, newAnswer) {
+    const questionIndex = CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.findIndex((question) => question.id === questionId);
+    const session = sessionRef.current;
+    const sessionContributorId = session?.contributorId;
+    const sessionContributorToken = session?.contributorToken || session?.contributorId;
+    setContinueError('');
     setResponses((prev) => prev.map((r) =>
       (r.question_id === questionId || r.question_text === questionText)
         ? { ...r, response_text: newAnswer, answer_text: newAnswer } : r
     ));
-    let updatedEntry = null;
+    let updatedEntry = {
+      contributor_id: sessionContributorId,
+      contributor_token: sessionContributorToken,
+      question_id: questionId,
+      question_text: questionText,
+      question_order: questionIndex + 1,
+      order_index: questionIndex + 1,
+      response_text: newAnswer,
+      answer_text: newAnswer,
+    };
     try {
-      const session = JSON.parse(localStorage.getItem(`remember_contributor_session:${inviteToken}`) || '{}');
-      const contributorId = session?.contributorId;
-      if (contributorId) {
+      if (sessionContributorId) {
         const responsesKey = `remember_questionnaire_responses:${inviteToken}`;
         const allResponses = JSON.parse(localStorage.getItem(responsesKey) || '{}');
-        const mine = allResponses[contributorId] ?? {};
+        const mine = allResponses[sessionContributorId] ?? {};
         const entryKey = Object.keys(mine).find((k) =>
           mine[k].question_id === questionId || mine[k].question_text === questionText
         );
         if (entryKey) {
           mine[entryKey] = { ...mine[entryKey], response_text: newAnswer, answer_text: newAnswer };
-          allResponses[contributorId] = mine;
-          localStorage.setItem(responsesKey, JSON.stringify(allResponses));
           updatedEntry = mine[entryKey];
+        } else {
+          mine[questionId] = updatedEntry;
+          updatedEntry = mine[questionId];
         }
+        allResponses[sessionContributorId] = mine;
+        localStorage.setItem(responsesKey, JSON.stringify(allResponses));
       }
     } catch {}
     if (updatedEntry) {
-      try { await saveResponses(inviteToken, [updatedEntry], { contributorToken: updatedEntry.contributor_id }); } catch {}
+      try { await saveResponses(inviteToken, [updatedEntry], { contributorToken: sessionContributorToken }); } catch {}
     }
+  }
+
+  function handleContinue() {
+    const firstMissingIndex = responses.findIndex((response) => (
+      !String(response.response_text || response.answer_text || '').trim()
+    ));
+
+    if (firstMissingIndex >= 0) {
+      setContinueError('Please answer every questionnaire question before continuing.');
+      return;
+    }
+
+    router.push(`/contribute/${inviteToken}/upload`);
   }
 
   return (
@@ -146,6 +209,12 @@ export default function QuestionsReviewPage() {
             </div>
           )}
 
+          {continueError ? (
+            <p className="rounded-2xl px-4 py-3 text-center text-caption" style={{ backgroundColor: '#F5DDD6', color: 'var(--color-r-danger)' }} role="alert">
+              {continueError}
+            </p>
+          ) : null}
+
           <div className="grid grid-cols-2 gap-4 pt-2">
             <button
               onClick={() => router.push(`/contribute/${inviteToken}/questions`)}
@@ -153,7 +222,7 @@ export default function QuestionsReviewPage() {
             >
               Start over
             </button>
-            <button onClick={() => router.push(`/contribute/${inviteToken}/upload`)}
+            <button onClick={handleContinue}
               className="flex h-[56px] items-center justify-center rounded-full text-body-2 font-medium transition-opacity hover:opacity-80 bg-r-btn text-r-btn-text border-none">
               Continue
             </button>

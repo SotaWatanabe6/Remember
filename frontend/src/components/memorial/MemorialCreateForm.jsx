@@ -6,15 +6,11 @@ import { createMemorial } from "@/services/memorialService.js";
 import { uploadMemorialCoverPhoto } from "@/lib/api.js";
 import MemorialDateFields from "@/components/memorial/MemorialDateFields.jsx";
 
-// ─── Field style constants 
-
 const fieldClassName =
   "h-[69px] w-full rounded-[18px] border border-r-border bg-[#F6EFE7] px-5 font-family-body text-[20px] leading-[20px] text-[#5F5A52] outline-none transition placeholder:text-[#5F5A52] focus:border-r-border-focus focus:ring-2 focus:ring-r-border/30";
 
 const labelClassName =
   "font-family-display text-[24px] font-medium leading-[24px] text-r-text";
-
-// ─── Initial form state 
 
 const initialRemembered = {
   firstName: "",
@@ -27,8 +23,6 @@ const initialRemembered = {
   photoName: "",
   photoPreview: null,
 };
-
-// ─── Sub-components 
 
 function UploadIcon() {
   return (
@@ -51,25 +45,38 @@ function UploadIcon() {
   );
 }
 
-function TextField({ id, label, labelClass = labelClassName, required, ...props }) {
+function TextField({ id, label, labelClass = labelClassName, required, error, ...props }) {
+  const errorId = error ? `${id}-error` : undefined;
+
   return (
     <div className="flex w-full flex-col gap-[10px]">
       <label htmlFor={id} className={labelClass}>
         {label}
         {required && <span className="ml-1 text-red-500" aria-hidden="true">*</span>}
       </label>
-      <input id={id} className={fieldClassName} required={required} {...props} />
+      <input
+        id={id}
+        aria-invalid={Boolean(error)}
+        aria-describedby={errorId}
+        aria-required={required}
+        className={fieldClassName}
+        {...props}
+      />
+      {error ? (
+        <p id={errorId} className="text-sm leading-5 text-r-danger">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
-
-// ─── Main form 
 
 export default function MemorialCreateForm() {
   const router = useRouter();
   const fileInputRef = useRef(null);
 
   const [remembered, setRemembered] = useState(initialRemembered);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [dateErrors, setDateErrors] = useState({
@@ -77,14 +84,12 @@ export default function MemorialCreateForm() {
     date_of_passing: "",
   });
 
-  // ── Field handlers
-
   const updateField = (event) => {
     const { name, value } = event.target;
     setRemembered((current) => ({ ...current, [name]: value }));
+    setFieldErrors((current) => ({ ...current, [name]: "" }));
   };
 
-  // Shared handler for MemorialDateFields — clears date-specific errors on change
   const handleDateChange = (event) => {
     const { name, value } = event.target;
     setRemembered((current) => ({ ...current, [name]: value }));
@@ -102,6 +107,7 @@ export default function MemorialCreateForm() {
         photoName: file.name,
         photoPreview: e.target?.result ?? null,
       }));
+      setFieldErrors((current) => ({ ...current, photo: "" }));
     };
     reader.readAsDataURL(file);
   };
@@ -110,30 +116,30 @@ export default function MemorialCreateForm() {
     fileInputRef.current?.click();
   };
 
-  // ── Validation 
-
-  function validate() {
-    const subjectName = `${remembered.firstName} ${remembered.lastName}`.trim();
-    if (!subjectName) return "Please enter a first or last name.";
-    if (!remembered.photo) return "A profile photo is required.";
-    if (!remembered.date_of_birth) {
-      setDateErrors((c) => ({ ...c, date_of_birth: "Date of birth is required." }));
-      return "Date of birth is required.";
-    }
-    if (!remembered.briefBiography.trim()) return "A brief biography is required.";
-    return null;
-  }
-
-  // ── Submit — photo uploads FIRST, then memorial row is created ──────────────
-
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
     setDateErrors({ date_of_birth: "", date_of_passing: "" });
 
-    const validationError = validate();
-    if (validationError) {
-      setError(validationError);
+    const nextFieldErrors = {};
+    if (!remembered.firstName.trim()) nextFieldErrors.firstName = "First name is required.";
+    if (!remembered.lastName.trim()) nextFieldErrors.lastName = "Last name is required.";
+    if (!remembered.nickName.trim()) nextFieldErrors.nickName = "Nickname is required.";
+    if (!remembered.briefBiography.trim()) nextFieldErrors.briefBiography = "Brief biography is required.";
+    if (!remembered.photo) nextFieldErrors.photo = "A profile photo is required.";
+
+    const nextDateErrors = { date_of_birth: "", date_of_passing: "" };
+    if (!remembered.date_of_birth) nextDateErrors.date_of_birth = "Date of birth is required.";
+    if (!remembered.date_of_passing) nextDateErrors.date_of_passing = "Date of passing is required.";
+
+    if (
+      Object.keys(nextFieldErrors).length ||
+      nextDateErrors.date_of_birth ||
+      nextDateErrors.date_of_passing
+    ) {
+      setFieldErrors(nextFieldErrors);
+      setDateErrors(nextDateErrors);
+      setError("Please complete all required profile fields.");
       return;
     }
 
@@ -148,7 +154,6 @@ export default function MemorialCreateForm() {
     }, 90_000);
 
     try {
-      // ── Step 1: Upload photo first so the URL is ready for the memorial row ──
       const controller = new AbortController();
       const uploadTimeout = setTimeout(() => controller.abort(), 20_000);
       let coverPhotoUrl = null;
@@ -170,7 +175,6 @@ export default function MemorialCreateForm() {
         throw new Error("Photo uploaded but no URL was returned. Please try again.");
       }
 
-      // ── Step 2: Create the memorial row with the photo URL already included ──
       const subjectName = `${remembered.firstName} ${remembered.lastName}`.trim();
 
       const memorial = await createMemorial({
@@ -198,15 +202,9 @@ export default function MemorialCreateForm() {
     }
   };
 
-  // ── Render 
-
   return (
     <form onSubmit={handleSubmit} className="flex w-full flex-col gap-[44px]">
-
-      {/* Name + Photo row */}
       <div className="grid w-full grid-cols-1 gap-x-6 gap-y-8 lg:grid-cols-[1fr_1fr] lg:items-start">
-
-        {/* Left: name fields */}
         <div className="flex w-full flex-col gap-6">
           <TextField
             id="first-name"
@@ -218,6 +216,7 @@ export default function MemorialCreateForm() {
             placeholder="John"
             disabled={isSubmitting}
             required
+            error={fieldErrors.firstName}
           />
 
           <TextField
@@ -230,30 +229,23 @@ export default function MemorialCreateForm() {
             placeholder="Smith"
             disabled={isSubmitting}
             required
+            error={fieldErrors.lastName}
           />
 
-          {/* Nickname — optional */}
-          <div className="flex w-full flex-col gap-[10px]">
-            <label htmlFor="nickname" className={labelClassName}>
-              Nickname
-              <span className="ml-2 font-family-body text-[16px] font-normal text-[#8A8580]">
-                (optional)
-              </span>
-            </label>
-            <input
-              id="nickname"
-              name="nickName"
-              type="text"
-              value={remembered.nickName}
-              onChange={updateField}
-              placeholder="e.g. Johny"
-              disabled={isSubmitting}
-              className={fieldClassName}
-            />
-          </div>
+          <TextField
+            id="nickname"
+            label="Nickname"
+            name="nickName"
+            type="text"
+            value={remembered.nickName}
+            onChange={updateField}
+            placeholder="e.g. Johny"
+            disabled={isSubmitting}
+            required
+            error={fieldErrors.nickName}
+          />
         </div>
 
-        {/* Right: photo upload */}
         <div className="w-full">
           <label htmlFor="photo-input" className={labelClassName}>
             Profile photo
@@ -299,10 +291,14 @@ export default function MemorialCreateForm() {
               </span>
             </label>
           )}
+          {fieldErrors.photo ? (
+            <p className="mt-2 text-sm leading-5 text-r-danger">
+              {fieldErrors.photo}
+            </p>
+          ) : null}
         </div>
       </div>
 
-      {/* Full date fields — replaces year-only dropdowns */}
       <MemorialDateFields
         values={{
           date_of_birth: remembered.date_of_birth,
@@ -312,7 +308,6 @@ export default function MemorialCreateForm() {
         onChange={handleDateChange}
       />
 
-      {/* Biography */}
       <div className="flex w-full flex-col gap-[10px]">
         <label htmlFor="brief-biography" className={labelClassName}>
           Brief Biography
@@ -327,13 +322,19 @@ export default function MemorialCreateForm() {
           value={remembered.briefBiography}
           onChange={updateField}
           placeholder="Share a few words about who they were, what they loved, and anything else that feels important to preserve their memory."
-          required
           className="min-h-[272px] w-full resize-none rounded-[18px] border border-r-border bg-[#F6EFE7] px-5 py-4 font-family-body text-[20px] leading-[30px] text-[#5F5A52] outline-none transition placeholder:text-[#5F5A52] focus:border-r-border-focus focus:ring-2 focus:ring-r-border/30 disabled:opacity-50"
           disabled={isSubmitting}
+          aria-invalid={Boolean(fieldErrors.briefBiography)}
+          aria-required="true"
+          aria-describedby={fieldErrors.briefBiography ? "brief-biography-error" : undefined}
         />
+        {fieldErrors.briefBiography ? (
+          <p id="brief-biography-error" className="text-sm leading-5 text-r-danger">
+            {fieldErrors.briefBiography}
+          </p>
+        ) : null}
       </div>
 
-      {/* Error + Submit */}
       <div className="flex flex-col items-center gap-4 pt-[8px]">
         {error && (
           <div

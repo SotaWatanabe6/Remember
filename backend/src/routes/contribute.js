@@ -6,6 +6,7 @@ const router = express.Router()
 const supabase = require('../supabase')
 const { extractAudioDuration } = require('../services/duration')
 const { extractImageMetadata } = require('../services/exif')
+const { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS } = require('../lib/questionnaireQuestions')
 
 const PHOTO_STORAGE_BUCKET =
   process.env.CONTRIBUTOR_PHOTO_BUCKET ||
@@ -23,6 +24,7 @@ const MAX_CONTRIBUTOR_PHOTOS = 500
 const MAX_PHOTO_UPLOAD_BATCH_SIZE = 20
 const ALLOWED_PHOTO_EXTENSIONS = new Set(['heic', 'heif', 'jpg', 'jpeg', 'png', 'webp'])
 const ALLOWED_AUDIO_EXTENSIONS = new Set(['m4a', 'mp3', 'wav', 'webm'])
+const RELATIONSHIP_TYPES_REQUIRING_LABEL = new Set(['Family', 'Other'])
 const PHOTO_MIME_BY_EXTENSION = {
   heic: 'image/heic',
   heif: 'image/heif',
@@ -144,12 +146,29 @@ router.get('/:token', async (req, res) => {
 
     const { data: memorial } = await supabase
       .from('memorials')
-      .select('id, subject_name, cover_photo_url, date_of_birth, date_of_passing, biography, nickname')
+      .select('id, subject_name, nickname, biography, related_people, cover_photo_url, date_of_birth, date_of_passing, status')
       .eq('id', invite.memorial_id)
       .single()
 
+    const biography =
+      memorial?.biography ||
+      memorial?.bio ||
+      memorial?.description ||
+      memorial?.brief_biography ||
+      memorial?.short_description ||
+      ''
+
     res.json({
-      memorial,
+      memorial: memorial
+        ? {
+          ...memorial,
+          biography,
+          bio: biography,
+          description: memorial.description || biography,
+          brief_biography: memorial.brief_biography || biography,
+          short_description: memorial.short_description || biography,
+        }
+        : null,
       invite: {
         token: invite.token,
         is_active: invite.is_active,
@@ -241,13 +260,19 @@ router.post('/:token/relationship', async (req, res) => {
     if (!contributor_token || !relationship_type) {
       return res.status(400).json({ error: 'contributor_token and relationship_type are required' })
     }
+    if (
+      RELATIONSHIP_TYPES_REQUIRING_LABEL.has(String(relationship_type).trim()) &&
+      !String(relationship_label || '').trim()
+    ) {
+      return res.status(400).json({ error: 'relationship_label is required for this relationship type' })
+    }
 
     const { data, error } = await supabase
       .from('contributors')
       .update({
         relationship_type,
         relationship_label: relationship_label || null,
-        is_anonymous: typeof req.body.is_anonymous === 'boolean' ? req.body.is_anonymous : false,
+        is_anonymous: false,
       })
       .eq('id', contributor_token)
       .select()
@@ -322,6 +347,57 @@ router.post('/:token/submit', async (req, res) => {
     const { contributor_token } = req.body
     if (!contributor_token) {
       return res.status(400).json({ error: 'contributor_token is required' })
+    }
+
+    const { data: invite, error: inviteError } = await supabase
+      .from('invite_links')
+      .select('memorial_id, is_active')
+      .eq('token', req.params.token)
+      .single()
+
+    if (inviteError || !invite || !invite.is_active) {
+      return res.status(410).json({ error: 'This link is no longer active.' })
+    }
+
+    const { data: contributor, error: contributorError } = await supabase
+      .from('contributors')
+      .select('id, memorial_id, relationship_type, relationship_label')
+      .eq('id', contributor_token)
+      .single()
+
+    if (contributorError || !contributor) {
+      return res.status(404).json({ error: 'Contributor not found' })
+    }
+
+    if (contributor.memorial_id !== invite.memorial_id) {
+      return res.status(403).json({ error: 'Contributor does not belong to this invitation.' })
+    }
+
+    const relationshipType = String(contributor.relationship_type || '').trim()
+    const relationshipLabel = String(contributor.relationship_label || '').trim()
+    if (!relationshipType || (RELATIONSHIP_TYPES_REQUIRING_LABEL.has(relationshipType) && !relationshipLabel)) {
+      return res.status(400).json({ error: 'Relationship information is required before submitting.' })
+    }
+
+    const { data: responses, error: responsesError } = await supabase
+      .from('questionnaire_responses')
+      .select('order_index, response_text')
+      .eq('contributor_id', contributor_token)
+
+    if (responsesError) return res.status(400).json({ error: responsesError.message })
+
+    const answeredIndexes = new Set(
+      (responses || [])
+        .filter((response) => String(response.response_text || '').trim())
+        .map((response) => Number(response.order_index))
+        .filter((orderIndex) => Number.isInteger(orderIndex)),
+    )
+    const missingQuestionCount = CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS
+      .filter((_, index) => !answeredIndexes.has(index + 1))
+      .length
+
+    if (missingQuestionCount) {
+      return res.status(400).json({ error: 'Please answer all questionnaire questions before submitting.' })
     }
 
     const { data, error } = await supabase

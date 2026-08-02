@@ -266,7 +266,9 @@ export default function VoicePage() {
 
           <div className="text-center">
             <h1 className="text-h1 text-r-text">Upload your memories</h1>
-            <p className="mt-2 text-body-2 text-r-secondary">Upload a voice memo below.</p>
+            <p className="mt-2 text-body-2 text-r-secondary">
+              Upload audio that contains the voice of the person being remembered, such as voicemails, voice notes, or audio from videos.
+            </p>
           </div>
 
           <div>
@@ -288,7 +290,7 @@ export default function VoicePage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 10l-4-4m0 0L8 10m4-4v12" />
                 </svg>
               )}
-              <span className="text-body-2 text-r-muted">{uploading ? 'Uploading...' : 'Click to upload or drag and drop'}</span>
+              <span className="text-body-2 text-r-muted">{uploading ? 'Uploading...' : 'Click to upload or drag and drop audio of their voice'}</span>
               <span id="voice-upload-guidance" className="text-caption text-r-muted">M4A, MP3, WAV, or WebM up to 50 MB</span>
             </label>
             <div id="voice-upload-status" className="mt-3 min-h-6" aria-live="polite">
@@ -324,12 +326,12 @@ export default function VoicePage() {
           )}
 
           <div className="flex flex-col gap-3">
-            <button onClick={() => router.push(`/contribute/${inviteToken}/story`)} disabled={uploading}
+            <button onClick={() => router.push(`/contribute/${inviteToken}/review`)} disabled={uploading}
               className="w-full rounded-full py-4 text-body-2 font-medium tracking-wide transition-opacity hover:opacity-80 active:opacity-70 disabled:opacity-55 bg-r-btn text-r-btn-text border-none">
               Continue
             </button>
             {recordings.length === 0 && (
-              <button onClick={() => router.push(`/contribute/${inviteToken}/story`)}
+              <button onClick={() => router.push(`/contribute/${inviteToken}/review`)}
                 className="w-full py-3 text-caption transition-colors text-r-muted"
                 onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-r-text)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-r-muted)'; }}>

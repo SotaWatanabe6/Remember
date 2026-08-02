@@ -111,23 +111,49 @@ router.post('/cover-photo', authMiddleware, async (req, res) => {
 // POST /memorials — create a new memorial
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { subject_name, date_of_birth, date_of_passing, cover_photo_url, biography, nickname } = req.body
-    if (!subject_name) return res.status(400).json({ error: 'subject_name is required' })
-    if (!date_of_birth) return res.status(400).json({ error: 'date_of_birth is required' })
-    if (!cover_photo_url) return res.status(400).json({ error: 'cover_photo_url is required' })
+    const {
+      subject_name,
+      nickname,
+      date_of_birth,
+      date_of_passing,
+      biography,
+      related_people,
+      cover_photo_url,
+    } = req.body
+    const subjectName = String(subject_name || '').trim()
+    const nicknameText = String(nickname || '').trim()
+    const biographyText = String(biography || '').trim()
+    const coverPhotoUrl = String(cover_photo_url || '').trim()
+    const requiredFields = [
+      [subjectName, 'subject_name'],
+      [date_of_birth, 'date_of_birth'],
+      [coverPhotoUrl, 'cover_photo_url'],
+    ]
+    const missingFields = requiredFields
+      .filter(([value]) => !value)
+      .map(([, field]) => field)
+
+    if (missingFields.length) {
+      return res.status(400).json({
+        error: `Missing required memorial profile fields: ${missingFields.join(', ')}`,
+      })
+    }
+
+    const memorialPayload = {
+      user_id: req.user.sub,
+      subject_name: subjectName,
+      nickname: nicknameText || null,
+      date_of_birth,
+      date_of_passing: date_of_passing || null,
+      biography: biographyText || null,
+      related_people: Array.isArray(related_people) ? related_people : [],
+      cover_photo_url: coverPhotoUrl,
+      status: 'collecting'
+    }
 
     const { data, error } = await supabase
       .from('memorials')
-      .insert({
-        user_id: req.user.sub,
-        subject_name,
-        nickname: nickname || null,
-        date_of_birth: date_of_birth || null,
-        date_of_passing: date_of_passing || null,
-        biography: biography || null,
-        cover_photo_url: cover_photo_url || null,
-        status: 'collecting'
-      })
+      .insert(memorialPayload)
       .select()
       .single()
 

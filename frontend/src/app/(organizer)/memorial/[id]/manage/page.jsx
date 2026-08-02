@@ -29,13 +29,26 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function normalizeMemorialForView(memorial) {
   if (!memorial) return null;
+  const biography =
+    memorial.biography ||
+    memorial.bio ||
+    memorial.description ||
+    memorial.profile ||
+    memorial.brief_biography ||
+    memorial.short_description ||
+    "";
+
   return {
     id: memorial.id,
     subject_name: memorial.subject_name || memorial.deceased_name,
     cover_photo_url: memorial.cover_photo_url || memorial.profile_photo_url || null,
     date_of_birth: memorial.date_of_birth || memorial.birth_date || null,
     date_of_passing: memorial.date_of_passing || memorial.death_date || null,
-    bio: memorial.brief_biography || memorial.short_description || memorial.biography || null,
+    bio: biography,
+    biography,
+    description: memorial.description || biography,
+    brief_biography: memorial.brief_biography || biography,
+    short_description: memorial.short_description || biography,
     status: memorial.status || null,
     generated_at: memorial.generated_at || null,
   };
@@ -127,6 +140,7 @@ function MemorialHeader({ memorial, inviteToken, onShare, contributorCount, subm
   const status = getManageStatus(memorial?.status);
   const birthDate = formatMemorialDate(memorial?.date_of_birth)
   const passingDate = formatMemorialDate(memorial?.date_of_passing)
+  const biography = memorial?.bio || memorial?.biography || ""
 
   return (
     <div className="grid gap-8 lg:grid-cols-[240px_1fr_220px] lg:items-start">
@@ -154,9 +168,11 @@ function MemorialHeader({ memorial, inviteToken, onShare, contributorCount, subm
         <p className="mt-4 text-[16px] leading-[16px] text-r-secondary">
           {birthDate}{birthDate && passingDate ? " - " : ""}{passingDate}
         </p>
-        <p className="mt-6 max-w-[520px] text-[20px] leading-[26px] text-r-secondary">
-          {memorial?.bio || ''}
-        </p>
+        {biography ? (
+          <p className="mt-6 max-w-[520px] text-[20px] leading-[26px] text-r-secondary">
+            {biography}
+          </p>
+        ) : null}
         {typeof contributorCount === 'number' && (
           <p className="mt-4 text-[15px] leading-[20px] text-r-secondary">
             {contributorCount} contributor{contributorCount === 1 ? '' : 's'} invited
@@ -429,6 +445,7 @@ function Lightbox({ photo, onClose, onPrev, onNext }) {
 function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
   
   const [filterView, setFilterView] = useState('all');
+  const [contributorFilter, setContributorFilter] = useState('all');
   const [sortOrder, setSortOrder] = useState('recently_added');
   
   const [openAlbum, setOpenAlbum] = useState(null);
@@ -462,9 +479,20 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
   const allPhotos = albumList.flatMap((album) =>
     (album.photos || []).map((p) => ({ ...p, album_name: album.album_name }))
   );
+  const contributorNames = [...new Set(allPhotos.map((photo) => photo.contributor_name).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: 'base' })
+  );
+  const filteredAllPhotos = contributorFilter === 'all'
+    ? allPhotos
+    : allPhotos.filter((photo) => photo.contributor_name === contributorFilter);
   const isAlbumView = filterView === 'albums';
 
-  function handleFilterChange(val) { setFilterView(val); setOpenAlbum(null); setSortOrder('recently_added'); }
+  function handleFilterChange(val) {
+    setFilterView(val);
+    setOpenAlbum(null);
+    setContributorFilter('all');
+    setSortOrder('recently_added');
+  }
   function handleAlbumClick(album) { setOpenAlbum(album); }
   function handleBackToAlbums() { setOpenAlbum(null); }
 
@@ -483,7 +511,7 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
   let itemsForPagination = [];
   if (openAlbum) itemsForPagination = sortPhotos(openAlbum.photos || []);
   else if (isAlbumView) itemsForPagination = sortAlbums(albumList);
-  else itemsForPagination = sortPhotos(allPhotos);
+  else itemsForPagination = sortPhotos(filteredAllPhotos);
 
   const paginatedItems = itemsForPagination;
 
@@ -520,9 +548,19 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
             <option value="all">All photos</option>
             <option value="albums">Albums</option>
           </FilterSelect>
-          <FilterSelect value={sortOrder} onChange={(e) => { setSortOrder(e.target.value); }} className="w-[207px]">
-            {sortOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-          </FilterSelect>
+          <div className="flex items-center gap-3">
+            {!isAlbumView && contributorNames.length > 0 ? (
+              <FilterSelect value={contributorFilter} onChange={(e) => setContributorFilter(e.target.value)} className="w-[220px]">
+                <option value="all">All contributors</option>
+                {contributorNames.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </FilterSelect>
+            ) : null}
+            <FilterSelect value={sortOrder} onChange={(e) => { setSortOrder(e.target.value); }} className="w-[207px]">
+              {sortOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+            </FilterSelect>
+          </div>
         </div>
       )}
       {openAlbum && (
@@ -561,7 +599,11 @@ function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
           ? <div className="flex flex-col items-center justify-center py-16 text-center">
               <p className="text-base font-medium text-r-text">{openAlbum ? 'No photos in this album' : 'No photos yet'}</p>
               <p className="text-sm text-r-secondary mt-1 max-w-xs">
-                {openAlbum ? 'This album has no photos assigned yet.' : 'Photos will appear here once contributors have submitted and the memorial has been generated.'}
+                {openAlbum
+                  ? 'This album has no photos assigned yet.'
+                  : contributorFilter === 'all'
+                    ? 'Photos will appear here once contributors have submitted and the memorial has been generated.'
+                    : 'No photos match this contributor filter.'}
               </p>
             </div>
           : <div className="max-h-[600px] overflow-y-auto pr-1">
@@ -709,6 +751,7 @@ function OutputsTab({ memorial, contributors, canGenerate, disabledMessage, gene
       )}
       {(currentSection.key === 'constellation-themes' || currentSection.key === 'constellation-relationships') && (
         <ConstellationGraph
+          key={constellationPage}
           ai_output={output}
           memorial={memorial}
           contributor={contributors}
@@ -850,7 +893,7 @@ function GenerateConfirmModal({ onConfirm, onCancel, subjectName }) {
             className="text-[28px] font-medium leading-[34px] text-r-text"
             style={{ fontFamily: 'var(--font-family-display)' }}
           >
-            Generate {subjectName}'s memorial?
+            Generate {subjectName}&apos;s memorial?
           </h2>
           <p className="text-base leading-6 text-r-secondary">
             This will create the Story, Constellation, Voices, and Photo Archive from all submitted contributions. Generation cannot be undone or re-run once complete.
