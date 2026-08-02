@@ -169,23 +169,23 @@ function PrimaryContributorButton({ children, className = "", ...props }) {
   );
 }
 
-function formatYear(value) {
-  if (!value) return "";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return String(date.getFullYear());
+function formatMemorialDate(value) {
+  if (!value) return '';
+  const parts = String(value).split('T')[0].split('-');
+  if (parts.length < 3) return '';
+  const [year, month, day] = parts.map(Number);
+  if (!year || !month || !day) return '';
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+    month: 'long', day: 'numeric', year: 'numeric',
+  });
 }
 
 function getMemorialYears(memorial) {
-  const birthYear = formatYear(memorial?.date_of_birth ?? memorial?.dateOfBirth ?? memorial?.birth_date);
-  const passingYear = formatYear(
-    memorial?.date_of_passing ?? memorial?.dateOfPassing ?? memorial?.death_date,
-  );
-
-  if (birthYear && passingYear) return `${birthYear} - ${passingYear}`;
-  if (birthYear) return `Born ${birthYear}`;
-  if (passingYear) return `Passed ${passingYear}`;
+  const birthDate = formatMemorialDate(memorial?.date_of_birth ?? memorial?.dateOfBirth ?? memorial?.birth_date);
+  const passingDate = formatMemorialDate(memorial?.date_of_passing ?? memorial?.dateOfPassing ?? memorial?.death_date);
+  if (birthDate && passingDate) return `${birthDate} - ${passingDate}`;
+  if (birthDate) return `Born ${birthDate}`;
+  if (passingDate) return `Passed ${passingDate}`;
   return "";
 }
 

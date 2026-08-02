@@ -750,3 +750,35 @@ export async function getContributorSubmittedDraft(inviteToken) {
     session,
   };
 }
+
+export async function deleteContributorPhoto(memorialId, contributorId, assetId, token) {
+  return organizerContributorRequest(
+    `/memorials/${encodeURIComponent(memorialId)}/contributors/${encodeURIComponent(contributorId)}/photos/${encodeURIComponent(assetId)}`,
+    token,
+    { method: 'DELETE' }
+  )
+}
+
+export async function deleteContributorVoice(memorialId, contributorId, recordingId, token) {
+  return organizerContributorRequest(
+    `/memorials/${encodeURIComponent(memorialId)}/contributors/${encodeURIComponent(contributorId)}/voices/${encodeURIComponent(recordingId)}`,
+    token,
+    { method: 'DELETE' }
+  )
+}
+
+export async function deleteContributorResponse(memorialId, contributorId, responseId, token) {
+  return organizerContributorRequest(
+    `/memorials/${encodeURIComponent(memorialId)}/contributors/${encodeURIComponent(contributorId)}/responses/${encodeURIComponent(responseId)}`,
+    token,
+    { method: 'DELETE' }
+  )
+}
+
+export async function deleteContributorStory(memorialId, contributorId, storyId, token) {
+  return organizerContributorRequest(
+    `/memorials/${encodeURIComponent(memorialId)}/contributors/${encodeURIComponent(contributorId)}/stories/${encodeURIComponent(storyId)}`,
+    token,
+    { method: 'DELETE' }
+  )
+}

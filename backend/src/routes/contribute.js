@@ -146,7 +146,7 @@ router.get('/:token', async (req, res) => {
 
     const { data: memorial } = await supabase
       .from('memorials')
-      .select('*')
+      .select('id, subject_name, nickname, biography, related_people, cover_photo_url, date_of_birth, date_of_passing, status')
       .eq('id', invite.memorial_id)
       .single()
 
@@ -185,6 +185,7 @@ router.post('/:token/start', async (req, res) => {
   try {
     const { name, email } = req.body
     if (!name) return res.status(400).json({ error: 'Name is required' })
+    const normalizedName = name.trim().toLowerCase()
 
     const { data: invite, error } = await supabase
       .from('invite_links')
@@ -194,6 +195,29 @@ router.post('/:token/start', async (req, res) => {
 
     if (error || !invite || !invite.is_active) {
       return res.status(410).json({ error: 'This link is no longer active.' })
+    }
+
+    // ── FIX-12: Return existing session if same person re-opens the link ──
+    const { data: existingContributor } = await supabase
+      .from('contributors')
+      .select('id, memorial_id, name, status')
+      .eq('invite_link_id', invite.id)
+      .ilike('name', normalizedName)   // ilike = case-insensitive match in Postgres
+      .neq('status', 'submitted')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (existingContributor) {
+      return res.status(200).json({
+        contributor: {
+          id: existingContributor.id,
+          memorial_id: existingContributor.memorial_id,
+          name: existingContributor.name,
+          status: existingContributor.status,
+        },
+        contributor_token: existingContributor.id,
+      })
     }
 
     const { data: contributor, error: contribError } = await supabase
@@ -210,7 +234,6 @@ router.post('/:token/start', async (req, res) => {
 
     if (contribError) return res.status(400).json({ error: contribError.message })
 
-    // increment use_count
     await supabase
       .from('invite_links')
       .update({ use_count: invite.use_count + 1 })
