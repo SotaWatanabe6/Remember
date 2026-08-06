@@ -1,8 +1,7 @@
+import { RememberLogoMark } from "@/components/brand/RememberLogo.jsx";
+
 export default function AuthLogo() {
   return (
-    <div
-      className="size-[100px] rounded-full bg-r-shape"
-      aria-hidden="true"
-    />
+    <RememberLogoMark className="h-[105px] w-[100px]" priority />
   );
 }
