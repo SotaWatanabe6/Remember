@@ -124,7 +124,6 @@ export default function MemorialCreateForm() {
     const nextFieldErrors = {};
     if (!remembered.firstName.trim()) nextFieldErrors.firstName = "First name is required.";
     if (!remembered.lastName.trim()) nextFieldErrors.lastName = "Last name is required.";
-    if (!remembered.nickName.trim()) nextFieldErrors.nickName = "Nickname is required.";
     if (!remembered.briefBiography.trim()) nextFieldErrors.briefBiography = "Brief biography is required.";
     if (!remembered.photo) nextFieldErrors.photo = "A profile photo is required.";
 
@@ -241,7 +240,6 @@ export default function MemorialCreateForm() {
             onChange={updateField}
             placeholder="e.g. Johny"
             disabled={isSubmitting}
-            required
             error={fieldErrors.nickName}
           />
         </div>
