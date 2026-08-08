@@ -567,7 +567,6 @@ export async function createMemorial({
   const biographyText = (biography || "").trim();
   const missingFields = [
     [subjectName, "subject name"],
-    [nicknameText, "nickname"],
     [date_of_birth, "year of birth"],
     [date_of_passing, "year of passing"],
     [biographyText, "brief biography"],
@@ -586,7 +585,7 @@ export async function createMemorial({
     headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       subject_name: subjectName,
-      nickname: nicknameText,
+      nickname: nicknameText || null,
       date_of_birth,
       date_of_passing,
       biography: biographyText,
