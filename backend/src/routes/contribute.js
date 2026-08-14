@@ -6,7 +6,7 @@ const router = express.Router()
 const supabase = require('../supabase')
 const { extractAudioDuration } = require('../services/duration')
 const { extractImageMetadata } = require('../services/exif')
-const { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS } = require('../lib/questionnaireQuestions')
+const { getQuestionSetForContributorRelationship } = require('../lib/questionnaireQuestions')
 
 const PHOTO_STORAGE_BUCKET =
   process.env.CONTRIBUTOR_PHOTO_BUCKET ||
@@ -379,20 +379,33 @@ router.post('/:token/submit', async (req, res) => {
       return res.status(400).json({ error: 'Relationship information is required before submitting.' })
     }
 
+    const questionnaireQuestions = getQuestionSetForContributorRelationship(
+      contributor.relationship_type,
+      contributor.relationship_label,
+    )
+
     const { data: responses, error: responsesError } = await supabase
       .from('questionnaire_responses')
-      .select('order_index, response_text')
+      .select('order_index, question_text, response_text')
       .eq('contributor_id', contributor_token)
 
     if (responsesError) return res.status(400).json({ error: responsesError.message })
 
     const answeredIndexes = new Set(
       (responses || [])
-        .filter((response) => String(response.response_text || '').trim())
-        .map((response) => Number(response.order_index))
-        .filter((orderIndex) => Number.isInteger(orderIndex)),
+        .filter((response) => {
+          const orderIndex = Number(response.order_index)
+          const expectedQuestion = questionnaireQuestions[orderIndex - 1]
+
+          return (
+            Number.isInteger(orderIndex) &&
+            String(response.response_text || '').trim() &&
+            String(response.question_text || '').trim() === expectedQuestion?.prompt
+          )
+        })
+        .map((response) => Number(response.order_index)),
     )
-    const missingQuestionCount = CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS
+    const missingQuestionCount = questionnaireQuestions
       .filter((_, index) => !answeredIndexes.has(index + 1))
       .length
 

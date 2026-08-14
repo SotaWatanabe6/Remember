@@ -2,12 +2,15 @@
 
 // frontend/src/components/contributor/QuestionnaireFlow.jsx
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import QuestionCard from "@/components/contributor/QuestionCard.jsx";
 import MemoryOrb from "@/components/contributor/MemoryOrb.jsx";
-import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS, formatQuestionPrompt } from "@/lib/contribute/questionnaireQuestions.js";
+import {
+  formatQuestionPrompt,
+  getQuestionSetForContributorRelationship,
+} from "@/lib/contribute/questionnaireQuestions.js";
 import {
   getContributorQuestionnaireDraft,
   getQuestionnaireResponses,
@@ -178,17 +181,26 @@ function storeQuestionnaireDraft(inviteToken, contributorId, answersByQuestion) 
   }
 }
 
-function getResumeQuestionIndex(answersByQuestion) {
-  const firstUnansweredIndex = CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.findIndex((question) => {
+function getResumeQuestionIndex(answersByQuestion, questions) {
+  const firstUnansweredIndex = questions.findIndex((question) => {
     const answer = answersByQuestion[question.id]?.answer_text ?? "";
     return !answer.trim();
   });
 
-  return firstUnansweredIndex === -1 ? CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.length : firstUnansweredIndex;
+  return firstUnansweredIndex === -1 ? questions.length : firstUnansweredIndex;
 }
 
 function hasAnyAnswer(answersByQuestion) {
   return Object.values(answersByQuestion).some((answer) => (answer.answer_text ?? "").trim());
+}
+
+function getQuestionsForDraft(draft) {
+  return getQuestionSetForContributorRelationship(
+    draft?.relationship_type ?? draft?.session?.relationship_type,
+    draft?.relationship_custom_label ??
+      draft?.session?.relationship_custom_label ??
+      draft?.session?.relationship_label,
+  );
 }
 
 export default function QuestionnaireFlow({ inviteToken }) {
@@ -209,16 +221,20 @@ export default function QuestionnaireFlow({ inviteToken }) {
   );
 
   const answersRef = useRef(answers);
-  const currentQuestionIdRef = useRef(CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS[0]?.id);
+  const currentQuestionIdRef = useRef(null);
   const lastSavedAnswersRef = useRef({});
   const saveTimerRef = useRef(null);
   const saveRequestVersionsRef = useRef({});
   const saveAbortControllersRef = useRef({});
   const recognitionRef = useRef(null);
 
-  const currentQuestion = CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS[currentIndex];
+  const questions = useMemo(
+    () => (draft?.status === "ready" ? getQuestionsForDraft(draft) : []),
+    [draft],
+  );
+  const currentQuestion = questions[currentIndex] ?? questions[0];
   const currentAnswer = answers[currentQuestion?.id] ?? createEmptyAnswer();
-  const isLastQuestion = currentIndex === CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.length - 1;
+  const isLastQuestion = currentIndex === questions.length - 1;
 
   useEffect(() => {
     answersRef.current = answers;
@@ -287,8 +303,9 @@ export default function QuestionnaireFlow({ inviteToken }) {
         setAnswers(restoredAnswers);
         lastSavedAnswersRef.current = buildLastSavedAnswers(savedResponses);
 
-        const resumeIndex = getResumeQuestionIndex(restoredAnswers);
-        if (resumeIndex >= CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.length) {
+        const questionnaireQuestions = getQuestionsForDraft(questionnaireDraft);
+        const resumeIndex = getResumeQuestionIndex(restoredAnswers, questionnaireQuestions);
+        if (resumeIndex >= questionnaireQuestions.length) {
           router.replace(`/contribute/${inviteToken}/questions-review`);
           return;
         }
@@ -297,7 +314,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
         setStep(hasAnyAnswer(restoredAnswers) ? "question" : "intro");
 
         const currentSavedAnswer =
-          lastSavedAnswersRef.current[CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS[resumeIndex].id];
+          lastSavedAnswersRef.current[questionnaireQuestions[resumeIndex].id];
         setAutosaveStatus(currentSavedAnswer ? "saved" : "idle");
       } catch {
         if (isMounted) {
@@ -322,7 +339,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
 
   const saveAnswer = useCallback(
     async (questionId, answerSnapshot, { force = false } = {}) => {
-      const questionIndex = CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.findIndex(
+      const questionIndex = questions.findIndex(
         (question) => question.id === questionId,
       );
 
@@ -360,7 +377,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
       try {
         const savedResponse = await saveQuestionnaireResponse(inviteToken, {
           questionId,
-          questionText: CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS[questionIndex].prompt,
+          questionText: questions[questionIndex].prompt,
           questionOrder: questionIndex + 1,
           answerText: answerToSave.answer_text ?? "",
           inputMode: answerToSave.input_mode ?? "text",
@@ -410,7 +427,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
         }
       }
     },
-    [inviteToken],
+    [inviteToken, questions],
   );
 
   const queueSave = useCallback(
@@ -554,7 +571,7 @@ export default function QuestionnaireFlow({ inviteToken }) {
       return;
     }
 
-    if (nextIndex >= CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.length) {
+    if (nextIndex >= questions.length) {
       return;
     }
 
