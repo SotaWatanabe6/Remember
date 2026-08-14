@@ -13,7 +13,7 @@ import {
   CONTRIBUTOR_RELATIONSHIP_OPTIONS,
   CONTRIBUTOR_RELATIONSHIP_TYPES_REQUIRING_LABEL,
 } from "@/lib/contribute/relationshipOptions.js";
-import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS } from "@/lib/contribute/questionnaireQuestions.js";
+import { getQuestionSetForContributorRelationship } from "@/lib/contribute/questionnaireQuestions.js";
 
 const CONTRIBUTOR_SESSION_STORAGE_PREFIX = "remember_contributor_session";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
@@ -485,6 +485,15 @@ export async function getContributorQuestionnaireDraft(inviteToken) {
   };
 }
 
+function getQuestionsForDraft(draft) {
+  return getQuestionSetForContributorRelationship(
+    draft?.relationship_type ?? draft?.session?.relationship_type,
+    draft?.relationship_custom_label ??
+      draft?.session?.relationship_custom_label ??
+      draft?.session?.relationship_label,
+  );
+}
+
 export async function getQuestionnaireResponses(inviteToken) {
   const draft = await getContributorQuestionnaireDraft(inviteToken);
 
@@ -496,13 +505,14 @@ export async function getQuestionnaireResponses(inviteToken) {
     contributor_id: draft.session.contributorId,
     contributor_token: draft.session.contributorToken,
   });
-  const currentQuestionIds = new Set(CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.map((question) => question.id));
+  const currentQuestions = getQuestionsForDraft(draft);
+  const currentQuestionIds = new Set(currentQuestions.map((question) => question.id));
 
   return (result.responses ?? []).map((response) => {
     const questionIndex = Number.isFinite(Number(response.order_index))
       ? Number(response.order_index) - 1
       : Number(response.question_order) - 1;
-    const question = CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS[questionIndex];
+    const question = currentQuestions[questionIndex];
     const questionId = response.question_id ?? question?.id ?? response.question_text;
 
     return {
@@ -627,9 +637,10 @@ export async function saveQuestionnaireResponse(inviteToken, response, options =
   const now = new Date().toISOString();
   const questionId = response.questionId ?? response.question_id;
   const questionOrder = response.questionOrder ?? response.question_order;
+  const currentQuestions = getQuestionsForDraft(draft);
   const question =
-    CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.find((item) => item.id === questionId) ??
-    CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS[Number(questionOrder) - 1];
+    currentQuestions.find((item) => item.id === questionId) ??
+    currentQuestions[Number(questionOrder) - 1];
   const responsePayload = {
     contributor_token: draft.session.contributorToken,
     contributor_id: draft.session.contributorId,

@@ -6,7 +6,7 @@ import { useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { saveResponses } from '@/lib/api.js';
-import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS } from '@/lib/contribute/questionnaireQuestions.js';
+import { getQuestionSetForContributorRelationship } from '@/lib/contribute/questionnaireQuestions.js';
 
 function ContributorNav({ backHref }) {
   return (
@@ -80,21 +80,27 @@ function EditableAnswerCard({ question, answer, questionId, onEdit }) {
 
 function readQuestionnaireReviewDraft(inviteToken) {
   if (typeof window === 'undefined') {
-    return { session: null, responses: [] };
+    return { session: null, questions: [], responses: [] };
   }
 
   try {
     const session = JSON.parse(localStorage.getItem(`remember_contributor_session:${inviteToken}`) || '{}');
     const contributorId = session?.contributorId;
-    if (!contributorId) return { session, responses: [] };
+    const questions = getQuestionSetForContributorRelationship(
+      session?.relationship_type,
+      session?.relationship_custom_label ?? session?.relationship_label,
+    );
+    if (!contributorId) return { session, questions, responses: [] };
 
     const allResponses = JSON.parse(localStorage.getItem(`remember_questionnaire_responses:${inviteToken}`) || '{}');
     const mine = allResponses[contributorId] ?? {};
-    const responses = CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.map((question, index) => {
+    const responses = questions.map((question, index) => {
       const saved = mine[question.id] || Object.values(mine).find((response) => (
-        response.question_id === question.id ||
-        response.question_order === index + 1 ||
-        response.order_index === index + 1
+        response.question_id
+          ? response.question_id === question.id
+          : response.question_text === question.prompt ||
+            response.question_order === index + 1 ||
+            response.order_index === index + 1
       ));
       return {
         ...(saved || {}),
@@ -107,9 +113,9 @@ function readQuestionnaireReviewDraft(inviteToken) {
       };
     });
 
-    return { session, responses };
+    return { session, questions, responses };
   } catch {
-    return { session: null, responses: [] };
+    return { session: null, questions: [], responses: [] };
   }
 }
 
@@ -120,9 +126,10 @@ export default function QuestionsReviewPage() {
   const [responses, setResponses] = useState(() => initialDraft.responses);
   const [continueError, setContinueError] = useState('');
   const sessionRef = useRef(initialDraft.session);
+  const questionsRef = useRef(initialDraft.questions);
 
   async function handleEdit(questionId, questionText, newAnswer) {
-    const questionIndex = CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS.findIndex((question) => question.id === questionId);
+    const questionIndex = questionsRef.current.findIndex((question) => question.id === questionId);
     const session = sessionRef.current;
     const sessionContributorId = session?.contributorId;
     const sessionContributorToken = session?.contributorToken || session?.contributorId;

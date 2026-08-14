@@ -106,17 +106,43 @@ export const RELATIONSHIP_QUESTION_SETS = {
 /** Flat list of every question across all relationship sets. */
 export const CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS = Object.values(RELATIONSHIP_QUESTION_SETS).flat();
 
+function normalizeQuestionSetKey(value) {
+  const key = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[\s/]+/g, "_");
+
+  const aliases = {
+    aunt_or_uncle: "aunt_uncle",
+    grandchildren: "grandchild",
+    grandkid: "grandchild",
+    grandkids: "grandchild",
+    spouse_or_family: "spouse_family",
+  };
+
+  return aliases[key] || key;
+}
+
 /**
  * Returns the 6-question set for a given relationship type, falling back
  * to 'other' if the type isn't recognized. Accepts values like "Spouse/Family",
  * "Aunt/Uncle", "Partner", etc. (case-insensitive, spaces/slashes normalized).
  */
 export function getQuestionSetForRelationship(relationshipType) {
-  const key = String(relationshipType || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[\s/]+/g, "_");
+  const key = normalizeQuestionSetKey(relationshipType);
   return RELATIONSHIP_QUESTION_SETS[key] || RELATIONSHIP_QUESTION_SETS.other;
+}
+
+export function getQuestionSetForContributorRelationship(relationshipType, relationshipLabel = "") {
+  const relationshipKey = normalizeQuestionSetKey(relationshipType);
+  const relationshipLabelKey = normalizeQuestionSetKey(relationshipLabel);
+
+  if (relationshipKey === "family" && relationshipLabelKey) {
+    return getQuestionSetForRelationship(relationshipLabelKey);
+  }
+
+  return getQuestionSetForRelationship(relationshipKey);
 }
 
 /**
