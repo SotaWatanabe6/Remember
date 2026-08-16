@@ -395,12 +395,12 @@ router.post('/:token/submit', async (req, res) => {
       (responses || [])
         .filter((response) => {
           const orderIndex = Number(response.order_index)
-          const expectedQuestion = questionnaireQuestions[orderIndex - 1]
 
           return (
             Number.isInteger(orderIndex) &&
-            String(response.response_text || '').trim() &&
-            String(response.question_text || '').trim() === expectedQuestion?.prompt
+            orderIndex >= 1 &&
+            orderIndex <= questionnaireQuestions.length &&
+            String(response.response_text || '').trim()
           )
         })
         .map((response) => Number(response.order_index)),
