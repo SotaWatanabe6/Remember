@@ -6,7 +6,10 @@ import { useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { saveResponses } from '@/lib/api.js';
-import { getQuestionSetForContributorRelationship } from '@/lib/contribute/questionnaireQuestions.js';
+import {
+  formatQuestionPrompt,
+  getQuestionSetForContributorRelationship,
+} from '@/lib/contribute/questionnaireQuestions.js';
 
 function ContributorNav({ backHref }) {
   return (
@@ -39,7 +42,7 @@ function EditableAnswerCard({ question, answer, questionId, onEdit }) {
 
     setEditing(false);
     setError('');
-    if (trimmed !== answer) await onEdit(questionId, question, trimmed);
+    if (trimmed !== answer) await onEdit(questionId, trimmed);
   }
 
   return (
@@ -86,6 +89,7 @@ function readQuestionnaireReviewDraft(inviteToken) {
   try {
     const session = JSON.parse(localStorage.getItem(`remember_contributor_session:${inviteToken}`) || '{}');
     const contributorId = session?.contributorId;
+    const subjectName = session?.deceasedName || session?.memorialSubjectName || session?.subjectName || '';
     const questions = getQuestionSetForContributorRelationship(
       session?.relationship_type,
       session?.relationship_custom_label ?? session?.relationship_label,
@@ -105,7 +109,8 @@ function readQuestionnaireReviewDraft(inviteToken) {
       return {
         ...(saved || {}),
         question_id: question.id,
-        question_text: saved?.question_text || question.prompt,
+        question_text: question.prompt,
+        display_question_text: formatQuestionPrompt(question.prompt, subjectName),
         question_order: index + 1,
         order_index: index + 1,
         response_text: saved?.response_text || saved?.answer_text || '',
@@ -128,8 +133,9 @@ export default function QuestionsReviewPage() {
   const sessionRef = useRef(initialDraft.session);
   const questionsRef = useRef(initialDraft.questions);
 
-  async function handleEdit(questionId, questionText, newAnswer) {
+  async function handleEdit(questionId, newAnswer) {
     const questionIndex = questionsRef.current.findIndex((question) => question.id === questionId);
+    const questionText = questionsRef.current[questionIndex]?.prompt ?? questionId;
     const session = sessionRef.current;
     const sessionContributorId = session?.contributorId;
     const sessionContributorToken = session?.contributorToken || session?.contributorId;
@@ -208,7 +214,7 @@ export default function QuestionsReviewPage() {
                 <EditableAnswerCard
                   key={r.question_id ?? r.question_text}
                   questionId={r.question_id ?? r.question_text}
-                  question={r.question_text || r.question_id}
+                  question={r.display_question_text || r.question_text || r.question_id}
                   answer={r.response_text || r.answer_text || ''}
                   onEdit={handleEdit}
                 />
