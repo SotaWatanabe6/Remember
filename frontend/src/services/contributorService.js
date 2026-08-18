@@ -595,6 +595,15 @@ export async function getMemorialContributorSubmission(memorialId, contributorId
   );
 }
 
+export async function getMemorialApprovedArchive(memorialId, token) {
+  if (!memorialId) throw new Error("memorialId is required");
+
+  return organizerContributorRequest(
+    `/memorials/${encodeURIComponent(memorialId)}/archive`,
+    token,
+  );
+}
+
 export async function updateMemorialContributorStatus(memorialId, contributorId, status, token) {
   if (!memorialId) throw new Error("memorialId is required");
   if (!contributorId) throw new Error("contributorId is required");

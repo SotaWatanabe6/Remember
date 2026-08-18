@@ -367,6 +367,86 @@ router.patch('/:id/invite-link', authMiddleware, async (req, res) => {
   }
 })
 
+// GET /memorials/:id/archive — approved contributions grouped for the organizer archive
+router.get('/:id/archive', authMiddleware, async (req, res) => {
+  try {
+    const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
+    if (!memorial) return res.status(403).json({ error: 'Not authorized' })
+
+    const { data: contributors, error: contributorsError } = await supabase
+      .from('contributors')
+      .select('id, name, relationship_type, relationship_label, status, submitted_at, created_at, updated_at')
+      .eq('memorial_id', req.params.id)
+      .eq('status', 'approved')
+      .order('submitted_at', { ascending: false })
+
+    if (contributorsError) return res.status(400).json({ error: contributorsError.message })
+
+    const approvedIds = (contributors || []).map((contributor) => contributor.id)
+
+    if (!approvedIds.length) {
+      return res.json({ contributors: [], photos: [], voices: [], stories: [], responses: [] })
+    }
+
+    const [
+      { data: responses, error: responsesError },
+      { data: stories, error: storiesError },
+      { data: photos, error: photosError },
+      { data: voices, error: voicesError },
+    ] = await Promise.all([
+      supabase
+        .from('questionnaire_responses')
+        .select('id, contributor_id, question_text, response_text, response_audio_url, order_index, created_at, updated_at')
+        .eq('memorial_id', req.params.id)
+        .in('contributor_id', approvedIds)
+        .order('order_index', { ascending: true }),
+      supabase
+        .from('contributor_stories')
+        .select('id, contributor_id, client_story_id, title, body, created_at, updated_at')
+        .eq('memorial_id', req.params.id)
+        .in('contributor_id', approvedIds)
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('media_assets')
+        .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption, is_flagged, flagged_reason, created_at')
+        .eq('memorial_id', req.params.id)
+        .in('contributor_id', approvedIds)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('voice_recordings')
+        .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, duration_seconds, contributor_title, transcript_text, key_quote, is_flagged, flagged_reason, created_at')
+        .eq('memorial_id', req.params.id)
+        .in('contributor_id', approvedIds)
+        .order('created_at', { ascending: false }),
+    ])
+
+    const archiveError = responsesError || storiesError || photosError || voicesError
+    if (archiveError) return res.status(400).json({ error: archiveError.message })
+
+    const contributorNames = new Map((contributors || []).map((contributor) => [contributor.id, contributor.name || null]))
+    const withContributorName = (items = []) => (items || []).map((item) => ({
+      ...item,
+      contributor_name: contributorNames.get(item.contributor_id) || null,
+    }))
+
+    const photosWithUrls = await createSignedAssetUrls(photos, 'photo_url')
+    const voicesWithUrls = await createSignedAssetUrls(voices, 'audio_url')
+
+    res.json({
+      contributors: enrichContributors(contributors, stories, photos, voices),
+      photos: withContributorName(photosWithUrls),
+      voices: withContributorName(voicesWithUrls),
+      stories: withContributorName(stories),
+      responses: withContributorName(responses).map((response) => ({
+        ...response,
+        answer_text: response.response_text || '',
+      })),
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // GET /memorials/:id/contributors — get all contributors
 router.get('/:id/contributors', authMiddleware, async (req, res) => {
   try {

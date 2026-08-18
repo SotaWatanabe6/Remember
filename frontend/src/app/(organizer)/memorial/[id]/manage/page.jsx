@@ -6,7 +6,7 @@ import { useCallback, useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { generateMemorialOutput, getGenerationJobStatus, getMemorialOutput } from '@/services/memorialService';
-import { getMemorialContributors } from '@/services/contributorService';
+import { getMemorialApprovedArchive, getMemorialContributors } from '@/services/contributorService';
 import { getMemorial, createInviteLink, createShareLink } from '@/lib/api';
 import { copyTextToClipboard, normalizeShareUrl } from '@/lib/copyToClipboard';
 import ConstellationGraph from "@/components/output/constellation";
@@ -305,79 +305,195 @@ function TabError({ title, message, onRetry }) {
   );
 }
 
-// ─── Archive Tab (Blessing's redesigned search bar + card hover overlay) ──────
+// ─── Archive Tab (approved contributions — independent of generation) ─────────
 
-function ArchiveTab({ contributors, output }) {
+const EMPTY_ARCHIVE = { contributors: [], photos: [], voices: [], stories: [], responses: [] };
 
-  const allPhotos = [];
-  const albums = Array.isArray(output?.photos)
-    ? output.photos
-    : output?.photos?.albums ?? [];
-  albums.forEach((album) => {
-    (album.photos || []).forEach((p) => allPhotos.push({ type: 'photo', ...p }));
-  });
-  const allVoices = (output?.voices || []).map((v) => ({ type: 'voice', ...v }));
-  const allItems = [...allPhotos, ...allVoices];
+function isApprovedContributor(contributor) {
+  return String(contributor?.status || '').toLowerCase() === 'approved';
+}
+
+function formatArchiveDate(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+function ArchiveSection({ title, count, children }) {
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex items-baseline justify-between">
+        <h3 className="text-[28px] font-medium text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
+          {title}
+        </h3>
+        <span className="text-sm text-r-secondary">{count}</span>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
+  const [archive, setArchive] = useState(EMPTY_ARCHIVE);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Re-fetch whenever the set of approved contributors changes (e.g. after an
+  // organizer approves a submission in the Contributions tab).
+  const approvedKey = (contributors || [])
+    .filter(isApprovedContributor)
+    .map((contributor) => contributor.id)
+    .sort()
+    .join(',');
+
+  const loadArchive = useCallback(async () => {
+    if (!memorialId) return;
+    if (!approvedKey) { setArchive(EMPTY_ARCHIVE); setError(null); setLoading(false); return; }
+
+    setLoading(true); setError(null);
+    try {
+      const token = await getAuthToken();
+      const data = await getMemorialApprovedArchive(memorialId, token);
+      setArchive({ ...EMPTY_ARCHIVE, ...(data || {}) });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load the archive');
+      setArchive(EMPTY_ARCHIVE);
+    } finally { setLoading(false); }
+  }, [approvedKey, memorialId]);
+
+  useEffect(() => { queueMicrotask(loadArchive); }, [loadArchive]);
+
+  if (loading || contributorsLoading) return <TabLoading />;
+  if (error) {
+    return <TabError title="Unable to load the archive" message={error} onRetry={loadArchive} />;
+  }
+
+  const photos = archive.photos || [];
+  const voices = archive.voices || [];
+  const stories = archive.stories || [];
+  const responses = (archive.responses || []).filter((response) => String(response.answer_text || '').trim());
+  const approvedContributorCount = (archive.contributors || []).length;
+  const totalItems = photos.length + voices.length + stories.length + responses.length;
+
+  if (totalItems === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <p className="text-r-text text-base font-medium">
+          {approvedContributorCount === 0 ? 'No approved contributions yet' : 'No memories in the approved contributions'}
+        </p>
+        <p className="text-r-secondary text-sm mt-1 max-w-sm">
+          {approvedContributorCount === 0
+            ? 'Approve a submission from Awaiting approval in the Contributions tab and it will appear here.'
+            : 'The approved contributors have not shared any photos, recordings, or written memories yet.'}
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-10 pt-8">
-      {/* Search + Filter + Sort row (Removed the search, filter and sort feature) */}
+    <div className="flex flex-col gap-12 pt-8">
+      <p className="text-sm text-r-secondary">
+        {totalItems} memor{totalItems === 1 ? 'y' : 'ies'} from {approvedContributorCount} approved contributor
+        {approvedContributorCount === 1 ? '' : 's'}
+      </p>
 
-      {allItems.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <p className="text-r-text text-base font-medium">
-            {allItems.length === 0 ? 'No contributions yet' : 'No results found'}
-          </p>
-          <p className="text-r-secondary text-sm mt-1 max-w-xs">
-            {allItems.length === 0
-              ? 'Submitted contributions will appear here once generated.'
-              : 'Try a different search term.'}
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-3 gap-4">
-          {allItems.map((item, i) => (
-            <div key={item.id || i} className="group rounded-xl overflow-hidden border border-r-border bg-r-card">
-              {item.type === 'photo' && (
-                item.url
-                  ? <div className="relative aspect-[4/3] w-full overflow-hidden">
-                      <img src={item.url} alt={item.caption || ''} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
-                      {/* Blessing's hover overlay with caption/contributor/date */}
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/0 px-8 text-center opacity-0 transition-all duration-300 group-hover:bg-black/38 group-hover:opacity-100">
-                        <p className="text-[30px] leading-[34px] text-white" style={{ fontFamily: 'var(--font-family-display)' }}>
-                          {item.caption || "Photo title"}
-                        </p>
-                        <p className="mt-4 text-[16px] leading-[16px] text-white">
-                          {item.contributor_name ? `Submitted by ${item.contributor_name}` : "Submitted by contributor"}
-                        </p>
-                        <p className="mt-4 text-[16px] leading-[16px] text-white">
-                          {item.taken_at
-                            ? new Date(item.taken_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-                            : ""}
-                        </p>
-                      </div>
+      {photos.length > 0 && (
+        <ArchiveSection title="Photos" count={`${photos.length} photo${photos.length === 1 ? '' : 's'}`}>
+          <div className="grid grid-cols-3 gap-4">
+            {photos.map((photo) => (
+              <div key={photo.id} className="group rounded-xl overflow-hidden border border-r-border bg-r-card">
+                {photo.url || photo.photo_url ? (
+                  <div className="relative aspect-[4/3] w-full overflow-hidden">
+                    <img
+                      src={photo.url || photo.photo_url}
+                      alt={photo.caption || ''}
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                    />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/0 px-8 text-center opacity-0 transition-all duration-300 group-hover:bg-black/38 group-hover:opacity-100">
+                      <p className="text-[30px] leading-[34px] text-white" style={{ fontFamily: 'var(--font-family-display)' }}>
+                        {photo.caption || photo.file_name || 'Photo'}
+                      </p>
+                      <p className="mt-4 text-[16px] leading-[16px] text-white">
+                        {photo.contributor_name ? `Submitted by ${photo.contributor_name}` : 'Submitted by contributor'}
+                      </p>
+                      <p className="mt-4 text-[16px] leading-[16px] text-white">
+                        {formatArchiveDate(photo.taken_at || photo.created_at)}
+                      </p>
                     </div>
-                  : <div className="aspect-[4/3] w-full bg-r-card flex items-center justify-center">
-                      <span className="text-xs text-r-muted">{item.contributor_name || 'Photo'}</span>
-                    </div>
-              )}
-              {item.type === 'voice' && (
-                <div className="aspect-[4/3] w-full bg-r-card flex flex-col items-center justify-center gap-2 p-4">
-                  <p className="text-sm font-medium text-r-text text-center">{item.contributor_title}</p>
-                  <div className="flex items-center gap-[2px]">
-                    {Array.from({ length: 20 }).map((_, j) => (
-                      <div key={j} className="w-[2px] rounded-full bg-r-muted"
-                        style={{ height: `${8 + ((j * 5) % 16)}px` }} />
-                    ))}
                   </div>
-                  {item.contributor_name && (
-                    <p className="text-xs text-r-secondary">Submitted by {item.contributor_name}</p>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+                ) : (
+                  <div className="aspect-[4/3] w-full bg-r-card flex items-center justify-center">
+                    <span className="text-xs text-r-muted">{photo.contributor_name || 'Photo'}</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </ArchiveSection>
+      )}
+
+      {voices.length > 0 && (
+        <ArchiveSection title="Voices" count={`${voices.length} recording${voices.length === 1 ? '' : 's'}`}>
+          <div className="grid grid-cols-2 gap-4">
+            {voices.map((voice) => (
+              <article key={voice.id} className="flex flex-col gap-3 rounded-xl border border-r-border bg-r-card p-6">
+                <h4 className="text-[22px] leading-[26px] text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
+                  {voice.contributor_title || voice.file_name || 'Voice recording'}
+                </h4>
+                {voice.url || voice.audio_url ? (
+                  <audio controls src={voice.url || voice.audio_url} className="w-full" />
+                ) : (
+                  <p className="text-sm text-r-secondary">Audio preview unavailable</p>
+                )}
+                {(voice.key_quote || voice.transcript_text) && (
+                  <p className="text-[16px] italic leading-6 text-r-secondary">
+                    &quot;{voice.key_quote || voice.transcript_text}&quot;
+                  </p>
+                )}
+                {voice.contributor_name && (
+                  <p className="text-xs text-r-secondary">Submitted by {voice.contributor_name}</p>
+                )}
+              </article>
+            ))}
+          </div>
+        </ArchiveSection>
+      )}
+
+      {stories.length > 0 && (
+        <ArchiveSection title="Stories" count={`${stories.length} stor${stories.length === 1 ? 'y' : 'ies'}`}>
+          <div className="grid grid-cols-2 gap-4">
+            {stories.map((story) => (
+              <article key={story.id} className="flex flex-col gap-2 rounded-xl border border-r-border bg-r-card p-6">
+                {story.title && (
+                  <h4 className="text-[22px] leading-[26px] text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
+                    {story.title}
+                  </h4>
+                )}
+                {story.body && <p className="text-[16px] leading-6 text-r-secondary">{story.body}</p>}
+                {story.contributor_name && (
+                  <p className="mt-1 text-xs text-r-secondary">Submitted by {story.contributor_name}</p>
+                )}
+              </article>
+            ))}
+          </div>
+        </ArchiveSection>
+      )}
+
+      {responses.length > 0 && (
+        <ArchiveSection title="Written memories" count={`${responses.length} answer${responses.length === 1 ? '' : 's'}`}>
+          <div className="flex flex-col gap-4">
+            {responses.map((response) => (
+              <article key={response.id} className="flex flex-col gap-2 rounded-xl border border-r-border bg-r-card p-6">
+                <p className="text-sm font-medium text-r-secondary">{response.question_text || 'Question'}</p>
+                <p className="text-[18px] leading-7 text-r-text">{response.answer_text}</p>
+                {response.contributor_name && (
+                  <p className="text-xs text-r-secondary">Submitted by {response.contributor_name}</p>
+                )}
+              </article>
+            ))}
+          </div>
+        </ArchiveSection>
       )}
     </div>
   );
@@ -1104,7 +1220,7 @@ export default function MemorialOutputPage() {
             onGenerateClick={handleGenerateClick} />
           <TabBar active={activeTab} onChange={setActiveTab} />
           <div>
-            {activeTab === 'Archive' && <ArchiveTab contributors={contributors} output={output} />}
+            {activeTab === 'Archive' && <ArchiveTab memorialId={memorialId} contributors={contributors} contributorsLoading={contributorsLoading} />}
             {activeTab === 'Contributions' && (
               <ContributionsTab
                 memorialId={memorialId}
