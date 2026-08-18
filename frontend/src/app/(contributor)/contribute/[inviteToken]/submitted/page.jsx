@@ -124,14 +124,6 @@ export default function SubmittedPage() {
           Start from beginning
         </button>
 
-        <button
-          onClick={() => router.push("/dashboard")}
-          className="rounded-full border border-r-border bg-transparent text-body-2 font-medium tracking-wide text-r-text transition-opacity hover:opacity-80"
-          style={{ width: '320px', padding: '16px 0' }}
-        >
-          Go to Dashboard
-        </button>
-
       </div>
     </main>
   );
