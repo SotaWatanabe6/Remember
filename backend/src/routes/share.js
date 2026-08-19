@@ -2,6 +2,7 @@ require('dotenv').config()
 const express = require('express')
 const router = express.Router()
 const supabase = require('../supabase')
+const { withContributorDisplayNames } = require('../services/contributorPrivacy')
 
 // GET /share/:token — get memorial output via viewer share link
 router.get('/:token', async (req, res) => {
@@ -40,11 +41,12 @@ router.get('/:token', async (req, res) => {
     if (memorialError || !memorial) {
       return res.status(404).json({ error: 'Memorial output not found.' })
     }      
-    const { data: contributor, error: contributorError } = await supabase.from('contributors').select('id, name, relationship_type, status, submitted_at, created_at').eq('memorial_id', output.memorial_id).order('created_at', { ascending: false })
+    const { data: contributor, error: contributorError } = await supabase.from('contributors').select('id, name, is_anonymous, relationship_type, status, submitted_at, created_at').eq('memorial_id', output.memorial_id).order('created_at', { ascending: false })
     if (contributorError || !contributor) {
       return res.status(404).json({ error: 'Contributors not found.' })
     }
-    res.json({ ...output.output_json, memorial: memorial || null, contributor: contributor || null})
+    // Viewers of a shared memorial never see the real name behind an anonymous contribution.
+    res.json({ ...output.output_json, memorial: memorial || null, contributor: withContributorDisplayNames(contributor) })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

@@ -455,7 +455,7 @@ router.get('/:id/contributors', authMiddleware, async (req, res) => {
 
     const { data: contributors, error } = await supabase
       .from('contributors')
-      .select('id, name, relationship_type, relationship_label, status, questionnaire_done, photos_done, voice_done, submitted_at, created_at, updated_at')
+      .select('id, name, is_anonymous, relationship_type, relationship_label, status, questionnaire_done, photos_done, voice_done, submitted_at, created_at, updated_at')
       .eq('memorial_id', req.params.id)
       .order('created_at', { ascending: false })
 
@@ -494,7 +494,7 @@ router.get('/:id/contributors/:contributorId/submission', authMiddleware, async 
 
     const { data: contributor, error: contributorError } = await supabase
       .from('contributors')
-      .select('id, name, relationship_type, relationship_label, status, questionnaire_done, photos_done, voice_done, submitted_at, created_at, updated_at')
+      .select('id, name, is_anonymous, relationship_type, relationship_label, status, questionnaire_done, photos_done, voice_done, submitted_at, created_at, updated_at')
       .eq('id', req.params.contributorId)
       .eq('memorial_id', req.params.id)
       .single()
@@ -568,7 +568,7 @@ router.patch('/:id/contributors/:contributorId/status', authMiddleware, async (r
       .update({ status, updated_at: new Date().toISOString() })
       .eq('id', req.params.contributorId)
       .eq('memorial_id', req.params.id)
-      .select('id, name, relationship_type, relationship_label, status, questionnaire_done, photos_done, voice_done, submitted_at, created_at, updated_at')
+      .select('id, name, is_anonymous, relationship_type, relationship_label, status, questionnaire_done, photos_done, voice_done, submitted_at, created_at, updated_at')
       .single()
 
     if (error || !data) return res.status(404).json({ error: 'Contributor not found' })

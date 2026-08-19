@@ -960,6 +960,29 @@ export async function startContribution(token, name) {
 }
 
 /**
+ * POST /contribute/:token/privacy
+ * Saves whether the contributor is credited by name or as "Anonymous".
+ * Body: { contributor_token, is_anonymous }
+ */
+export async function savePrivacyChoice(token, { contributor_token, is_anonymous }) {
+  if (isLocalMockInviteToken(token)) {
+    await delay(MOCK_DELAY / 2);
+
+    return {
+      contributor: {
+        id: contributor_token,
+        is_anonymous,
+      },
+    };
+  }
+
+  return requestJson(`/contribute/${encodeURIComponent(token)}/privacy`, {
+    method: "POST",
+    body: JSON.stringify({ contributor_token, is_anonymous }),
+  });
+}
+
+/**
  * POST /contribute/:token/relationship
  * Saves relationship type to contributors table.
  * Body: { contributor_token, relationship_type, relationship_label? }
@@ -983,7 +1006,6 @@ export async function saveRelationship(token, relationshipInput) {
       contributor_token: relationshipInput.contributor_token,
       relationship_type: relationshipInput.relationship_type,
       relationship_label: relationshipInput.relationship_label ?? null,
-      is_anonymous: false,
     }),
   });
 }
