@@ -253,6 +253,28 @@ router.post('/:token/start', async (req, res) => {
   }
 })
 
+// POST /contribute/:token/privacy — save whether the contributor stays anonymous
+router.post('/:token/privacy', async (req, res) => {
+  try {
+    const { contributor_token, is_anonymous } = req.body
+    if (!contributor_token || typeof is_anonymous !== 'boolean') {
+      return res.status(400).json({ error: 'contributor_token and is_anonymous are required' })
+    }
+
+    const { data, error } = await supabase
+      .from('contributors')
+      .update({ is_anonymous, updated_at: new Date().toISOString() })
+      .eq('id', contributor_token)
+      .select()
+      .single()
+
+    if (error) return res.status(400).json({ error: error.message })
+    res.json({ contributor: { id: data.id, is_anonymous: data.is_anonymous } })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // POST /contribute/:token/relationship — save relationship type
 router.post('/:token/relationship', async (req, res) => {
   try {
@@ -272,7 +294,6 @@ router.post('/:token/relationship', async (req, res) => {
       .update({
         relationship_type,
         relationship_label: relationship_label || null,
-        is_anonymous: false,
       })
       .eq('id', contributor_token)
       .select()

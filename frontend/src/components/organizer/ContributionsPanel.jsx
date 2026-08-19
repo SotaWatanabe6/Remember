@@ -577,8 +577,11 @@ export default function ContributionsPanel({
     [...contributors]
       .filter((contributor) => {
         const name = String(contributor.name || "").trim().toLowerCase();
-        if (contributorFilter === "anonymous") return !name || name === "anonymous";
-        if (contributorFilter === "named") return Boolean(name) && name !== "anonymous";
+        // Contributors who chose anonymity on the privacy step keep their real
+        // name here for the organizer — the flag is what marks them anonymous.
+        const isAnonymous = Boolean(contributor.is_anonymous) || !name || name === "anonymous";
+        if (contributorFilter === "anonymous") return isAnonymous;
+        if (contributorFilter === "named") return !isAnonymous;
         if (contributorFilter === "awaiting") return isAwaitingReview(contributor);
         if (contributorFilter === "approved") return String(contributor.status || "").toLowerCase() === "approved";
         return true;

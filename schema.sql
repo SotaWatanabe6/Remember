@@ -34,6 +34,7 @@ CREATE TABLE contributors (
   email text,
   relationship_type text,
   relationship_label text,
+  is_anonymous boolean DEFAULT false,
   status text DEFAULT 'in_progress',
   questionnaire_done boolean DEFAULT false,
   photos_done boolean DEFAULT false,

@@ -14,6 +14,7 @@ const {
   composeStorySlideshow,
 } = require('../services/memorialGeneration')
 const { processVoiceRecording } = require('../services/voiceProcessing')
+const { withContributorDisplayNames } = require('../services/contributorPrivacy')
 
 const MAX_GENERATION_PHOTOS = Number(process.env.AI_PIPELINE_MAX_PHOTOS) || 60
 const CAN_USE_OPENAI = Boolean(process.env.OPENAI_API_KEY)
@@ -76,12 +77,15 @@ async function runPipelines(memorialId, jobId) {
   try {
     await updateJob(jobId, 10, 'Gathering contributions...')
 
-    const { data: contributors } = await supabase
+    const { data: contributorRows } = await supabase
       .from('contributors')
       .select('*')
       .eq('memorial_id', memorialId)
       .in('status', ['submitted', 'approved'])
-    const contributorIds = (contributors || []).map((contributor) => contributor.id)
+    // Contributors who chose to stay anonymous on the privacy step are credited
+    // as "Anonymous" everywhere the generated memorial names them.
+    const contributors = withContributorDisplayNames(contributorRows)
+    const contributorIds = contributors.map((contributor) => contributor.id)
     const { data: responses } = contributorIds.length
       ? await supabase
         .from('questionnaire_responses')

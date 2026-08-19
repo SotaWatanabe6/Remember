@@ -4,6 +4,7 @@ import {
   getInviteToken,
   getContributorSummary,
   getResponses,
+  savePrivacyChoice,
   saveRelationship,
   saveResponses,
   startContribution,
@@ -368,6 +369,45 @@ export async function getContributorRelationshipDraft(inviteToken) {
     relationship_type: session.relationship_type ?? "",
     relationship_custom_label: session.relationship_custom_label ?? "",
   };
+}
+
+export async function getContributorPrivacyDraft(inviteToken) {
+  const draft = await getContributorRelationshipDraft(inviteToken);
+
+  return {
+    ...draft,
+    is_anonymous: draft.session?.is_anonymous ?? null,
+  };
+}
+
+export async function saveContributorPrivacy(inviteToken, isAnonymous) {
+  const draft = await getContributorRelationshipDraft(inviteToken);
+
+  if (draft.status !== "ready") {
+    throw new Error("Your contribution could not be found.");
+  }
+
+  try {
+    await savePrivacyChoice(inviteToken, {
+      contributor_token: draft.session.contributorToken,
+      is_anonymous: isAnonymous,
+    });
+  } catch (error) {
+    console.error("Failed to save contributor privacy choice.", error);
+    throw new Error("We could not save your choice yet. Please try again.");
+  }
+
+  const updatedSession = {
+    ...draft.session,
+    // Only the flag is stored: the contributor's real name stays on the session
+    // (and on the contributors row) so the organizer-facing record keeps it, and
+    // the "Anonymous" credit is applied server-side when the memorial is built.
+    is_anonymous: isAnonymous,
+    updatedAt: new Date().toISOString(),
+  };
+
+  storeContributorSession(inviteToken, updatedSession);
+  return updatedSession;
 }
 
 export async function saveContributorRelationship(

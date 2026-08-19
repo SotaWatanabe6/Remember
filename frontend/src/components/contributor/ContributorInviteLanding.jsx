@@ -377,13 +377,12 @@ export function PublicContributorPage({ inviteToken }) {
             contributorToken: result?.contributorToken ?? existing.contributorToken ?? "",
             contributorName: trimmedContributorName,
             display_name: trimmedContributorName,
-            is_anonymous: false,
             memorialSubjectName: invite.deceased.name || "",
           }),
         );
       } catch {}
 
-      router.push(`/contribute/${inviteToken}/relationship`);
+      router.push(`/contribute/${inviteToken}/privacy`);
     } catch (error) {
       setSubmitError(
         error instanceof Error
@@ -395,7 +394,7 @@ export function PublicContributorPage({ inviteToken }) {
   };
 
   return (
-    <ContributorPageShell backHref={`/contribute/${inviteToken}/privacy`}>
+    <ContributorPageShell backHref={`/contribute/${inviteToken}/onboarding`}>
       <section className="mx-auto flex w-full max-w-[578px] flex-col items-center pt-[101px] max-sm:pt-16">
         <div className="flex flex-col items-center gap-5 text-center">
           <h1 className="[font-family:var(--font-family-display)] text-[40px] font-bold leading-[52px] text-r-text">
