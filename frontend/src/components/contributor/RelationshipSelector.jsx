@@ -45,7 +45,7 @@ function ContributorNav({ backHref }) {
   return (
     <nav className="w-full flex items-center justify-between px-6 sm:px-[50px] py-6">
       <div className="flex items-center gap-2">
-        <img src="/logo.svg" alt="" width={36} height={36} aria-hidden="true" />
+        <img src="/Logo.svg" alt="" width={36} height={36} aria-hidden="true" />
         <span className="text-r-text text-2xl leading-8 font-display">Remember</span>
       </div>
       <Link href={backHref} className="flex items-center gap-2 text-r-text transition-opacity hover:opacity-70">
