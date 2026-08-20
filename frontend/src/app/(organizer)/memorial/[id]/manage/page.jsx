@@ -136,7 +136,7 @@ function formatMemorialDate(value) {
 
 // ─── Memorial Header (Blessing's layout + my inviteToken + MemorialCoverImage) ──
 
-function MemorialHeader({ memorial, inviteToken, onShare, contributorCount, submittedCount, canGenerate, generating, onGenerateClick }) {
+function MemorialHeader({ memorial, inviteToken, onShare, contributorCount, submittedCount, canGenerate, disabledMessage, generating, onGenerateClick }) {
   const status = getManageStatus(memorial?.status);
   const birthDate = formatMemorialDate(memorial?.date_of_birth)
   const passingDate = formatMemorialDate(memorial?.date_of_passing)
@@ -219,6 +219,7 @@ function MemorialHeader({ memorial, inviteToken, onShare, contributorCount, subm
             type="button"
             onClick={onGenerateClick}
             disabled={!canGenerate || generating}
+            title={!canGenerate && !generating ? disabledMessage || undefined : undefined}
             className="rounded-full bg-r-btn px-6 py-5 text-center text-[18px] leading-[20px] text-r-btn-text transition hover:opacity-85 disabled:opacity-45 disabled:cursor-not-allowed border-none"
           >
             {generating ? 'Generating…' : 'Generate'}
@@ -1177,14 +1178,30 @@ export default function MemorialOutputPage() {
     return status === "submitted" || status === "approved" || Boolean(contributor?.submitted_at);
   }).length;
 
-  const canGenerate = !contributorsLoading && !contributorsError && submittedContributionCount > 0;
+  // Generation runs on the approved archive only, so it stays locked until the
+  // organizer has cleared the Awaiting approval list and kept at least one
+  // contributor.
+  const awaitingApprovalCount = contributors.filter(
+    (contributor) => String(contributor?.status || "").toLowerCase() === "submitted",
+  ).length;
+  const approvedContributionCount = contributors.filter(
+    (contributor) => String(contributor?.status || "").toLowerCase() === "approved",
+  ).length;
+
+  const canGenerate =
+    !contributorsLoading &&
+    !contributorsError &&
+    awaitingApprovalCount === 0 &&
+    approvedContributionCount > 0;
   const generationDisabledMessage = contributorsLoading
     ? "Checking submitted contributions..."
     : contributorsError
       ? "Contributor data could not be loaded, so generation is unavailable right now."
-      : submittedContributionCount === 0
-        ? "Generation is available after at least one contributor submits a memory."
-        : "";
+      : awaitingApprovalCount > 0
+        ? `Review the ${awaitingApprovalCount} contribution${awaitingApprovalCount === 1 ? "" : "s"} awaiting approval in the Contributions tab before generating.`
+        : approvedContributionCount === 0
+          ? "Generation is available after you approve at least one contribution."
+          : "";
 
   useEffect(() => { queueMicrotask(loadContributors); }, [loadContributors]);
   useEffect(() => { queueMicrotask(loadOutput); }, [loadOutput]);
@@ -1216,6 +1233,7 @@ export default function MemorialOutputPage() {
             contributorCount={contributors.length}
             submittedCount={submittedContributionCount}
             canGenerate={canGenerate}
+            disabledMessage={generationDisabledMessage}
             generating={generating}
             onGenerateClick={handleGenerateClick} />
           <TabBar active={activeTab} onChange={setActiveTab} />
