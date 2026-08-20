@@ -222,7 +222,7 @@ function MemorialHeader({ memorial, inviteToken, onShare, contributorCount, subm
             title={!canGenerate && !generating ? disabledMessage || undefined : undefined}
             className="rounded-full bg-r-btn px-6 py-5 text-center text-[18px] leading-[20px] text-r-btn-text transition hover:opacity-85 disabled:opacity-45 disabled:cursor-not-allowed border-none"
           >
-            {generating ? 'Generating…' : 'Generate'}
+            {generating ? 'Generating…' : 'Create Memorial'}
           </button>
         )}
         </div>
