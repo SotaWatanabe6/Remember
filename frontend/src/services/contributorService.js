@@ -394,6 +394,18 @@ export async function saveContributorPrivacy(inviteToken, isAnonymous) {
     });
   } catch (error) {
     console.error("Failed to save contributor privacy choice.", error);
+
+    // Distinguish "the API never answered" from "the API rejected the save" —
+    // otherwise an unreachable or out-of-date server looks like a save bug.
+    if (
+      error instanceof ApiRequestError &&
+      (error.code === "network_error" || error.code === "not_found")
+    ) {
+      throw new Error(
+        "We could not reach the Remember API. Please check that the server is running and try again.",
+      );
+    }
+
     throw new Error("We could not save your choice yet. Please try again.");
   }
 
