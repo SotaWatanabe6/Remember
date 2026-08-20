@@ -136,7 +136,7 @@ function formatMemorialDate(value) {
 
 // ─── Memorial Header (Blessing's layout + my inviteToken + MemorialCoverImage) ──
 
-function MemorialHeader({ memorial, inviteToken, onShare, contributorCount, submittedCount, canGenerate, disabledMessage, generating, onGenerateClick }) {
+function MemorialHeader({ memorial, generated, inviteToken, onShare, contributorCount, submittedCount, canGenerate, disabledMessage, generating, onGenerateClick }) {
   const status = getManageStatus(memorial?.status);
   const birthDate = formatMemorialDate(memorial?.date_of_birth)
   const passingDate = formatMemorialDate(memorial?.date_of_passing)
@@ -207,7 +207,7 @@ function MemorialHeader({ memorial, inviteToken, onShare, contributorCount, subm
           >
             Upload Memories
           </Link>
-          {memorial?.status === 'complete' ? (
+          {generated ? (
           <Link
             href={memorial?.id ? `/memorial/${memorial.id}/output` : '#'}
             className="rounded-full bg-r-btn px-6 py-5 text-center text-[18px] leading-[20px] text-r-btn-text transition hover:opacity-85"
@@ -1110,6 +1110,18 @@ export default function MemorialOutputPage() {
     } finally { setOutputLoading(false); }
   }, [id]);
 
+  const refreshMemorial = useCallback(async () => {
+    if (!id) return null;
+    try {
+      const data = await getMemorial(id);
+      const normalized = normalizeMemorialForView(data?.memorial ?? data);
+      if (normalized) setMemorial(normalized);
+      return normalized;
+    } catch {
+      return null;
+    }
+  }, [id]);
+
   const handleGenerate = useCallback(async () => {
     if (!memorialId || generating) return;
     setGenerating(true); setGenerationError(null); setGenerationJob(null);
@@ -1138,10 +1150,11 @@ export default function MemorialOutputPage() {
         }
       }
       await loadOutput({ fallbackToMock: process.env.NODE_ENV !== 'production' });
+      await refreshMemorial();
     } catch (err) {
       setGenerationError(err instanceof Error ? err.message : "Generation failed. Please try again.");
     } finally { if (!keepGenerating) setGenerating(false); }
-  }, [generating, loadOutput, memorialId]);
+  }, [generating, loadOutput, memorialId, refreshMemorial]);
 
   const handleGenerateClick = useCallback(() => {
     setShowGenerateConfirm(true)
@@ -1188,6 +1201,10 @@ export default function MemorialOutputPage() {
     (contributor) => String(contributor?.status || "").toLowerCase() === "approved",
   ).length;
 
+  // The header flips to View Memorial as soon as an output exists, without
+  // waiting for a page refresh to pick up the memorial's `complete` status.
+  const memorialGenerated = memorial?.status === 'complete' || Boolean(output);
+
   const canGenerate =
     !contributorsLoading &&
     !contributorsError &&
@@ -1228,6 +1245,7 @@ export default function MemorialOutputPage() {
         <div className="mx-auto flex w-full max-w-[960px] flex-col gap-8">
           <MemorialHeader
             memorial={memorial}
+            generated={memorialGenerated}
             inviteToken={inviteToken}
             onShare={() => setShowShare(true)}
             contributorCount={contributors.length}
