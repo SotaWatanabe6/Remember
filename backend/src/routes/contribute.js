@@ -7,6 +7,7 @@ const supabase = require('../supabase')
 const { extractAudioDuration } = require('../services/duration')
 const { extractImageMetadata } = require('../services/exif')
 const { getQuestionSetForContributorRelationship } = require('../lib/questionnaireQuestions')
+const { formatPersonName } = require('../lib/formatName')
 
 const PHOTO_STORAGE_BUCKET =
   process.env.CONTRIBUTOR_PHOTO_BUCKET ||
@@ -185,7 +186,10 @@ router.post('/:token/start', async (req, res) => {
   try {
     const { name, email } = req.body
     if (!name) return res.status(400).json({ error: 'Name is required' })
-    const normalizedName = name.trim().toLowerCase()
+    // Store names with each word capitalized so "sungjun" is saved as "Sungjun".
+    const displayName = formatPersonName(name)
+    if (!displayName) return res.status(400).json({ error: 'Name is required' })
+    const normalizedName = displayName.toLowerCase()
 
     const { data: invite, error } = await supabase
       .from('invite_links')
@@ -225,7 +229,7 @@ router.post('/:token/start', async (req, res) => {
       .insert({
         memorial_id: invite.memorial_id,
         invite_link_id: invite.id,
-        name,
+        name: displayName,
         email: email || null,
         status: 'in_progress'
       })

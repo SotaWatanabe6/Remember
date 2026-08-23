@@ -9,6 +9,7 @@ import {
   beginContributorDraft,
   validateContributorInvite,
 } from "@/services/contributorService.js";
+import { formatPersonName } from "@/lib/formatName.js";
 
 const inviteErrorCopy = {
   invalid: {
@@ -343,7 +344,8 @@ export function PublicContributorPage({ inviteToken }) {
     return <InviteErrorState status={invite?.status ?? "invalid"} />;
   }
 
-  const trimmedContributorName = contributorName.trim();
+  // Store the name capitalized ("sungjun" -> "Sungjun"), matching the backend.
+  const trimmedContributorName = formatPersonName(contributorName);
   const isContinueDisabled = isSubmitting || trimmedContributorName.length === 0;
 
   const handleNameChange = (event) => {
@@ -365,6 +367,8 @@ export function PublicContributorPage({ inviteToken }) {
 
     try {
       const result = await beginContributorDraft(inviteToken, trimmedContributorName);
+      const savedContributorName = result?.contributorName || trimmedContributorName;
+      setContributorName(savedContributorName);
 
       try {
         const sessionKey = `remember_contributor_session:${inviteToken}`;
@@ -375,8 +379,8 @@ export function PublicContributorPage({ inviteToken }) {
             ...existing,
             contributorId: result?.contributorId ?? existing.contributorId ?? "",
             contributorToken: result?.contributorToken ?? existing.contributorToken ?? "",
-            contributorName: trimmedContributorName,
-            display_name: trimmedContributorName,
+            contributorName: savedContributorName,
+            display_name: savedContributorName,
             memorialSubjectName: invite.deceased.name || "",
           }),
         );

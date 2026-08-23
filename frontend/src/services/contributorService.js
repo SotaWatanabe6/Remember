@@ -10,6 +10,7 @@ import {
   startContribution,
   submitContribution,
 } from "@/lib/api.js";
+import { formatPersonName } from "@/lib/formatName.js";
 import {
   CONTRIBUTOR_RELATIONSHIP_OPTIONS,
   CONTRIBUTOR_RELATIONSHIP_TYPES_REQUIRING_LABEL,
@@ -231,7 +232,9 @@ export async function validateContributorInvite(inviteToken) {
 }
 
 export async function beginContributorDraft(inviteToken, contributorName) {
-  const trimmedContributorName = contributorName.trim();
+  // Names are stored capitalized ("sungjun" -> "Sungjun"); the backend applies
+  // the same normalization, this keeps the local session in sync with it.
+  const trimmedContributorName = formatPersonName(contributorName);
 
   if (!trimmedContributorName) {
     throw new Error("Please enter your name.");
