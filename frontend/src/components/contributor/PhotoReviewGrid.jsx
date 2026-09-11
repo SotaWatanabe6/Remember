@@ -1,5 +1,5 @@
 import Image from 'next/image';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import styles from './PhotoReviewGrid.module.css';
 
 function ReviewPhoto({ photo, index, deleting, disabled, onDelete }) {
@@ -32,11 +32,31 @@ function ReviewPhoto({ photo, index, deleting, disabled, onDelete }) {
 }
 
 export default function PhotoReviewGrid({ photos, deletingPhotoId, disabled, onDelete }) {
+  const gridRef = useRef(null);
+
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+
+    const resize = () => {
+      // Measure the usable width, excluding any scrollbar, so both rows fit
+      // exactly and the thumbnails stay square on every platform.
+      const gap = parseFloat(getComputedStyle(grid).columnGap) || 0;
+      if (grid.clientWidth > 0) {
+        grid.style.setProperty('--thumbnail-size', `${(grid.clientWidth - 2 * gap) / 3}px`);
+      }
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(grid);
+    resize();
+    return () => observer.disconnect();
+  }, [photos.length]);
+
   return (
     <div className="rounded-[20px] border border-r-muted p-3 sm:p-[30px]">
       {photos.length ? (
         <div className={styles.viewport}>
-          <ul className={styles.grid} tabIndex={0} aria-label="Uploaded photos; scroll to review more">
+          <ul ref={gridRef} className={styles.grid} tabIndex={0} aria-label="Uploaded photos; scroll to review more">
             {photos.map((photo, index) => (
               <ReviewPhoto key={photo.id} photo={photo} index={index}
                 deleting={deletingPhotoId === photo.id} disabled={disabled} onDelete={onDelete} />

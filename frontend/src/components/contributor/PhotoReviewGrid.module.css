@@ -5,14 +5,15 @@
 }
 
 .grid {
+  --thumbnail-size: calc((100cqw - 2 * var(--column-gap)) / 3);
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-rows: calc((100cqw - 2 * var(--column-gap)) / 3);
+  grid-auto-rows: var(--thumbnail-size);
   align-content: start;
   column-gap: var(--column-gap);
   row-gap: var(--row-gap);
   /* Keep two square rows visible, with additional uploads scrolling inside. */
-  height: calc((100cqw - 2 * var(--column-gap)) * 2 / 3 + var(--row-gap));
+  height: calc(2 * var(--thumbnail-size) + var(--row-gap));
   overflow-y: auto;
   overscroll-behavior-y: contain;
 }
