@@ -12,7 +12,7 @@
 import { mockMemorials } from "@/data/mockMemorials.js";
 import { getSupabaseClient } from "@/lib/supabaseClient.js";
 import { normalizeShareUrl } from "@/lib/copyToClipboard.js";
-import { getStore } from "@/lib/contributionStore";
+import { getStore, removePhoto } from "@/lib/contributionStore";
 import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS } from "@/lib/contribute/questionnaireQuestions.js";
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -1449,7 +1449,12 @@ export async function deletePhoto(token, assetId) {
   const session = readContributorSession(token);
   const contributorToken = session?.contributorToken || session?.contributorId;
 
-  if (contributorToken && !String(assetId).startsWith('photo-')) {
+  if (!isLocalMockInviteToken(token) && !String(assetId).startsWith('photo-')) {
+    if (!contributorToken) {
+      throw new ApiRequestError('Please return to your invitation and enter your contributor details.', {
+        code: 'missing_contributor_token',
+      });
+    }
     await requestJson(`/contribute/${encodeURIComponent(token)}/photos/${encodeURIComponent(assetId)}`, {
       method: "DELETE",
       body: JSON.stringify({ contributor_token: contributorToken }),
@@ -1458,6 +1463,7 @@ export async function deletePhoto(token, assetId) {
 
   const existing = readStoredPhotos(token);
   writeStoredPhotos(token, existing.filter((p) => p.id !== assetId));
+  removePhoto(assetId);
   return { success: true };
 }
 
@@ -1508,7 +1514,7 @@ export async function fetchContributorPhotos(token, contributorToken) {
   }
 }
 
-export async function getContributorSummary(token) {
+export async function getContributorSummary(token, { requireFreshPhotos = false } = {}) {
   const session = readContributorSession(token);
   const store = getStore();
   const contributorToken = session?.contributorToken || session?.contributorId;
@@ -1516,7 +1522,22 @@ export async function getContributorSummary(token) {
   // Check in-memory store first — used when photos/page.jsx uses addPhotos
   // Fall back to localStorage — used when backend upload path writes via writeStoredPhotos
   let photos;
-  if (store.photos.length > 0) {
+  let reviewContributor = null;
+  if (requireFreshPhotos && !isLocalMockInviteToken(token)) {
+    if (!contributorToken) {
+      throw new ApiRequestError('Please return to your invitation and enter your contributor details.', {
+        code: 'missing_contributor_token',
+      });
+    }
+    // Review must reflect saved photos; do not silently replace a failed read
+    // with stale drafts or another invitation's unscoped in-memory photos.
+    const data = await requestJson(
+      `/contribute/${encodeURIComponent(token)}/photos?contributor_token=${encodeURIComponent(contributorToken)}`,
+    );
+    photos = data.photos || [];
+    reviewContributor = data.contributor;
+    writeStoredPhotos(token, photos);
+  } else if (store.photos.length > 0) {
     photos = store.photos.map((p) => ({
       id: p.id,
       file_name: p.file?.name || '',
@@ -1567,6 +1588,9 @@ export async function getContributorSummary(token) {
       name: session?.contributorName || '',
       relationship_type: session?.relationship_type || '',
       relationship_label: session?.relationship_custom_label || null,
+      status: session?.status || 'in_progress',
+      submitted_at: session?.submittedAt || null,
+      ...reviewContributor,
     },
     responses,
     photos,
