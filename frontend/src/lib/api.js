@@ -13,7 +13,7 @@ import { mockMemorials } from "@/data/mockMemorials.js";
 import { getSupabaseClient } from "@/lib/supabaseClient.js";
 import { normalizeShareUrl } from "@/lib/copyToClipboard.js";
 import { getStore, removePhoto } from "@/lib/contributionStore";
-import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS } from "@/lib/contribute/questionnaireQuestions.js";
+import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS, formatQuestionPrompt, getQuestionSetForContributorRelationship } from "@/lib/contribute/questionnaireQuestions.js";
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 const MOCK_DELAY = 500;
@@ -1571,16 +1571,27 @@ export async function getContributorSummary(token, { requireFreshPhotos = false 
     voice = readStoredVoice(token);
   }
 
-  const contributorId = session?.contributorId ?? null;
+  const contributorId = session?.contributorId ?? contributorToken ?? null;
   const responsesByContributor = readStoredResponses(token);
   const contributorResponses = contributorId ? responsesByContributor[contributorId] ?? {} : {};
-  const responses = Object.values(contributorResponses)
-    .filter((r) => CONTRIBUTOR_QUESTION_IDS.has(r.question_id))
-    .sort((a, b) => (a.question_order ?? 0) - (b.question_order ?? 0))
-    .map((r) => ({
-      question_text: r.question_text || r.question_id || 'Question',
-      response_text: r.answer_text || r.response_text || '',
-    }));
+  const subjectName = session?.deceasedName || session?.memorialSubjectName || session?.subjectName || '';
+  const questions = getQuestionSetForContributorRelationship(
+    session?.relationship_type,
+    session?.relationship_custom_label ?? session?.relationship_label,
+  );
+  const responses = questions.map((question, index) => {
+    const saved = contributorResponses[question.id] || Object.values(contributorResponses).find((response) => (
+      response.question_id
+        ? response.question_id === question.id
+        : response.question_text === question.prompt ||
+          response.question_order === index + 1 || response.order_index === index + 1
+    ));
+    return {
+      question_id: question.id,
+      question_text: formatQuestionPrompt(question.prompt, subjectName),
+      response_text: saved?.answer_text || saved?.response_text || '',
+    };
+  }).filter((response) => String(response.response_text).trim());
 
   return {
     contributor: {

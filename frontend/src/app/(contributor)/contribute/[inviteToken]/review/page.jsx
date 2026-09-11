@@ -109,6 +109,7 @@ export default function ReviewPage() {
   const [photos, setPhotos] = useState([]);
   const [voice, setVoice] = useState([]);
   const [stories, setStories] = useState([]);
+  const [responses, setResponses] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -132,7 +133,11 @@ export default function ReviewPage() {
           router.replace(`/contribute/${inviteToken}/submitted`);
           return;
         }
-        if (isMounted) { setPhotos(summary.photos || []); setVoice(summary.voice || []); }
+        if (isMounted) {
+          setPhotos(summary.photos || []);
+          setVoice(summary.voice || []);
+          setResponses(summary.responses || []);
+        }
       } catch (error) {
         if (isMounted) setLoadError(error instanceof Error ? error.message : 'Could not load your photos. Please try again.');
       }
@@ -272,20 +277,38 @@ export default function ReviewPage() {
 
               </div>
               <div id="review-panel-stories" role="tabpanel" aria-labelledby="review-tab-stories" hidden={activeTab !== 'stories'}>
-                {stories.length > 0 ? (
-                  <SectionCard title="Stories">
-                    <div className="flex flex-col gap-4">
-                      {stories.map((story) => (
-                        <div key={story.id} className="flex flex-col gap-1">
-                          <p className="text-body-2 font-medium text-r-text">{story.title}</p>
-                          <p className="text-caption text-r-muted">
-                            {story.body ? story.body.slice(0, 120) + (story.body.length > 120 ? '…' : '') : 'An AI generated summary of the story will be featured here.'}
+                <SectionCard title="Your questionnaire answers">
+                  {responses.length > 0 ? (
+                    <div className="flex flex-col gap-8">
+                      {responses.map((response) => (
+                        <article key={response.question_id} className="min-w-0">
+                          <h3 className="text-[20px] leading-7 text-r-text">{response.question_text}</h3>
+                          <p className="mt-3 whitespace-pre-wrap break-words text-body-2 leading-7 text-r-secondary">
+                            {response.response_text}
                           </p>
-                        </div>
+                        </article>
                       ))}
-              </div>
-            </SectionCard>
-          ) : <SectionCard title="Stories"><p className="text-body-2 text-r-secondary">No stories added. You can submit without stories.</p></SectionCard>}
+                    </div>
+                  ) : (
+                    <p className="text-body-2 text-r-secondary">No questionnaire answers added yet.</p>
+                  )}
+                </SectionCard>
+                {stories.length > 0 ? (
+                  <div className="mt-6">
+                    <SectionCard title="Additional stories">
+                      <div className="flex flex-col gap-4">
+                        {stories.map((story) => (
+                          <div key={story.id} className="flex flex-col gap-1">
+                            <p className="text-body-2 font-medium text-r-text">{story.title}</p>
+                            <p className="whitespace-pre-wrap break-words text-body-2 text-r-secondary">
+                              {story.body}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </SectionCard>
+                  </div>
+                ) : null}
               </div>
             </>
           )}
