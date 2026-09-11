@@ -25,7 +25,7 @@ function ReviewPhoto({ photo, index, deleting, disabled, onDelete, onEnlarge }) 
       )}
       <button type="button" onClick={() => onDelete(photo.id)} disabled={disabled}
         aria-label={`Remove photo ${index + 1}: ${label}`}
-        className="absolute right-1 top-1 flex size-11 items-center justify-center rounded-full bg-r-bg/90 transition hover:bg-r-modal focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-r-text disabled:cursor-wait disabled:opacity-50">
+        className="absolute right-1 top-1 flex size-6 items-center justify-center bg-transparent transition hover:opacity-75 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-r-text disabled:cursor-wait disabled:opacity-50 sm:size-8">
         {deleting ? (
           <span className="size-5 animate-spin rounded-full border-2 border-r-border border-t-r-text" aria-hidden="true" />
         ) : (
