@@ -23,6 +23,33 @@
   outline-offset: 4px;
 }
 
+/* Explicit styling keeps the overflow control visible on overlay-scrollbar
+   platforms too. overflow-y: auto shows it only when there are extra rows. */
+.grid::-webkit-scrollbar {
+  width: 12px;
+}
+
+.grid::-webkit-scrollbar-track {
+  background: var(--color-r-card);
+  border-radius: 8px;
+}
+
+.grid::-webkit-scrollbar-thumb {
+  background: var(--color-r-muted);
+  border: 3px solid var(--color-r-card);
+  border-radius: 8px;
+}
+
+.grid::-webkit-scrollbar-thumb:hover {
+  background: var(--color-r-secondary);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .grid {
+    scrollbar-color: var(--color-r-muted) var(--color-r-card);
+  }
+}
+
 @media (min-width: 640px) {
   .viewport {
     --column-gap: 39px;
