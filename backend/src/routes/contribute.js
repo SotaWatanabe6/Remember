@@ -529,7 +529,7 @@ router.get('/:token/photos', async (req, res) => {
 
     const { data: contributor } = await supabase
       .from('contributors')
-      .select('id, memorial_id')
+      .select('id, memorial_id, status, submitted_at')
       .eq('id', contributor_token)
       .single()
 
@@ -560,6 +560,7 @@ router.get('/:token/photos', async (req, res) => {
     }))
 
     res.json({
+      contributor: { id: contributor.id, status: contributor.status, submitted_at: contributor.submitted_at },
       photos: photosWithUrls,
       count: photosWithUrls.length,
       max_photos: MAX_CONTRIBUTOR_PHOTOS,
@@ -756,7 +757,7 @@ router.patch('/:token/photos/:assetId', async (req, res) => {
 // DELETE /contribute/:token/photos/:assetId
 router.delete('/:token/photos/:assetId', async (req, res) => {
   try {
-    const { contributor_token } = req.body
+    const { contributor_token } = req.body || {}
 
     if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
 
@@ -768,6 +769,20 @@ router.delete('/:token/photos/:assetId', async (req, res) => {
 
     if (inviteError || !invite || !invite.is_active) {
       return res.status(410).json({ error: 'This link is no longer active.' })
+    }
+
+    const { data: contributor, error: contributorError } = await supabase
+      .from('contributors')
+      .select('id, memorial_id, status, submitted_at')
+      .eq('id', contributor_token)
+      .eq('memorial_id', invite.memorial_id)
+      .single()
+
+    if (contributorError || !contributor) {
+      return res.status(404).json({ error: 'Contributor not found for this invitation.' })
+    }
+    if (contributor.status !== 'in_progress' || contributor.submitted_at) {
+      return res.status(403).json({ error: 'Photos cannot be removed after your contribution has been submitted.' })
     }
 
     const { data: asset, error: assetError } = await supabase

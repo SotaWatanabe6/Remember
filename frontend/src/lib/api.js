@@ -12,8 +12,8 @@
 import { mockMemorials } from "@/data/mockMemorials.js";
 import { getSupabaseClient } from "@/lib/supabaseClient.js";
 import { normalizeShareUrl } from "@/lib/copyToClipboard.js";
-import { getStore } from "@/lib/contributionStore";
-import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS } from "@/lib/contribute/questionnaireQuestions.js";
+import { getStore, removePhoto } from "@/lib/contributionStore";
+import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS, formatQuestionPrompt, getQuestionSetForContributorRelationship } from "@/lib/contribute/questionnaireQuestions.js";
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 const MOCK_DELAY = 500;
@@ -1449,7 +1449,12 @@ export async function deletePhoto(token, assetId) {
   const session = readContributorSession(token);
   const contributorToken = session?.contributorToken || session?.contributorId;
 
-  if (contributorToken && !String(assetId).startsWith('photo-')) {
+  if (!isLocalMockInviteToken(token) && !String(assetId).startsWith('photo-')) {
+    if (!contributorToken) {
+      throw new ApiRequestError('Please return to your invitation and enter your contributor details.', {
+        code: 'missing_contributor_token',
+      });
+    }
     await requestJson(`/contribute/${encodeURIComponent(token)}/photos/${encodeURIComponent(assetId)}`, {
       method: "DELETE",
       body: JSON.stringify({ contributor_token: contributorToken }),
@@ -1458,6 +1463,7 @@ export async function deletePhoto(token, assetId) {
 
   const existing = readStoredPhotos(token);
   writeStoredPhotos(token, existing.filter((p) => p.id !== assetId));
+  removePhoto(assetId);
   return { success: true };
 }
 
@@ -1508,7 +1514,7 @@ export async function fetchContributorPhotos(token, contributorToken) {
   }
 }
 
-export async function getContributorSummary(token) {
+export async function getContributorSummary(token, { requireFreshPhotos = false } = {}) {
   const session = readContributorSession(token);
   const store = getStore();
   const contributorToken = session?.contributorToken || session?.contributorId;
@@ -1516,7 +1522,22 @@ export async function getContributorSummary(token) {
   // Check in-memory store first — used when photos/page.jsx uses addPhotos
   // Fall back to localStorage — used when backend upload path writes via writeStoredPhotos
   let photos;
-  if (store.photos.length > 0) {
+  let reviewContributor = null;
+  if (requireFreshPhotos && !isLocalMockInviteToken(token)) {
+    if (!contributorToken) {
+      throw new ApiRequestError('Please return to your invitation and enter your contributor details.', {
+        code: 'missing_contributor_token',
+      });
+    }
+    // Review must reflect saved photos; do not silently replace a failed read
+    // with stale drafts or another invitation's unscoped in-memory photos.
+    const data = await requestJson(
+      `/contribute/${encodeURIComponent(token)}/photos?contributor_token=${encodeURIComponent(contributorToken)}`,
+    );
+    photos = data.photos || [];
+    reviewContributor = data.contributor;
+    writeStoredPhotos(token, photos);
+  } else if (store.photos.length > 0) {
     photos = store.photos.map((p) => ({
       id: p.id,
       file_name: p.file?.name || '',
@@ -1550,16 +1571,27 @@ export async function getContributorSummary(token) {
     voice = readStoredVoice(token);
   }
 
-  const contributorId = session?.contributorId ?? null;
+  const contributorId = session?.contributorId ?? contributorToken ?? null;
   const responsesByContributor = readStoredResponses(token);
   const contributorResponses = contributorId ? responsesByContributor[contributorId] ?? {} : {};
-  const responses = Object.values(contributorResponses)
-    .filter((r) => CONTRIBUTOR_QUESTION_IDS.has(r.question_id))
-    .sort((a, b) => (a.question_order ?? 0) - (b.question_order ?? 0))
-    .map((r) => ({
-      question_text: r.question_text || r.question_id || 'Question',
-      response_text: r.answer_text || r.response_text || '',
-    }));
+  const subjectName = session?.deceasedName || session?.memorialSubjectName || session?.subjectName || '';
+  const questions = getQuestionSetForContributorRelationship(
+    session?.relationship_type,
+    session?.relationship_custom_label ?? session?.relationship_label,
+  );
+  const responses = questions.map((question, index) => {
+    const saved = contributorResponses[question.id] || Object.values(contributorResponses).find((response) => (
+      response.question_id
+        ? response.question_id === question.id
+        : response.question_text === question.prompt ||
+          response.question_order === index + 1 || response.order_index === index + 1
+    ));
+    return {
+      question_id: question.id,
+      question_text: formatQuestionPrompt(question.prompt, subjectName),
+      response_text: saved?.answer_text || saved?.response_text || '',
+    };
+  }).filter((response) => String(response.response_text).trim());
 
   return {
     contributor: {
@@ -1567,6 +1599,9 @@ export async function getContributorSummary(token) {
       name: session?.contributorName || '',
       relationship_type: session?.relationship_type || '',
       relationship_label: session?.relationship_custom_label || null,
+      status: session?.status || 'in_progress',
+      submitted_at: session?.submittedAt || null,
+      ...reviewContributor,
     },
     responses,
     photos,

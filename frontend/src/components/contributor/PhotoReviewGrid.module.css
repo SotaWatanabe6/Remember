@@ -1,0 +1,57 @@
+.viewport {
+  container-type: inline-size;
+  --column-gap: 12px;
+  --row-gap: 20px;
+}
+
+.grid {
+  --thumbnail-size: calc((100cqw - 2 * var(--column-gap)) / 3);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: var(--thumbnail-size);
+  align-content: start;
+  column-gap: var(--column-gap);
+  row-gap: var(--row-gap);
+  /* Keep two square rows visible, with additional uploads scrolling inside. */
+  height: calc(2 * var(--thumbnail-size) + var(--row-gap));
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+
+.grid:focus-visible {
+  outline: 2px solid var(--color-r-text);
+  outline-offset: 4px;
+}
+
+/* Explicit styling keeps the overflow control visible on overlay-scrollbar
+   platforms too. overflow-y: auto shows it only when there are extra rows. */
+.grid::-webkit-scrollbar {
+  width: 12px;
+}
+
+.grid::-webkit-scrollbar-track {
+  background: var(--color-r-card);
+  border-radius: 8px;
+}
+
+.grid::-webkit-scrollbar-thumb {
+  background: var(--color-r-muted);
+  border: 3px solid var(--color-r-card);
+  border-radius: 8px;
+}
+
+.grid::-webkit-scrollbar-thumb:hover {
+  background: var(--color-r-secondary);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .grid {
+    scrollbar-color: var(--color-r-muted) var(--color-r-card);
+  }
+}
+
+@media (min-width: 640px) {
+  .viewport {
+    --column-gap: 39px;
+  }
+}
