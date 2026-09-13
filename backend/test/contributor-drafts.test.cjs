@@ -12,6 +12,11 @@ function fixture({ status = 'in_progress', submittedAt = null, active = true, ex
       { id: 'owner', memorial_id: 'memorial', status, submitted_at: submittedAt, voice_done: true },
       { id: 'outsider', memorial_id: 'other-memorial', status: 'in_progress' },
     ],
+    contributor_stories: [
+      { id: 'own-story', client_story_id: 'draft-1', contributor_id: 'owner', memorial_id: 'memorial', title: 'Old title', body: 'First line\nSecond line' },
+      { id: 'other-story', contributor_id: 'someone-else', memorial_id: 'memorial', title: 'Private', body: 'Keep this' },
+      { id: 'cross-memorial-story', contributor_id: 'owner', memorial_id: 'other-memorial', title: 'Elsewhere', body: 'Keep this too' },
+    ],
     voice_recordings: [
       { id: 'own-voice', contributor_id: 'owner', memorial_id: 'memorial', contributor_title: 'Original title', file_name: 'memory.wav', storage_path: 'owner/voice.wav', storage_bucket: 'voices' },
       { id: 'other-voice', contributor_id: 'someone-else', memorial_id: 'memorial', contributor_title: 'Private title', storage_path: 'other/voice.wav', storage_bucket: 'voices' },
@@ -53,14 +58,14 @@ function fixture({ status = 'in_progress', submittedAt = null, active = true, ex
     } },
   })
   const router = createContributorDraftRouter(supabase)
-  async function call(method, { id = 'own-voice', contributorToken = 'owner', token = 'invite-token', body = {} } = {}) {
-    const path = method === 'get' ? '/:token/voice' : '/:token/voice/:recordingId'
+  async function call(method, { kind = 'voice', id = kind === 'stories' ? 'own-story' : 'own-voice', contributorToken = 'owner', token = 'invite-token', body = {} } = {}) {
+    const path = method === 'get' ? `/:token/${kind}` : `/:token/${kind}/:${kind === 'stories' ? 'storyId' : 'recordingId'}`
     const route = router.stack.find((layer) => layer.route?.path === path && layer.route.methods[method]).route
     const response = { statusCode: 200, body: null, status(code) { this.statusCode = code; return this }, json(body) { this.body = body; return this } }
-    await route.stack[0].handle({ params: { token, recordingId: id }, body: { contributor_token: contributorToken, ...body }, query: { contributor_token: contributorToken } }, response)
+    await route.stack[0].handle({ params: { token, recordingId: id, storyId: id }, body: { contributor_token: contributorToken, ...body }, query: { contributor_token: contributorToken } }, response)
     return response
   }
-  return { db, removedFiles, call }
+  return { db, removedFiles, call, supabase }
 }
 
 test('renaming persists through a fresh read and only changes the owned recording title', async () => {
@@ -149,4 +154,103 @@ test('failed title update leaves saved content intact', async () => {
   const f = fixture({ updateFails: true })
   assert.equal((await f.call('patch', { body: { contributor_title: 'New' } })).statusCode, 400)
   assert.equal(f.db.voice_recordings[0].contributor_title, 'Original title')
+})
+
+
+test('story title and multiline text changes persist through a fresh read', async () => {
+  const f = fixture()
+  const result = await f.call('patch', { kind: 'stories', body: { title: '  Our garden  ', body: '  A new memory\nWith two lines  ', contributor_id: 'outsider' } })
+  assert.equal(result.statusCode, 200)
+  const read = await f.call('get', { kind: 'stories' })
+  assert.equal(read.body.stories.length, 1)
+  assert.equal(read.body.stories[0].id, 'own-story')
+  assert.equal(read.body.stories[0].client_story_id, 'draft-1')
+  assert.equal(read.body.stories[0].title, 'Our garden')
+  assert.equal(read.body.stories[0].body, 'A new memory\nWith two lines')
+  assert.equal(f.db.contributor_stories[0].contributor_id, 'owner')
+})
+
+test('partial story edit preserves the other field and allows an untitled story', async () => {
+  const f = fixture()
+  assert.equal((await f.call('patch', { kind: 'stories', body: { title: '' } })).statusCode, 200)
+  assert.equal(f.db.contributor_stories[0].body, 'First line\nSecond line')
+  assert.equal((await f.call('patch', { kind: 'stories', body: { body: '' } })).statusCode, 400)
+  assert.equal(f.db.contributor_stories[0].body, 'First line\nSecond line')
+})
+
+for (const body of [{ title: 12 }, { body: {} }, {}, { title: ' ', body: ' ' }]) {
+  test(`rejects invalid story edits: ${JSON.stringify(body)}`, async () => {
+    const f = fixture()
+    const before = JSON.stringify(f.db)
+    assert.equal((await f.call('patch', { kind: 'stories', body })).statusCode, 400)
+    assert.equal(JSON.stringify(f.db), before)
+  })
+}
+
+test('story deletion persists and leaves other contributors and memorials untouched', async () => {
+  const f = fixture()
+  assert.equal((await f.call('delete', { kind: 'stories' })).statusCode, 200)
+  assert.equal((await f.call('get', { kind: 'stories' })).body.stories.length, 0)
+  assert.deepEqual(f.db.contributor_stories.map(story => story.id), ['other-story', 'cross-memorial-story'])
+})
+
+for (const method of ['patch', 'delete']) {
+  for (const status of ['submitted', 'approved', 'rejected', null]) {
+    test(`story ${method} is denied for ${status} contributions`, async () => {
+      const f = fixture({ status })
+      const before = JSON.stringify(f.db)
+      assert.equal((await f.call(method, { kind: 'stories', body: { title: 'Changed' } })).statusCode, 403)
+      assert.equal(JSON.stringify(f.db), before)
+    })
+  }
+  test(`story ${method} is denied after a previous submission`, async () => {
+    const f = fixture({ submittedAt: '2026-09-01T12:00:00Z' })
+    assert.equal((await f.call(method, { kind: 'stories', body: { title: 'Changed' } })).statusCode, 403)
+  })
+  for (const [args, expected] of [
+    [{ id: 'other-story' }, 404], [{ id: 'cross-memorial-story' }, 404],
+    [{ contributorToken: 'outsider' }, 404], [{ contributorToken: null }, 400], [{ token: 'invalid' }, 410],
+  ]) {
+    test(`story ${method} rejects unauthorized access ${JSON.stringify(args)}`, async () => {
+      const f = fixture()
+      const before = JSON.stringify(f.db)
+      assert.equal((await f.call(method, { kind: 'stories', ...args, body: { title: 'Changed' } })).statusCode, expected)
+      assert.equal(JSON.stringify(f.db), before)
+    })
+  }
+}
+
+test('failed story update retains the saved text', async () => {
+  const f = fixture({ updateFails: true })
+  assert.equal((await f.call('patch', { kind: 'stories', body: { body: 'New' } })).statusCode, 400)
+  assert.equal(f.db.contributor_stories[0].body, 'First line\nSecond line')
+})
+
+
+test('the existing story upsert route cannot bypass the post-submission edit lock', async () => {
+  const { readFileSync } = require('node:fs')
+  const { createRequire } = require('node:module')
+  const path = require('node:path')
+  const vm = require('node:vm')
+  const filename = path.resolve(__dirname, '../src/routes/contribute.js')
+  const realRequire = createRequire(filename)
+  for (const options of [{ status: 'submitted' }, { status: 'approved' }, { submittedAt: '2026-09-01T12:00:00Z' }]) {
+    const f = fixture(options)
+    const before = JSON.stringify(f.db)
+    const module = { exports: {} }
+    vm.runInNewContext(readFileSync(filename, 'utf8'), {
+      module, exports: module.exports, process, console, Buffer, Request,
+      require(name) {
+        if (name === '../supabase') return f.supabase
+        if (name === 'dotenv') return { config() {} }
+        if (name === '../services/duration' || name === '../services/exif') return {}
+        return realRequire(name)
+      },
+    }, { filename })
+    const route = module.exports.stack.find(layer => layer.route?.path === '/:token/stories' && layer.route.methods.post).route
+    const response = { statusCode: 200, status(code) { this.statusCode = code; return this }, json() { return this } }
+    await route.stack[0].handle({ params: { token: 'invite-token' }, body: { contributor_token: 'owner', client_story_id: 'draft-1', title: 'Bypass attempt', body: 'Changed text' } }, response)
+    assert.equal(response.statusCode, 403)
+    assert.equal(JSON.stringify(f.db), before)
+  }
 })

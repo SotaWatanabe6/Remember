@@ -1511,12 +1511,7 @@ export async function renameContributorVoice(token, recordingId, title) {
   return recording;
 }
 
-/**
- * Returns the same-browser contributor draft summary for the review screen.
- *
- * Backend-backed review/resume is blocked until the API exposes saved response
- * and media read endpoints. Do not call fake GET contribution endpoints here.
- */
+/** Fetch saved photos, retaining the upload page's local draft fallback. */
 export async function fetchContributorPhotos(token, contributorToken) {
   if (!contributorToken || isLocalMockInviteToken(token)) {
     return readStoredPhotos(token);
@@ -1546,16 +1541,18 @@ export async function fetchContributorPhotos(token, contributorToken) {
   }
 }
 
-export async function getContributorSummary(token, { requireFreshPhotos = false } = {}) {
+// Fresh review reads require the backend; upload pages may still use drafts.
+export async function getContributorSummary(token, { requireFreshPhotos = false, requireFreshContent = false } = {}) {
   const session = readContributorSession(token);
   const store = getStore();
   const contributorToken = session?.contributorToken || session?.contributorId;
+  const freshReview = requireFreshPhotos || requireFreshContent;
 
   // Check in-memory store first — used when photos/page.jsx uses addPhotos
   // Fall back to localStorage — used when backend upload path writes via writeStoredPhotos
   let photos;
   let reviewContributor = null;
-  if (requireFreshPhotos && !isLocalMockInviteToken(token)) {
+  if (freshReview && !isLocalMockInviteToken(token)) {
     if (!contributorToken) {
       throw new ApiRequestError('Please return to your invitation and enter your contributor details.', {
         code: 'missing_contributor_token',
@@ -1592,7 +1589,7 @@ export async function getContributorSummary(token, { requireFreshPhotos = false 
   // Review uses saved recordings, including fresh playback URLs, rather than
   // stale browser state that could resurrect a deleted or renamed recording.
   let voice;
-  if (requireFreshPhotos && !isLocalMockInviteToken(token)) {
+  if (freshReview && !isLocalMockInviteToken(token)) {
     const data = await requestJson(
       `/contribute/${encodeURIComponent(token)}/voice?contributor_token=${encodeURIComponent(contributorToken)}`,
     );
@@ -1609,6 +1606,20 @@ export async function getContributorSummary(token, { requireFreshPhotos = false 
     }));
   } else {
     voice = readStoredVoice(token);
+  }
+
+  let stories = readStoredStories(token);
+  if (freshReview && !isLocalMockInviteToken(token)) {
+    const data = await requestJson(
+      `/contribute/${encodeURIComponent(token)}/stories?contributor_token=${encodeURIComponent(contributorToken)}`,
+    );
+    const savedStories = (data.stories || []).map(normalizeSavedStory);
+    const savedIds = new Set(savedStories.map((story) => story.id));
+    // Keep unsaved drafts (including legacy drafts with no server ID). Saved
+    // rows always win; cached saved rows absent on the server were deleted.
+    stories = [...savedStories, ...stories.filter((story) => !story.server_id && !savedIds.has(story.id))];
+    reviewContributor = data.contributor;
+    writeStoredStories(token, stories);
   }
 
   const contributorId = session?.contributorId ?? contributorToken ?? null;
@@ -1646,57 +1657,101 @@ export async function getContributorSummary(token, { requireFreshPhotos = false 
     responses,
     photos,
     voice,
+    stories,
   };
+}
+
+function normalizeSavedStory(story) {
+  return { ...story, id: story.client_story_id || story.id, server_id: story.id };
+}
+
+function cacheStory(token, story) {
+  const existing = readStoredStories(token);
+  writeStoredStories(token, existing.some((item) => item.id === story.id)
+    ? existing.map((item) => item.id === story.id ? story : item)
+    : [...existing, story]);
+}
+
+export async function updateContributorStory(token, story, changes) {
+  const title = String(changes.title || '').trim();
+  const body = String(changes.body || '').trim();
+  if (!title && !body) throw new ApiRequestError('Please add a story title or text.');
+  let updated = { ...story, title, body };
+  if (!isLocalMockInviteToken(token)) {
+    if (!story.server_id) {
+      // A draft that never reached the server must be created before it can
+      // be addressed by the item PATCH endpoint.
+      return (await saveContributorStory(token, requireContributorToken(token), updated)).story;
+    }
+    const data = await requestJson(`/contribute/${encodeURIComponent(token)}/stories/${encodeURIComponent(story.server_id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ contributor_token: requireContributorToken(token), title, body }),
+    });
+    updated = normalizeSavedStory(data.story);
+  }
+  cacheStory(token, updated);
+  return updated;
+}
+
+export async function deleteContributorStory(token, story) {
+  if (!isLocalMockInviteToken(token) && story.server_id) {
+    await requestJson(`/contribute/${encodeURIComponent(token)}/stories/${encodeURIComponent(story.server_id)}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ contributor_token: requireContributorToken(token) }),
+    });
+  }
+  writeStoredStories(token, readStoredStories(token).filter((item) => item.id !== story.id));
+  return { success: true };
 }
 
 export async function saveContributorStory(token, contributorToken, story) {
   const storyTitle = String(story?.title || "").trim();
   const storyBody = String(story?.body || "").trim();
-  const clientStoryId = story?.id || story?.client_story_id || `story-${Date.now()}`;
+  const clientStoryId = story?.client_story_id || story?.id || `story-${Date.now()}`;
 
   if (!storyTitle && !storyBody) {
     return null;
   }
 
   const localStory = {
+    ...story,
     id: clientStoryId,
     title: storyTitle,
     body: storyBody,
     created_at: story?.created_at || now(),
   };
 
-  const existingStories = readStoredStories(token);
-  const nextStories = existingStories.some((item) => item.id === localStory.id)
-    ? existingStories.map((item) => (item.id === localStory.id ? { ...item, ...localStory } : item))
-    : [...existingStories, localStory];
-  writeStoredStories(token, nextStories);
-
-  if (!contributorToken || isLocalMockInviteToken(token)) {
+  if (isLocalMockInviteToken(token)) {
+    cacheStory(token, localStory);
     return { story: localStory };
   }
+  if (!contributorToken) requireContributorToken(token);
 
   const storyPath = `/contribute/${encodeURIComponent(token)}/stories`;
   const storyOptions = {
     method: "POST",
     body: JSON.stringify({
-      contributor_token: contributorToken,
+      contributor_token: contributorToken || requireContributorToken(token),
       client_story_id: localStory.id,
       title: localStory.title,
       body: localStory.body,
     }),
   };
 
+  let result;
   try {
-    return await requestJson(storyPath, storyOptions);
+    result = await requestJson(storyPath, storyOptions);
   } catch (error) {
     if (error instanceof ApiRequestError && error.status === 404 && isLocalFrontendApiUrl()) {
-      return requestJson(storyPath, {
+      result = await requestJson(storyPath, {
         ...storyOptions,
         baseUrl: LOCAL_BACKEND_API_URL,
       });
-    }
-    throw error;
+    } else throw error;
   }
+  const saved = normalizeSavedStory(result.story);
+  cacheStory(token, saved);
+  return { story: saved };
 }
 
 /**

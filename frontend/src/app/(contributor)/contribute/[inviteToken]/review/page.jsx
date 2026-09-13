@@ -5,7 +5,8 @@
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { deletePhoto, deleteVoice, getContributorSummary, renameContributorVoice, saveContributorStory, submitContribution } from '@/lib/api.js';
+import { deletePhoto, deleteVoice, deleteContributorStory, updateContributorStory, getContributorSummary, renameContributorVoice, saveContributorStory, submitContribution } from '@/lib/api.js';
+import StoryReviewCard from '@/components/contributor/StoryReviewCard';
 import VoiceReviewCard from '@/components/contributor/VoiceReviewCard';
 import PhotoReviewGrid from '@/components/contributor/PhotoReviewGrid';
 import HeaderBrand from '@/components/ui-components/navs/header-brand';
@@ -62,7 +63,7 @@ export default function ReviewPage() {
       setIsLoading(true);
       setLoadError('');
       try {
-        const summary = await getContributorSummary(inviteToken, { requireFreshPhotos: true });
+        const summary = await getContributorSummary(inviteToken, { requireFreshContent: true });
         if (!isMounted) return;
         if (summary.contributor.status !== 'in_progress' || summary.contributor.submitted_at) {
           router.replace(`/contribute/${inviteToken}/submitted`);
@@ -72,14 +73,11 @@ export default function ReviewPage() {
           setPhotos(summary.photos || []);
           setVoice(summary.voice || []);
           setResponses(summary.responses || []);
+          setStories(summary.stories || []);
         }
       } catch (error) {
         if (isMounted) setLoadError(error instanceof Error ? error.message : 'Could not load your memories. Please try again.');
       }
-      try {
-        const storiesRaw = localStorage.getItem(`remember_stories:${inviteToken}`);
-        if (storiesRaw && isMounted) setStories(JSON.parse(storiesRaw));
-      } catch {}
       if (isMounted) setIsLoading(false);
     }
     load();
@@ -141,6 +139,22 @@ export default function ReviewPage() {
     if (saved) setEditingKey('');
   }
 
+  async function handleEditStory(story, changes) {
+    const saved = await runContentMutation(async () => {
+      const updated = await updateContributorStory(inviteToken, story, changes);
+      setStories((items) => items.map((item) => item.id === story.id ? updated : item));
+    }, 'Story saved.');
+    if (saved) setEditingKey('');
+  }
+
+  async function handleDeleteStory(story) {
+    if (editingKey) return;
+    await runContentMutation(async () => {
+      await deleteContributorStory(inviteToken, story);
+      setStories((items) => items.filter((item) => item.id !== story.id));
+    }, 'Story removed.');
+  }
+
   async function handleSubmit() {
     if (mutationRef.current || editingKey || isLoading || loadError || isLocked) return;
     mutationRef.current = true;
@@ -154,7 +168,7 @@ export default function ReviewPage() {
 
       await Promise.all(
         stories
-          .filter((story) => String(story?.title || story?.body || '').trim())
+          .filter((story) => !story.server_id && String(story?.title || story?.body || '').trim())
           .map((story) => saveContributorStory(inviteToken, contributorToken, story)),
       );
       await submitContribution(inviteToken, contributorToken);
@@ -254,34 +268,35 @@ export default function ReviewPage() {
                     <p className="text-body-2 text-r-secondary">No questionnaire answers added yet.</p>
                   )}
                 </SectionCard>
-                {stories.length > 0 ? (
-                  <div className="mt-6">
-                    <SectionCard title="Additional stories">
-                      <div className="flex flex-col gap-4">
-                        {stories.map((story) => (
-                          <div key={story.id} className="flex flex-col gap-1">
-                            <p className="text-body-2 font-medium text-r-text">{story.title}</p>
-                            <p className="whitespace-pre-wrap break-words text-body-2 text-r-secondary">
-                              {story.body}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </SectionCard>
-                  </div>
-                ) : null}
+                <div className="mt-[30px]">
+                  <h2 className="mb-5 text-h3 text-r-text">Additional stories</h2>
+                  {stories.length > 0 ? (
+                    <div className="flex flex-col gap-[30px]">
+                      {stories.map((story) => (
+                        <StoryReviewCard key={story.id} story={story}
+                          disabled={controlsDisabled || Boolean(editingKey && editingKey !== `story:${story.id}`)}
+                          editing={editingKey === `story:${story.id}`} saving={Boolean(pendingAction)}
+                          onEdit={() => { setEditingKey(`story:${story.id}`); setSubmitError(''); }}
+                          onCancel={() => { setEditingKey(''); setSubmitError(''); }}
+                          onSave={(changes) => handleEditStory(story, changes)}
+                          onDelete={() => handleDeleteStory(story)} />
+                      ))}
+                    </div>
+                  ) : <p className="text-body-2 text-r-muted">No additional stories added. You can submit without an additional story.</p>}
+                </div>
               </div>
             </>
           )}
 
           <p className="sr-only" role="status">{deletingPhotoId ? 'Removing photo…' : photoNotice}</p>
           <p className="sr-only" role="status">{pendingAction ? 'Saving changes…' : notice}</p>
-          {editingKey && <p className="mt-5 text-body-2 text-r-secondary">Save or cancel your edit before submitting.</p>}
+          {editingKey && !isLocked && <p className="mt-5 text-body-2 text-r-secondary">Save or cancel your edit before submitting.</p>}
           {submitError && (
             <p className="mt-6 rounded-2xl px-4 py-3 text-center text-body-2" style={{ backgroundColor: '#F5DDD6', color: 'var(--color-r-danger)' }} role="alert">
               {submitError}
             </p>
           )}
+          {isLocked && <Link href={`/contribute/${inviteToken}/submitted`} className="mt-4 text-center text-body-2 underline">Return to your submission</Link>}
 
           <div className="mt-12 grid grid-cols-1 gap-5 sm:mt-[100px] sm:grid-cols-2">
             <Link href={`/contribute/${inviteToken}/upload`}

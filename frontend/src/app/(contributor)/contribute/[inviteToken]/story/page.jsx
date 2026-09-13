@@ -91,6 +91,7 @@ export default function StoryPage() {
   const [interimText, setInterimText] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [saving, setSaving] = useState(false);
+  const storyIdRef = useRef(null);
   const [error, setError] = useState('');
 
   const [deceasedName] = useState(() => {
@@ -115,18 +116,16 @@ export default function StoryPage() {
   }
 
   async function handleContinue() {
+    if (saving) return;
     if (listening) toggleMic();
-    // if (!title.trim() && !body.trim()) {
-    //   setError('Please add a title or write something before continuing.');
-    //   return;
-    // }
     setSaving(true);
     setError('');
     try {
       const session = JSON.parse(localStorage.getItem(`remember_contributor_session:${inviteToken}`) || '{}');
       const contributorToken = session?.contributorToken || session?.contributorId;
+      storyIdRef.current ||= `story-${crypto.randomUUID()}`;
       const newStory = {
-        id: `story-${Date.now()}`,
+        id: storyIdRef.current,
         title: title.trim(),
         body: body.trim(),
         created_at: new Date().toISOString(),

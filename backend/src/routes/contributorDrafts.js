@@ -40,6 +40,78 @@ async function getContributorForInvite(supabase, req, res, requireDraft = true) 
 function createContributorDraftRouter(supabase) {
   const router = express.Router()
 
+  router.get('/:token/stories', async (req, res) => {
+    try {
+      const contributor = await getContributorForInvite(supabase, req, res, false)
+      if (!contributor) return
+      const { data, error } = await supabase.from('contributor_stories')
+        .select('id, client_story_id, title, body, created_at, updated_at')
+        .eq('contributor_id', contributor.id)
+        .eq('memorial_id', contributor.memorial_id)
+        .order('created_at', { ascending: true })
+      if (error) return res.status(400).json({ error: error.message })
+      res.json({ contributor, stories: data || [] })
+    } catch (error) {
+      res.status(500).json({ error: error.message })
+    }
+  })
+
+  router.patch('/:token/stories/:storyId', async (req, res) => {
+    try {
+      const contributor = await getContributorForInvite(supabase, req, res)
+      if (!contributor) return
+      const changes = {}
+      for (const field of ['title', 'body']) {
+        if (Object.hasOwn(req.body, field)) {
+          if (typeof req.body[field] !== 'string') return res.status(400).json({ error: `Story ${field} must be text.` })
+          changes[field] = req.body[field].trim()
+        }
+      }
+      if (!Object.keys(changes).length) return res.status(400).json({ error: 'Provide a story title or text to update.' })
+      const { data: story, error: lookupError } = await supabase.from('contributor_stories')
+        .select('id, title, body')
+        .eq('id', req.params.storyId)
+        .eq('contributor_id', contributor.id)
+        .eq('memorial_id', contributor.memorial_id)
+        .single()
+      if (lookupError || !story) return res.status(404).json({ error: 'Story not found' })
+      const updated = { ...story, ...changes }
+      if (!String(updated.title || '').trim() && !String(updated.body || '').trim()) {
+        return res.status(400).json({ error: 'Please add a story title or text.' })
+      }
+      const { data, error } = await supabase.from('contributor_stories')
+        .update({ ...changes, updated_at: new Date().toISOString() })
+        .eq('id', story.id)
+        .eq('contributor_id', contributor.id)
+        .eq('memorial_id', contributor.memorial_id)
+        .select('id, client_story_id, title, body, created_at, updated_at')
+        .maybeSingle()
+      if (error) return res.status(400).json({ error: error.message })
+      if (!data) return res.status(404).json({ error: 'Story not found' })
+      res.json({ story: data })
+    } catch (error) {
+      res.status(500).json({ error: error.message })
+    }
+  })
+
+  router.delete('/:token/stories/:storyId', async (req, res) => {
+    try {
+      const contributor = await getContributorForInvite(supabase, req, res)
+      if (!contributor) return
+      const { data, error } = await supabase.from('contributor_stories').delete()
+        .eq('id', req.params.storyId)
+        .eq('contributor_id', contributor.id)
+        .eq('memorial_id', contributor.memorial_id)
+        .select('id')
+        .maybeSingle()
+      if (error) return res.status(400).json({ error: error.message })
+      if (!data) return res.status(404).json({ error: 'Story not found' })
+      res.json({ deleted: true })
+    } catch (error) {
+      res.status(500).json({ error: error.message })
+    }
+  })
+
   router.get('/:token/voice', async (req, res) => {
     try {
       const contributor = await getContributorForInvite(supabase, req, res, false)
