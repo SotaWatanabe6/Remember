@@ -12,7 +12,7 @@
 import { mockMemorials } from "@/data/mockMemorials.js";
 import { getSupabaseClient } from "@/lib/supabaseClient.js";
 import { normalizeShareUrl } from "@/lib/copyToClipboard.js";
-import { getStore, removePhoto } from "@/lib/contributionStore";
+import { getStore, removePhoto, removeVoice, updateVoiceTitle } from "@/lib/contributionStore";
 import { CONTRIBUTOR_QUESTIONNAIRE_QUESTIONS, formatQuestionPrompt, getQuestionSetForContributorRelationship } from "@/lib/contribute/questionnaireQuestions.js";
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -1470,13 +1470,45 @@ export async function deletePhoto(token, assetId) {
 /**
  * DELETE /contribute/:token/voice/:recordingId
  * Removes a voice recording before submission. Also removes from localStorage.
- * TODO: Replace with real fetch() on Day 9.
  */
 export async function deleteVoice(token, recordingId) {
-  await delay(MOCK_DELAY);
+  if (!isLocalMockInviteToken(token)) {
+    await requestJson(`/contribute/${encodeURIComponent(token)}/voice/${encodeURIComponent(recordingId)}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ contributor_token: requireContributorToken(token) }),
+    });
+  }
   const existing = readStoredVoice(token);
   writeStoredVoice(token, existing.filter((r) => r.id !== recordingId));
+  removeVoice(recordingId);
   return { success: true };
+}
+
+function requireContributorToken(token) {
+  const session = readContributorSession(token);
+  const contributorToken = session?.contributorToken || session?.contributorId;
+  if (!contributorToken) {
+    throw new ApiRequestError('Please return to your invitation and enter your contributor details.', {
+      code: 'missing_contributor_token',
+    });
+  }
+  return contributorToken;
+}
+
+export async function renameContributorVoice(token, recordingId, title) {
+  const contributorTitle = String(title || '').trim();
+  if (!contributorTitle) throw new ApiRequestError('Please add a title for this recording.');
+  let recording = { id: recordingId, contributor_title: contributorTitle };
+  if (!isLocalMockInviteToken(token)) {
+    const data = await requestJson(`/contribute/${encodeURIComponent(token)}/voice/${encodeURIComponent(recordingId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ contributor_token: requireContributorToken(token), contributor_title: contributorTitle }),
+    });
+    recording = data.recording;
+  }
+  writeStoredVoice(token, readStoredVoice(token).map((item) => item.id === recordingId ? { ...item, ...recording } : item));
+  updateVoiceTitle(recordingId, recording.contributor_title);
+  return recording;
 }
 
 /**
@@ -1557,9 +1589,17 @@ export async function getContributorSummary(token, { requireFreshPhotos = false 
     }));
   }
 
-  // Same for voice
+  // Review uses saved recordings, including fresh playback URLs, rather than
+  // stale browser state that could resurrect a deleted or renamed recording.
   let voice;
-  if (store.voice.length > 0) {
+  if (requireFreshPhotos && !isLocalMockInviteToken(token)) {
+    const data = await requestJson(
+      `/contribute/${encodeURIComponent(token)}/voice?contributor_token=${encodeURIComponent(contributorToken)}`,
+    );
+    voice = data.voice || [];
+    reviewContributor = data.contributor;
+    writeStoredVoice(token, voice);
+  } else if (store.voice.length > 0) {
     voice = store.voice.map((r) => ({
       id: r.id,
       contributor_title: r.title,

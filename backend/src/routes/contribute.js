@@ -8,6 +8,9 @@ const { extractAudioDuration } = require('../services/duration')
 const { extractImageMetadata } = require('../services/exif')
 const { getQuestionSetForContributorRelationship } = require('../lib/questionnaireQuestions')
 const { formatPersonName } = require('../lib/formatName')
+const { createContributorDraftRouter } = require('./contributorDrafts')
+
+router.use(createContributorDraftRouter(supabase))
 
 const PHOTO_STORAGE_BUCKET =
   process.env.CONTRIBUTOR_PHOTO_BUCKET ||
