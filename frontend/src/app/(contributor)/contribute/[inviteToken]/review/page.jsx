@@ -4,7 +4,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { deletePhoto, deleteVoice, deleteContributorStory, updateContributorStory, getContributorSummary, renameContributorVoice, saveContributorStory, submitContribution } from '@/lib/api.js';
 import StoryReviewCard from '@/components/contributor/StoryReviewCard';
 import VoiceReviewCard from '@/components/contributor/VoiceReviewCard';
@@ -40,13 +40,14 @@ export default function ReviewPage() {
   const [photos, setPhotos] = useState([]);
   const [voice, setVoice] = useState([]);
   const [stories, setStories] = useState([]);
-  const [responses, setResponses] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [loadError, setLoadError] = useState('');
   const [reload, setReload] = useState(0);
-  const [activeTab, setActiveTab] = useState('photos');
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(() => ['photos', 'voice', 'stories'].includes(requestedTab) ? requestedTab : 'photos');
   const [deletingPhotoId, setDeletingPhotoId] = useState(null);
   const [photoNotice, setPhotoNotice] = useState('');
   const [isLocked, setIsLocked] = useState(false);
@@ -72,7 +73,6 @@ export default function ReviewPage() {
         if (isMounted) {
           setPhotos(summary.photos || []);
           setVoice(summary.voice || []);
-          setResponses(summary.responses || []);
           setStories(summary.stories || []);
         }
       } catch (error) {
@@ -252,38 +252,19 @@ export default function ReviewPage() {
                 ) : <SectionCard title="Uploaded audio"><p className="text-body-2 text-r-muted">No voice recordings added. You can submit without audio.</p></SectionCard>}
               </div>
               <div id="review-panel-stories" role="tabpanel" aria-labelledby="review-tab-stories" hidden={activeTab !== 'stories'}>
-                <SectionCard title="Your questionnaire answers">
-                  {responses.length > 0 ? (
-                    <div className="flex flex-col gap-8">
-                      {responses.map((response) => (
-                        <article key={response.question_id} className="min-w-0">
-                          <h3 className="text-[20px] leading-7 text-r-text">{response.question_text}</h3>
-                          <p className="mt-3 whitespace-pre-wrap break-words text-body-2 leading-7 text-r-secondary">
-                            {response.response_text}
-                          </p>
-                        </article>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-body-2 text-r-secondary">No questionnaire answers added yet.</p>
-                  )}
-                </SectionCard>
-                <div className="mt-[30px]">
-                  <h2 className="mb-5 text-h3 text-r-text">Additional stories</h2>
-                  {stories.length > 0 ? (
-                    <div className="flex flex-col gap-[30px]">
-                      {stories.map((story) => (
-                        <StoryReviewCard key={story.id} story={story}
-                          disabled={controlsDisabled || Boolean(editingKey && editingKey !== `story:${story.id}`)}
-                          editing={editingKey === `story:${story.id}`} saving={Boolean(pendingAction)}
-                          onEdit={() => { setEditingKey(`story:${story.id}`); setSubmitError(''); }}
-                          onCancel={() => { setEditingKey(''); setSubmitError(''); }}
-                          onSave={(changes) => handleEditStory(story, changes)}
-                          onDelete={() => handleDeleteStory(story)} />
-                      ))}
-                    </div>
-                  ) : <p className="text-body-2 text-r-muted">No additional stories added. You can submit without an additional story.</p>}
-                </div>
+                {stories.length > 0 ? (
+                  <div className="flex flex-col gap-[30px]">
+                    {stories.map((story) => (
+                      <StoryReviewCard key={story.id} story={story}
+                        disabled={controlsDisabled || Boolean(editingKey && editingKey !== `story:${story.id}`)}
+                        editing={editingKey === `story:${story.id}`} saving={Boolean(pendingAction)}
+                        onEdit={() => { setEditingKey(`story:${story.id}`); setSubmitError(''); }}
+                        onCancel={() => { setEditingKey(''); setSubmitError(''); }}
+                        onSave={(changes) => handleEditStory(story, changes)}
+                        onDelete={() => handleDeleteStory(story)} />
+                    ))}
+                  </div>
+                ) : <p className="text-body-2 text-r-muted">No stories added. Choose Story (text) from Upload more to share one.</p>}
               </div>
             </>
           )}
