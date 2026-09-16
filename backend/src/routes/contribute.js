@@ -8,6 +8,9 @@ const { extractAudioDuration } = require('../services/duration')
 const { extractImageMetadata } = require('../services/exif')
 const { getQuestionSetForContributorRelationship } = require('../lib/questionnaireQuestions')
 const { formatPersonName } = require('../lib/formatName')
+const { createContributorDraftRouter, getContributorForInvite } = require('./contributorDrafts')
+
+router.use(createContributorDraftRouter(supabase))
 
 const PHOTO_STORAGE_BUCKET =
   process.env.CONTRIBUTOR_PHOTO_BUCKET ||
@@ -462,26 +465,8 @@ router.post('/:token/stories', async (req, res) => {
     if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
     if (!storyTitle && !storyBody) return res.status(400).json({ error: 'Story title or body is required' })
 
-    const { data: invite, error: inviteError } = await supabase
-      .from('invite_links')
-      .select('id, memorial_id, is_active')
-      .eq('token', req.params.token)
-      .single()
-
-    if (inviteError || !invite || !invite.is_active) {
-      return res.status(410).json({ error: 'This link is no longer active.' })
-    }
-
-    const { data: contributor } = await supabase
-      .from('contributors')
-      .select('id, memorial_id')
-      .eq('id', contributor_token)
-      .single()
-
-    if (!contributor) return res.status(404).json({ error: 'Contributor not found' })
-    if (contributor.memorial_id !== invite.memorial_id) {
-      return res.status(403).json({ error: 'Contributor does not belong to this invitation.' })
-    }
+    const contributor = await getContributorForInvite(supabase, req, res)
+    if (!contributor) return
 
     const payload = {
       memorial_id: contributor.memorial_id,
