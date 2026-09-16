@@ -44,9 +44,19 @@ function fixture({ fail = false, savedStories = [], cachedStories = [], withSess
       return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
     },
   };
-  vm.runInNewContext(`${source}\nthis.api = { getContributorSummary, saveContributorStory, updateContributorStory, deleteContributorStory, renameContributorVoice, deleteVoice };`, context);
+  vm.runInNewContext(`${source}\nthis.api = { getContributorStories, getContributorSummary, saveContributorStory, updateContributorStory, deleteContributorStory, renameContributorVoice, deleteVoice };`, context);
   return { api: context.api, token, storage, memory, requests, stories: () => JSON.parse(storage.getItem(`remember_stories:${token}`)) };
 }
+
+test('story entry fetches saved stories and contributor status without loading other media', async () => {
+  const f = fixture({ savedStories: [{ id: 'server-id', client_story_id: 'draft-id', title: 'A memory', body: 'Text' }] });
+  const result = await f.api.getContributorStories(f.token);
+  assert.equal(result.contributor.status, 'in_progress');
+  assert.equal(result.stories[0].server_id, 'server-id');
+  assert.equal(result.stories[0].id, 'draft-id');
+  assert.equal(f.requests.length, 1);
+  assert.ok(f.requests[0].url.includes('/stories?contributor_token=owner'));
+});
 
 test('story creation caches both stable client and server identifiers', async () => {
   const f = fixture();

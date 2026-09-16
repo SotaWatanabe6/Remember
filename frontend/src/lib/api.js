@@ -1610,16 +1610,9 @@ export async function getContributorSummary(token, { requireFreshPhotos = false,
 
   let stories = readStoredStories(token);
   if (freshReview && !isLocalMockInviteToken(token)) {
-    const data = await requestJson(
-      `/contribute/${encodeURIComponent(token)}/stories?contributor_token=${encodeURIComponent(contributorToken)}`,
-    );
-    const savedStories = (data.stories || []).map(normalizeSavedStory);
-    const savedIds = new Set(savedStories.map((story) => story.id));
-    // Keep unsaved drafts (including legacy drafts with no server ID). Saved
-    // rows always win; cached saved rows absent on the server were deleted.
-    stories = [...savedStories, ...stories.filter((story) => !story.server_id && !savedIds.has(story.id))];
+    const data = await getContributorStories(token);
+    stories = data.stories;
     reviewContributor = data.contributor;
-    writeStoredStories(token, stories);
   }
 
   const contributorId = session?.contributorId ?? contributorToken ?? null;
@@ -1663,6 +1656,26 @@ export async function getContributorSummary(token, { requireFreshPhotos = false,
 
 function normalizeSavedStory(story) {
   return { ...story, id: story.client_story_id || story.id, server_id: story.id };
+}
+
+// Story entry needs only stories and the submission lock, not signed URLs for
+// every photo and audio recording in the full review summary.
+export async function getContributorStories(token) {
+  const cachedStories = readStoredStories(token);
+  if (isLocalMockInviteToken(token)) {
+    const session = readContributorSession(token);
+    return { stories: cachedStories, contributor: { status: session?.status || 'in_progress', submitted_at: session?.submittedAt || null } };
+  }
+  const contributorToken = requireContributorToken(token);
+  const data = await requestJson(
+    `/contribute/${encodeURIComponent(token)}/stories?contributor_token=${encodeURIComponent(contributorToken)}`,
+  );
+  const savedStories = (data.stories || []).map(normalizeSavedStory);
+  const savedIds = new Set(savedStories.map((story) => story.id));
+  // Preserve unsaved legacy drafts; never restore a deleted, previously saved row.
+  const stories = [...savedStories, ...cachedStories.filter((story) => !story.server_id && !savedIds.has(story.id))];
+  writeStoredStories(token, stories);
+  return { contributor: data.contributor, stories };
 }
 
 function cacheStory(token, story) {
