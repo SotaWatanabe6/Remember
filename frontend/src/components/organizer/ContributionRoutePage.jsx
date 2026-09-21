@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import ContributionsPanel from "@/components/organizer/ContributionsPanel.jsx";
 
-export default function ContributionRoutePage({ initialView = "contributors" }) {
+export default function ContributionRoutePage() {
   const { id } = useParams();
 
   return (
@@ -26,11 +26,11 @@ export default function ContributionRoutePage({ initialView = "contributors" }) 
         <div className="mb-8">
           <p className="text-[15px] leading-5 text-r-secondary">Organizer layer</p>
           <h1 className="mt-2 text-[42px] leading-[46px] text-r-text [font-family:var(--font-family-display)]">
-            Contributions
+            Approve Contributions
           </h1>
         </div>
 
-        <ContributionsPanel memorialId={id} initialView={initialView} />
+        <ContributionsPanel memorialId={id} />
       </section>
     </main>
   );

@@ -16,6 +16,7 @@ import ProcessingTextSequence from "@/components/dashboard/ProcessingTextSequenc
 import { getAuthToken } from "@/lib/api.js";
 import MemorialCoverImage from "@/components/memorial/MemorialCoverImage.jsx";
 import ContributionsPanel from "@/components/organizer/ContributionsPanel.jsx";
+import { APPROVE_TAB, ARCHIVE_TAB, OUTPUTS_TAB, getManageTabs, resolveManageTab } from "@/lib/organizer/contributionReview";
 
 // ─── Generation constants ─────────────────────────────────────────────────────
 
@@ -243,27 +244,26 @@ function MemorialHeader({ memorial, generated, inviteToken, onShare, contributor
   );
 }
 
-// ─── Tab bar (Blessing's Boska sizing) ───────────────────────────────────────
+// ─── Tab bar (Figma "menu tab": equal-width, bold + 2px underline when active) ─
 
-const MAIN_TABS = ['Archive', 'Contributions', 'Outputs'];
-
-function TabBar({ active, onChange }) {
+function TabBar({ tabs, active, onChange }) {
   return (
-    <div className="grid grid-cols-3 gap-6">
-      {MAIN_TABS.map((tab) => (
-        <button
-          key={tab}
-          onClick={() => onChange(tab)}
-          className={`border-b pb-3 text-center transition-colors text-[24px] font-medium leading-[24px] ${
-            active === tab
-              ? 'border-r-text text-r-text'
-              : 'border-r-border text-r-muted hover:text-r-text'
-          }`}
-          style={{ fontFamily: 'var(--font-family-display)' }}
-        >
-          {tab}
-        </button>
-      ))}
+    <div className="flex gap-5">
+      {tabs.map((tab) => {
+        const isActive = active === tab;
+        return (
+          <button
+            key={tab}
+            onClick={() => onChange(tab)}
+            className={`flex h-10 flex-1 items-center justify-center text-center text-[24px] leading-none text-r-text transition-colors ${
+              isActive ? 'border-b-2 border-r-text font-bold' : 'border-b border-r-text/60 font-medium hover:border-r-text'
+            }`}
+            style={{ fontFamily: 'var(--font-family-display)' }}
+          >
+            {tab}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -385,7 +385,7 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
         </p>
         <p className="text-r-secondary text-sm mt-1 max-w-sm">
           {approvedContributorCount === 0
-            ? 'Approve a submission from Awaiting approval in the Contributions tab and it will appear here.'
+            ? 'Approve a submission in the Approve Contributions tab and it will appear here.'
             : 'The approved contributors have not shared any photos, recordings, or written memories yet.'}
         </p>
       </div>
@@ -500,9 +500,9 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
   );
 }
 
-// ─── Contributions Tab (Blessing's filter/sort/larger cards) ─────────────────
+// ─── Approve Contributions Tab (only mounted while something is pending) ─────
 
-function ContributionsTab({ memorialId, contributorslist, loading, error, onRetry, onContributorsChange }) {
+function ApproveContributionsTab({ memorialId, contributorslist, loading, error, onRetry, onContributorsChange }) {
   return (
     <ContributionsPanel
       memorialId={memorialId}
@@ -511,7 +511,6 @@ function ContributionsTab({ memorialId, contributorslist, loading, error, onRetr
       error={error}
       onRetry={onRetry}
       onContributorsChange={onContributorsChange}
-      initialView="awaiting"
     />
   );
 }
@@ -1042,7 +1041,7 @@ function GenerateConfirmModal({ onConfirm, onCancel, subjectName }) {
 
 export default function MemorialOutputPage() {
   const { id } = useParams();
-  const [activeTab, setActiveTab] = useState('Outputs');
+  const [activeTab, setActiveTab] = useState(OUTPUTS_TAB);
   const [output, setOutput] = useState(null);
   const [outputLoading, setOutputLoading] = useState(true);
   const [outputError, setOutputError] = useState(null);
@@ -1215,10 +1214,15 @@ export default function MemorialOutputPage() {
     : contributorsError
       ? "Contributor data could not be loaded, so generation is unavailable right now."
       : awaitingApprovalCount > 0
-        ? `Review the ${awaitingApprovalCount} contribution${awaitingApprovalCount === 1 ? "" : "s"} awaiting approval in the Contributions tab before generating.`
+        ? `Review the ${awaitingApprovalCount} contribution${awaitingApprovalCount === 1 ? "" : "s"} awaiting approval in the Approve Contributions tab before generating.`
         : approvedContributionCount === 0
           ? "Generation is available after you approve at least one contribution."
           : "";
+
+  // NS-7: Approve Contributions only exists while a submission is pending.
+  // Approving or deleting the last one drops the organizer back to Archive.
+  const manageTabs = getManageTabs(contributors);
+  const currentTab = resolveManageTab(activeTab, manageTabs);
 
   useEffect(() => { queueMicrotask(loadContributors); }, [loadContributors]);
   useEffect(() => { queueMicrotask(loadOutput); }, [loadOutput]);
@@ -1254,11 +1258,11 @@ export default function MemorialOutputPage() {
             disabledMessage={generationDisabledMessage}
             generating={generating}
             onGenerateClick={handleGenerateClick} />
-          <TabBar active={activeTab} onChange={setActiveTab} />
+          <TabBar tabs={manageTabs} active={currentTab} onChange={setActiveTab} />
           <div>
-            {activeTab === 'Archive' && <ArchiveTab memorialId={memorialId} contributors={contributors} contributorsLoading={contributorsLoading} />}
-            {activeTab === 'Contributions' && (
-              <ContributionsTab
+            {currentTab === ARCHIVE_TAB && <ArchiveTab memorialId={memorialId} contributors={contributors} contributorsLoading={contributorsLoading} />}
+            {currentTab === APPROVE_TAB && (
+              <ApproveContributionsTab
                 memorialId={memorialId}
                 contributorslist={contributors}
                 loading={contributorsLoading}
@@ -1267,7 +1271,7 @@ export default function MemorialOutputPage() {
                 onContributorsChange={setContributors}
               />
             )}
-            {activeTab === 'Outputs' && (
+            {currentTab === OUTPUTS_TAB && (
               <OutputsTab
                 memorial={memorial}
                 contributors={contributors}
