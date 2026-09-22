@@ -5,10 +5,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
-  FileText,
-  ImageIcon,
   Loader2,
-  Mic,
   Play,
   Search,
   Trash2,
@@ -23,6 +20,12 @@ import {
   getMemorialContributors,
   updateMemorialContributorStatus,
 } from "@/services/contributorService";
+import {
+  getPendingSubmissionSections,
+  getSubmissionSubTabs,
+  isAwaitingReview,
+  resolveSubTab,
+} from "@/lib/organizer/contributionReview";
 
 function formatDate(value, fallback = "No date provided") {
   if (!value) return fallback;
@@ -46,15 +49,6 @@ function getRelationship(contributor) {
   return contributor?.relationship_label || contributor?.relationship_type || "No relationship";
 }
 
-function isAwaitingReview(contributor) {
-  return String(contributor?.status || "").toLowerCase() === "submitted";
-}
-
-function getCountLabel(count) {
-  const safeCount = Number.isFinite(Number(count)) ? Number(count) : 0;
-  return `${safeCount} contribution${safeCount === 1 ? "" : "s"}`;
-}
-
 function buildSearchText(contributor) {
   return [
     contributor?.name,
@@ -62,30 +56,6 @@ function buildSearchText(contributor) {
     contributor?.relationship_type,
     contributor?.status,
   ].filter(Boolean).join(" ").toLowerCase();
-}
-
-function StatusBadge({ status }) {
-  const key = String(status || "in_progress").toLowerCase();
-  const label = key === "approved"
-    ? "Approved"
-    : key === "submitted"
-      ? "Awaiting approval"
-      : key === "rejected"
-        ? "Rejected"
-        : "In progress";
-  const className = key === "approved"
-    ? "bg-[#DCE3C6] text-[#5C6549]"
-    : key === "submitted"
-      ? "bg-[#F1D6C8] text-[#7A553F]"
-      : key === "rejected"
-        ? "bg-[#E7CBC6] text-[#794D45]"
-        : "bg-[#E7E0D6] text-[#665E52]";
-
-  return (
-    <span className={`inline-flex min-h-8 items-center rounded-full px-4 text-[13px] leading-4 ${className}`}>
-      {label}
-    </span>
-  );
 }
 
 function TabLoading() {
@@ -121,45 +91,6 @@ function TabEmpty({ title, message }) {
       <h3 className="text-[24px] leading-[28px] text-r-text [font-family:var(--font-family-display)]">{title}</h3>
       <p className="mx-auto mt-3 max-w-xl text-[16px] leading-6 text-r-secondary">{message}</p>
     </div>
-  );
-}
-
-function SelectControl({ value, onChange, children, className = "" }) {
-  return (
-    <div className={`relative ${className}`}>
-      <select
-        onChange={onChange}
-        value={value}
-        className="h-[56px] w-full appearance-none rounded-[16px] border border-r-border bg-r-card px-5 pr-14 text-[20px] leading-[22px] text-r-text outline-none [font-family:var(--font-family-display)]"
-      >
-        {children}
-      </select>
-      <span className="pointer-events-none absolute right-5 top-1/2 size-0 -translate-y-1/2 border-l-[9px] border-r-[9px] border-t-[14px] border-l-transparent border-r-transparent border-t-r-text" />
-    </div>
-  );
-}
-
-function ContributorCard({ contributor }) {
-  return (
-    <article className="min-h-[260px] rounded-[18px] border border-r-border bg-r-card px-8 py-8">
-      <div className="flex items-start justify-between gap-4">
-        <h3 className="min-w-0 text-[28px] leading-[32px] text-r-text [font-family:var(--font-family-display)]">
-          {getContributorName(contributor)}
-        </h3>
-        <StatusBadge status={contributor.status} />
-      </div>
-      <p className="mt-6 text-[16px] leading-[20px] text-r-secondary">
-        {getCountLabel(contributor.contribution_count)}
-      </p>
-      <p className="mt-4 text-[16px] leading-[20px] text-r-secondary">
-        Last submitted {formatDate(contributor.submitted_at)}
-      </p>
-      <div className="mt-6 flex flex-wrap gap-3">
-        <span className="inline-flex min-h-[44px] items-center justify-center rounded-[14px] bg-r-shape px-5 text-[15px] leading-[18px] text-[#FBF9F6]">
-          {getRelationship(contributor)}
-        </span>
-      </div>
-    </article>
   );
 }
 
@@ -202,191 +133,137 @@ function DeleteItemButton({ onDelete, label = "Delete" }) {
   )
 }
 
-function PhotoSection({ contributor, photos, submittedDate, actions, onDeletePhoto }) {
-  if (!photos.length) return null
-
+// Figma "archive_button" pill: outlined when idle, filled #9E9384 when active.
+function SubTabPills({ tabs, active, onChange }) {
   return (
-    <section className="rounded-[18px] border border-r-border bg-[#F6EFE7] p-6 md:p-7">
-      <div className="grid gap-7 lg:grid-cols-[260px_1fr]">
-        <div className="flex items-start gap-4">
-          <div className="mt-1 rounded-[4px] bg-[#4B463E] p-2 text-[#F6EFE7]">
-            <ImageIcon size={24} />
-          </div>
-          <div>
-            <p className="text-[16px] leading-[20px] text-[#5F5A52]">
-              {getContributorName(contributor)} added {photos.length} photo{photos.length === 1 ? "" : "s"}
-            </p>
-            <p className="mt-3 text-[14px] leading-[18px] text-[#5F5A52]">Submitted {submittedDate}</p>
-          </div>
-        </div>
-
-        <div>
-          <div className="grid max-w-[620px] grid-cols-2 gap-4 sm:grid-cols-3">
-            {photos.map((photo) => (
-              <figure key={photo.id} className="group overflow-hidden rounded-[8px] bg-[#D8C8AF]">
-                {photo.photo_url || photo.url ? (
-                  <img
-                    src={photo.photo_url || photo.url}
-                    alt={photo.caption || photo.file_name || "Contributor photo"}
-                    className="aspect-square w-full object-cover"
-                  />
-                ) : (
-                  <div className="aspect-square w-full" />
-                )}
-                {photo.caption && (
-                  <figcaption className="px-3 py-2 text-[13px] leading-4 text-[#5F5A52]">{photo.caption}</figcaption>
-                )}
-                <div className="flex justify-end px-3 pb-2">
-                  <DeleteItemButton
-                    label="Remove"
-                    onDelete={() => onDeletePhoto?.(photo.id)}
-                  />
-                </div>
-              </figure>
-            ))}
-          </div>
-          {/* <div className="mt-6 flex justify-end">{actions}</div> */}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function VoiceSection({ contributor, voices, submittedDate, actions, onDeleteVoice }) {
-  if (!voices.length) return null
-
-  return (
-    <section className="rounded-[18px] border border-r-border bg-[#F6EFE7] p-6 md:p-7">
-      <div className="grid gap-7 lg:grid-cols-[260px_1fr_auto]">
-        <div className="flex items-start gap-4">
-          <Mic className="mt-1 text-[#3F3A33]" size={28} />
-          <div>
-            <p className="text-[16px] leading-[20px] text-[#5F5A52]">
-              {getContributorName(contributor)} added {voices.length} audio recording{voices.length === 1 ? "" : "s"}
-            </p>
-            <p className="mt-3 text-[14px] leading-[18px] text-[#5F5A52]">Submitted {submittedDate}</p>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          {voices.map((voice) => (
-            <article key={voice.id} className="flex flex-col gap-3">
-              <div className="flex items-start justify-between gap-4">
-                <h3 className="text-[26px] leading-[30px] text-r-text [font-family:var(--font-family-display)]">
-                  {voice.contributor_title || voice.file_name || "Voice recording"}
-                </h3>
-                <DeleteItemButton
-                  label="Remove"
-                  onDelete={() => onDeleteVoice?.(voice.id)}
-                />
-              </div>
-              {voice.audio_url || voice.url ? (
-                <audio controls src={voice.audio_url || voice.url} className="w-full max-w-[520px]" />
-              ) : (
-                <div className="flex items-center gap-5">
-                  <span className="flex size-[48px] items-center justify-center rounded-full bg-[#3F3A33] text-[#F6EFE7]">
-                    <Play size={20} fill="currentColor" />
-                  </span>
-                  <span className="text-[15px] text-[#5F5A52]">Audio preview unavailable</span>
-                </div>
-              )}
-              {(voice.key_quote || voice.transcript_text) && (
-                <p className="max-w-[760px] text-[18px] italic leading-[28px] text-[#5F5A52]">
-                  &quot;{voice.key_quote || voice.transcript_text}&quot;
-                </p>
-              )}
-            </article>
-          ))}
-        </div>
-
-        {/* <div className="self-end">{actions}</div> */}
-      </div>
-    </section>
-  )
-}
-
-function ResponsesSection({ contributor, responses, submittedDate, actions, onDeleteResponse }) {
-  const savedResponses = responses.filter((r) => String(r.answer_text || '').trim())
-  if (!savedResponses.length) return null
-
-  return (
-    <section className="rounded-[18px] border border-r-border bg-[#F6EFE7] p-6 md:p-7">
-      <div className="grid gap-7 lg:grid-cols-[260px_1fr_auto]">
-        <div className="flex items-start gap-4">
-          <FileText className="mt-1 text-[#3F3A33]" size={28} />
-          <div>
-            <p className="text-[16px] leading-[20px] text-[#5F5A52]">
-              {getContributorName(contributor)} answered {savedResponses.length} question{savedResponses.length === 1 ? '' : 's'}
-            </p>
-            <p className="mt-3 text-[14px] leading-[18px] text-[#5F5A52]">Submitted {submittedDate}</p>
-          </div>
-        </div>
-        <div className="space-y-6">
-          {savedResponses.map((response) => (
-            <article key={response.id} className="flex flex-col gap-2">
-              <div className="flex items-start justify-between gap-4">
-                <p className="text-[14px] font-medium leading-[18px] text-[#5F5A52]">
-                  {response.question_text || response.question_id || 'Question'}
-                </p>
-                <DeleteItemButton
-                  label="Remove"
-                  onDelete={() => onDeleteResponse?.(response.id)}
-                />
-              </div>
-              <p className="text-[18px] leading-[28px] text-r-text">
-                {response.answer_text}
-              </p>
-            </article>
-          ))}
-        </div>
-        {/* <div className="self-end">{actions}</div> */}
-      </div>
-    </section>
-  )
-}
-
-function StorySection({ contributor, stories, submittedDate, onDeleteStory }) {
-  const savedStories = stories.filter((story) => String(story.title || story.body || "").trim());
-  if (!savedStories.length) return null;
-
-  return (
-    <section className="rounded-[18px] border border-r-border bg-[#F6EFE7] p-6 md:p-7">
-      <div className="grid gap-7 lg:grid-cols-[260px_1fr_auto]">
-        <div className="flex items-start gap-4">
-          <FileText className="mt-1 text-[#3F3A33]" size={28} />
-          <div>
-            <p className="text-[16px] leading-[20px] text-[#5F5A52]">
-              {getContributorName(contributor)} added {savedStories.length} stor{savedStories.length === 1 ? "y" : "ies"}
-            </p>
-            <p className="mt-3 text-[14px] leading-[18px] text-[#5F5A52]">Submitted {submittedDate}</p>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          {savedStories.map((story) => (
-            <article key={story.id || story.client_story_id} className="flex flex-col gap-2">
-              <div className="flex items-start justify-between gap-4">
-                {story.title && (
-                  <h3 className="text-[24px] leading-[30px] text-r-text [font-family:var(--font-family-display)]">
-                    {story.title}
-                  </h3>
-                )}
-                <DeleteItemButton
-                  label="Remove"
-                  onDelete={() => onDeleteStory?.(story.id)}
-                />
-              </div>
-              {story.body && (
-                <p className="text-[18px] leading-[28px] text-[#5F5A52]">
-                  {story.body}
-                </p>
-              )}
-            </article>
-          ))}
-        </div>
-      </div>
-    </section>
+    <div className="flex flex-wrap gap-5" role="tablist" aria-label="Submission content">
+      {tabs.map((tab) => {
+        const isActive = tab.key === active;
+        return (
+          <button
+            key={tab.key}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onChange(tab.key)}
+            className={`flex h-[50px] min-w-[160px] items-center justify-center rounded-full border border-r-muted px-7 text-[24px] italic leading-none transition [font-family:var(--font-family-display)] ${
+              isActive ? "bg-[#9E9384] text-r-modal" : "text-r-muted hover:text-r-text"
+            }`}
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
   );
+}
+
+// Figma "Awaiting Approval/Photos": 3-up grid of 3:2 tiles.
+function PhotoSection({ photos, onDeletePhoto }) {
+  return (
+    <div className="grid grid-cols-2 gap-5 sm:grid-cols-3">
+      {photos.map((photo) => (
+        <figure key={photo.id} className="group overflow-hidden rounded-[8px] bg-[#D8C8AF]">
+          {photo.photo_url || photo.url ? (
+            <img
+              src={photo.photo_url || photo.url}
+              alt={photo.caption || photo.file_name || "Contributor photo"}
+              className="aspect-[3/2] w-full object-cover"
+            />
+          ) : (
+            <div className="aspect-[3/2] w-full" />
+          )}
+          <div className="flex items-center justify-between gap-3 px-3 py-2">
+            <figcaption className="truncate text-[13px] leading-4 text-[#5F5A52]">{photo.caption || ""}</figcaption>
+            <DeleteItemButton label="Remove" onDelete={() => onDeletePhoto?.(photo.id)} />
+          </div>
+        </figure>
+      ))}
+    </div>
+  )
+}
+
+// Shared card shell for the Voice / Stories / Q&A sub-tabs (Figma bordered row).
+function SubmissionCard({ title, date, children, onDelete }) {
+  return (
+    <article className="grid gap-6 rounded-[10px] border border-r-muted p-6 md:grid-cols-[250px_1fr] md:p-10">
+      <div className="flex flex-col gap-2">
+        <h3 className="text-[24px] leading-[28px] text-r-secondary [font-family:var(--font-family-display)]">{title}</h3>
+        <p className="text-[12px] leading-4 text-r-secondary">{date}</p>
+        <div className="mt-2">
+          <DeleteItemButton label="Remove" onDelete={onDelete} />
+        </div>
+      </div>
+      <div className="min-w-0">{children}</div>
+    </article>
+  );
+}
+
+function VoiceSection({ voices, submittedDate, onDeleteVoice }) {
+  return (
+    <div className="flex flex-col gap-5">
+      {voices.map((voice) => (
+        <SubmissionCard
+          key={voice.id}
+          title={voice.contributor_title || voice.file_name || "Voice recording"}
+          date={formatDate(voice.created_at, submittedDate)}
+          onDelete={() => onDeleteVoice?.(voice.id)}
+        >
+          {voice.audio_url || voice.url ? (
+            <audio controls src={voice.audio_url || voice.url} className="w-full max-w-[600px]" />
+          ) : (
+            <div className="flex items-center gap-5">
+              <span className="flex size-[48px] items-center justify-center rounded-full bg-[#3F3A33] text-[#F6EFE7]">
+                <Play size={20} fill="currentColor" />
+              </span>
+              <span className="text-[15px] text-[#5F5A52]">Audio preview unavailable</span>
+            </div>
+          )}
+          {(voice.key_quote || voice.transcript_text) && (
+            <p className="mt-4 max-w-[760px] text-[18px] italic leading-[28px] text-[#5F5A52]">
+              &quot;{voice.key_quote || voice.transcript_text}&quot;
+            </p>
+          )}
+        </SubmissionCard>
+      ))}
+    </div>
+  )
+}
+
+function StorySection({ stories, submittedDate, onDeleteStory }) {
+  return (
+    <div className="flex flex-col gap-5">
+      {stories.map((story) => (
+        <SubmissionCard
+          key={story.id || story.client_story_id}
+          title={story.title || "Untitled story"}
+          date={formatDate(story.created_at, submittedDate)}
+          onDelete={() => onDeleteStory?.(story.id)}
+        >
+          {story.body && (
+            <p className="whitespace-pre-line text-[16px] leading-[24px] text-r-secondary">{story.body}</p>
+          )}
+        </SubmissionCard>
+      ))}
+    </div>
+  );
+}
+
+function ResponsesSection({ responses, submittedDate, onDeleteResponse }) {
+  return (
+    <div className="flex flex-col gap-5">
+      {responses.map((response) => (
+        <SubmissionCard
+          key={response.id}
+          title={response.question_text || response.question_id || "Question"}
+          date={formatDate(response.created_at, submittedDate)}
+          onDelete={() => onDeleteResponse?.(response.id)}
+        >
+          <p className="text-[16px] leading-[24px] text-r-secondary">{response.answer_text}</p>
+        </SubmissionCard>
+      ))}
+    </div>
+  )
 }
 
 function ApprovalDetail({
@@ -395,6 +272,7 @@ function ApprovalDetail({
   loading,
   error,
   actionPending,
+  searching = false,
   onApprove,
   onDelete,
   onDeletePhoto,
@@ -403,8 +281,17 @@ function ApprovalDetail({
   onDeleteStory,
   onRetry,
 }) {
+  const [requestedSubTab, setRequestedSubTab] = useState(null);
+
   if (!contributor) {
-    return (
+    // The tab itself is hidden when nothing is pending (NS-7), so an empty
+    // list here means the search excluded every pending submission.
+    return searching ? (
+      <TabEmpty
+        title="No pending submissions match your search"
+        message="Clear the search to see every contribution awaiting approval."
+      />
+    ) : (
       <TabEmpty
         title="No contributions awaiting approval"
         message="Submitted memories will appear here before they are approved for generation."
@@ -426,91 +313,45 @@ function ApprovalDetail({
 
   const currentContributor = detail?.contributor || contributor;
   const submittedDate = formatDate(currentContributor.submitted_at, "No date provided");
-  const photos = detail?.photos || [];
-  const stories = detail?.stories || [];
-  const voices = detail?.voices || [];
-  const responses = detail?.responses || [];
-  const visibleContributionCount = photos.length + stories.length + voices.length + responses.length;
-  const contributionCount = Math.max(Number(currentContributor.contribution_count) || 0, visibleContributionCount);
-  const actions = (
-    <ActionButtons
-      disabled={actionPending}
-      onApprove={onApprove}
-      onDelete={onDelete}
-    />
-  );
-  const hasContent = photos.length || stories.length || voices.length || responses.length;
+  // NS-7: a content type only gets a sub-tab while it has something pending.
+  const sections = getPendingSubmissionSections(detail);
+  const subTabs = getSubmissionSubTabs(sections);
+  const activeSubTab = resolveSubTab(requestedSubTab, subTabs);
+  const { photos, stories, voices, responses } = sections;
 
   return (
-    <div className="mx-auto flex flex-col gap-5">
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
-        <article className="rounded-[18px] border border-r-border bg-[#F6EFE7] p-8">
-          <div className="flex items-start justify-between gap-4">
-            <h2 className="text-[24px] leading-[28px] text-r-text [font-family:var(--font-family-display)]">
-              {getContributorName(currentContributor)}
-            </h2>
-            <StatusBadge status={currentContributor.status} />
-          </div>
-          <p className="mt-4 text-[16px] leading-[20px] text-[#5F5A52]">
-            {getCountLabel(contributionCount)}
+    <div className="flex flex-col gap-[30px]">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+        <div className="flex flex-col gap-[10px]">
+          <h2 className="text-[36px] italic leading-none text-r-secondary [font-family:var(--font-family-display)]">
+            {getContributorName(currentContributor)}
+          </h2>
+          <p className="text-[24px] leading-none text-r-text [font-family:var(--font-family-display)]">
+            Submitted {submittedDate}
           </p>
-          <p className="mt-3 text-[16px] leading-[20px] text-[#5F5A52]">
-            Last submitted {submittedDate}
-          </p>
-          <div className="mt-8 inline-flex min-h-[42px] min-w-[162px] items-center justify-center rounded-[12px] bg-[#B9C493] px-6 text-[12px] leading-[16px] text-[#4D523A]">
-            {getRelationship(currentContributor)}
-          </div>
-        </article>
-
-        <article className="rounded-[18px] border border-r-border bg-[#F6EFE7] p-8">
-          <div className="flex h-full flex-col justify-between gap-6 md:flex-row md:items-start">
-            <div>
-              <h3 className="text-[24px] leading-[28px] text-r-text [font-family:var(--font-family-display)]">
-                Review submission
-              </h3>
-              <p className="mt-3 max-w-3xl text-[18px] leading-[28px] text-[#5F5A52]">
-                Check the contributor&apos;s photos, voice recordings, and written memories before approving them for memorial generation.
-              </p>
-            </div>
-            {actions}
-          </div>
-        </article>
+        </div>
+        <span className="inline-flex h-[50px] min-w-[207px] items-center justify-center rounded-[14px] bg-[#D9D9D9] px-6 text-[12px] leading-none text-r-text">
+          {getRelationship(currentContributor)}
+        </span>
       </div>
 
-      {!hasContent && (
+      <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+        {subTabs.length > 0 ? (
+          <SubTabPills tabs={subTabs} active={activeSubTab} onChange={setRequestedSubTab} />
+        ) : <span />}
+        <ActionButtons disabled={actionPending} onApprove={onApprove} onDelete={onDelete} />
+      </div>
+
+      {subTabs.length === 0 && (
         <TabEmpty
           title="No saved memories in this submission"
           message="This contributor submitted, but no photos, stories, or voice recordings were found."
         />
       )}
-      <PhotoSection
-        contributor={currentContributor}
-        photos={photos}
-        submittedDate={submittedDate}
-        // actions={actions}
-        onDeletePhoto={onDeletePhoto}
-      />
-      <VoiceSection
-        contributor={currentContributor}
-        voices={voices}
-        submittedDate={submittedDate}
-        // actions={actions}
-        onDeleteVoice={onDeleteVoice}
-      />
-      <StorySection
-        contributor={currentContributor}
-        stories={stories}
-        submittedDate={submittedDate}
-        // actions={actions}
-        onDeleteStory={onDeleteStory}
-      />
-      <ResponsesSection
-        contributor={currentContributor}
-        responses={responses}
-        submittedDate={submittedDate}
-        // actions={actions}
-        onDeleteResponse={onDeleteResponse}
-      />
+      {activeSubTab === "photos" && <PhotoSection photos={photos} onDeletePhoto={onDeletePhoto} />}
+      {activeSubTab === "voices" && <VoiceSection voices={voices} submittedDate={submittedDate} onDeleteVoice={onDeleteVoice} />}
+      {activeSubTab === "stories" && <StorySection stories={stories} submittedDate={submittedDate} onDeleteStory={onDeleteStory} />}
+      {activeSubTab === "responses" && <ResponsesSection responses={responses} submittedDate={submittedDate} onDeleteResponse={onDeleteResponse} />}
     </div>
   );
 }
@@ -522,16 +363,12 @@ export default function ContributionsPanel({
   error = null,
   onRetry,
   onContributorsChange,
-  initialView = "awaiting",
 }) {
   const usesExternalContributors = Array.isArray(contributorslist);
   const [internalContributors, setInternalContributors] = useState([]);
   const [internalLoading, setInternalLoading] = useState(!usesExternalContributors);
   const [internalError, setInternalError] = useState(null);
-  const [value, setValue] = useState(initialView);
   const [searchQuery, setSearchQuery] = useState("");
-  const [contributorFilter, setContributorFilter] = useState("all");
-  const [contributorSort, setContributorSort] = useState("recent");
   const [currentIndex, setCurrentIndex] = useState(0);
   const [submissionDetail, setSubmissionDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -573,26 +410,6 @@ export default function ContributionsPanel({
     queueMicrotask(loadContributors);
   }, [loadContributors]);
 
-  const contributorCards = useMemo(() => (
-    [...contributors]
-      .filter((contributor) => {
-        const name = String(contributor.name || "").trim().toLowerCase();
-        // Contributors who chose anonymity on the privacy step keep their real
-        // name here for the organizer — the flag is what marks them anonymous.
-        const isAnonymous = Boolean(contributor.is_anonymous) || !name || name === "anonymous";
-        if (contributorFilter === "anonymous") return isAnonymous;
-        if (contributorFilter === "named") return !isAnonymous;
-        if (contributorFilter === "awaiting") return isAwaitingReview(contributor);
-        if (contributorFilter === "approved") return String(contributor.status || "").toLowerCase() === "approved";
-        return true;
-      })
-      .sort((a, b) => {
-        if (contributorSort === "name") return getContributorName(a).localeCompare(getContributorName(b));
-        if (contributorSort === "count") return Number(b.contribution_count || 0) - Number(a.contribution_count || 0);
-        return new Date(b.submitted_at || b.updated_at || b.created_at || 0) - new Date(a.submitted_at || a.updated_at || a.created_at || 0);
-      })
-  ), [contributorFilter, contributorSort, contributors]);
-
   const awaitingContributors = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
@@ -601,9 +418,6 @@ export default function ContributionsPanel({
       .filter((contributor) => !query || buildSearchText(contributor).includes(query))
       .sort((a, b) => new Date(b.submitted_at || 0) - new Date(a.submitted_at || 0));
   }, [contributors, searchQuery]);
-
-  console.log('all contributors:', contributors.map(c => ({ name: c.name, status: c.status })));
-  console.log('awaiting count:', awaitingContributors.length);
 
   const maxAwaitingIndex = Math.max(awaitingContributors.length - 1, 0);
   const activeIndex = Math.min(currentIndex, maxAwaitingIndex);
@@ -631,9 +445,8 @@ export default function ContributionsPanel({
   }, [currentContributorId, memorialId]);
 
   useEffect(() => {
-    if (value !== "awaiting") return;
     queueMicrotask(loadSubmissionDetail);
-  }, [loadSubmissionDetail, value]);
+  }, [loadSubmissionDetail]);
 
   const retry = useCallback(() => {
     if (usesExternalContributors) {
@@ -707,22 +520,22 @@ export default function ContributionsPanel({
   }, [actionPending, currentContributorId, memorialId])
 
   const handleDeleteStory = useCallback(async (storyId) => {
-  if (!memorialId || !currentContributorId || actionPending) return
-  const confirmed = window.confirm("Remove this story? This cannot be undone.")
-  if (!confirmed) return
-  setActionPending(true)
-  try {
-    await deleteContributorStory(memorialId, currentContributorId, storyId)
-    setSubmissionDetail((detail) => detail
-      ? { ...detail, stories: detail.stories.filter((s) => s.id !== storyId) }
-      : detail
-    )
-  } catch (err) {
-    setDetailError(err instanceof Error ? err.message : "Failed to remove story")
-  } finally {
-    setActionPending(false)
-  }
-}, [actionPending, currentContributorId, memorialId])
+    if (!memorialId || !currentContributorId || actionPending) return
+    const confirmed = window.confirm("Remove this story? This cannot be undone.")
+    if (!confirmed) return
+    setActionPending(true)
+    try {
+      await deleteContributorStory(memorialId, currentContributorId, storyId)
+      setSubmissionDetail((detail) => detail
+        ? { ...detail, stories: detail.stories.filter((s) => s.id !== storyId) }
+        : detail
+      )
+    } catch (err) {
+      setDetailError(err instanceof Error ? err.message : "Failed to remove story")
+    } finally {
+      setActionPending(false)
+    }
+  }, [actionPending, currentContributorId, memorialId])
 
   const handleApprove = useCallback(async () => {
     if (!memorialId || !currentContributorId || actionPending) return;
@@ -763,119 +576,52 @@ export default function ContributionsPanel({
   }, [actionPending, currentContributorId, memorialId, setContributors]);
 
   return (
-    <div className="mx-auto max-w-7xl">
-      <div className="mb-6 flex flex-col gap-6">
-        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
-          <SelectControl
+    <div className="mx-auto flex max-w-7xl flex-col gap-[30px]">
+      {/* Figma "contributor nav": search bar + 1/3 pager */}
+      <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+        <div className="flex h-[63px] w-full max-w-[432px] items-center rounded-[30px] border border-r-muted px-[30px]">
+          <Search size={26} strokeWidth={1.8} className="text-r-text" />
+          <input
+            type="text"
+            value={searchQuery}
             onChange={(event) => {
-              setValue(event.target.value);
+              setSearchQuery(event.target.value);
               setCurrentIndex(0);
             }}
-            value={value}
-            className="w-full lg:w-[360px]"
-          >
-            <option value="awaiting">Awaiting approval</option>
-            <option value="contributors">Contributors</option>
-          </SelectControl>
-
-          {value === "contributors" && (
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-              <SelectControl
-                value={contributorFilter}
-                onChange={(event) => setContributorFilter(event.target.value)}
-                className="w-full sm:w-[210px]"
-              >
-                <option value="all">Filter</option>
-                <option value="named">Named</option>
-                <option value="anonymous">Anonymous</option>
-                <option value="awaiting">Awaiting approval</option>
-                <option value="approved">Approved</option>
-              </SelectControl>
-              <SelectControl
-                value={contributorSort}
-                onChange={(event) => setContributorSort(event.target.value)}
-                className="w-full sm:w-[210px]"
-              >
-                <option value="recent">Most recent</option>
-                <option value="name">Name</option>
-                <option value="count">Contribution count</option>
-              </SelectControl>
-            </div>
-          )}
+            placeholder="Search for contributor"
+            className="ml-5 w-full bg-transparent text-[20px] leading-none text-r-secondary placeholder:text-r-secondary outline-none"
+          />
         </div>
-
-        {value === "awaiting" && (
-          <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
-            <div className="flex h-[56px] w-full max-w-[434px] items-center rounded-full border border-r-border bg-r-card px-6">
-              <Search size={26} strokeWidth={1.8} className="text-r-text" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(event) => {
-                  setSearchQuery(event.target.value);
-                  setCurrentIndex(0);
-                }}
-                placeholder="Search for a contributor"
-                className="ml-5 w-full bg-transparent text-[18px] leading-[20px] text-r-secondary placeholder:text-r-muted outline-none"
-              />
-            </div>
-            {awaitingContributors.length > 0 && (
-              <div className="flex items-center gap-8 text-[22px] leading-[24px] text-r-text [font-family:var(--font-family-display)]">
-                <button onClick={handlePrev} className="transition hover:opacity-70" aria-label="Previous submission">
-                  <ChevronLeft size={46} strokeWidth={1.8} />
-                </button>
-                <span>{activeIndex + 1}/{awaitingContributors.length}</span>
-                <button onClick={handleNext} className="transition hover:opacity-70" aria-label="Next submission">
-                  <ChevronRight size={46} strokeWidth={1.8} />
-                </button>
-              </div>
-            )}
+        {awaitingContributors.length > 0 && (
+          <div className="flex w-[206px] items-center justify-between text-[24px] leading-none text-r-text [font-family:var(--font-family-display)]">
+            <button onClick={handlePrev} className="transition hover:opacity-70" aria-label="Previous submission">
+              <ChevronLeft size={46} strokeWidth={1.8} />
+            </button>
+            <span>{activeIndex + 1}/{awaitingContributors.length}</span>
+            <button onClick={handleNext} className="transition hover:opacity-70" aria-label="Next submission">
+              <ChevronRight size={46} strokeWidth={1.8} />
+            </button>
           </div>
         )}
       </div>
 
-      {value === "contributors" && isLoading && <TabLoading />}
-      {value === "contributors" && !isLoading && loadError && (
-        <TabError
-          title="Unable to load contributors"
-          message="Contributor details could not be loaded. You can still use the other tabs."
-          onRetry={retry}
-        />
-      )}
-      {value === "contributors" && !isLoading && !loadError && contributors.length === 0 && (
-        <TabEmpty
-          title="No contributors yet"
-          message="Contributors will appear here once people begin sharing memories."
-        />
-      )}
-      {value === "contributors" && !isLoading && !loadError && contributors.length > 0 && (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {contributorCards.map((contributor) => (
-            <ContributorCard key={contributor.id} contributor={contributor} />
-          ))}
-          {contributorCards.length === 0 && (
-            <div className="col-span-full py-12 text-center text-[18px] text-r-secondary">
-              No contributors match the current filter.
-            </div>
-          )}
-        </div>
-      )}
-
-      {value === "awaiting" && isLoading && <TabLoading />}
-      {value === "awaiting" && !isLoading && loadError && (
+      {isLoading && <TabLoading />}
+      {!isLoading && loadError && (
         <TabError
           title="Unable to load submissions"
           message="Submitted contributions could not be loaded right now."
           onRetry={retry}
         />
       )}
-      {value === "awaiting" && !isLoading && !loadError && (
+      {!isLoading && !loadError && (
         <ApprovalDetail
+          key={currentContributorId || "none"}
           contributor={current}
           detail={submissionDetail}
           loading={detailLoading}
           error={detailError}
           actionPending={actionPending}
+          searching={Boolean(searchQuery.trim())}
           onApprove={handleApprove}
           onDelete={handleDelete}
           onDeletePhoto={handleDeletePhoto}
