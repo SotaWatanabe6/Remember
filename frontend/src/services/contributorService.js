@@ -674,6 +674,23 @@ export async function updateMemorialContributorStatus(memorialId, contributorId,
   );
 }
 
+// NS-5: the organizer opened a submission sub-tab, so its pending items are
+// now reviewed. `type` is a sub-tab key: photos | voices | stories | responses.
+export async function markMemorialContributorSubmissionReviewed(memorialId, contributorId, type, token) {
+  if (!memorialId) throw new Error("memorialId is required");
+  if (!contributorId) throw new Error("contributorId is required");
+  if (!type) throw new Error("type is required");
+
+  return organizerContributorRequest(
+    `/memorials/${encodeURIComponent(memorialId)}/contributors/${encodeURIComponent(contributorId)}/submission/reviewed`,
+    token,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ type }),
+    },
+  );
+}
+
 export async function deleteMemorialContributor(memorialId, contributorId, token) {
   if (!memorialId) throw new Error("memorialId is required");
   if (!contributorId) throw new Error("contributorId is required");

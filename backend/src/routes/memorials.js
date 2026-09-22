@@ -12,6 +12,14 @@ const { enrichMemorialsForClient, enrichMemorialForClient } = require('../servic
 
 const CONTRIBUTOR_REVIEW_STATUSES = new Set(['in_progress', 'submitted', 'approved', 'rejected'])
 
+// Submission sub-tab key -> table whose rows carry the organizer's reviewed_at stamp.
+const REVIEWABLE_SUBMISSION_TABLES = {
+  photos: 'media_assets',
+  voices: 'voice_recordings',
+  stories: 'contributor_stories',
+  responses: 'questionnaire_responses',
+}
+
 async function getOwnedMemorial(memorialId, userId) {
   const { data, error } = await supabase
     .from('memorials')
@@ -509,25 +517,25 @@ router.get('/:id/contributors/:contributorId/submission', authMiddleware, async 
     ] = await Promise.all([
       supabase
         .from('questionnaire_responses')
-        .select('id, question_text, response_text, response_audio_url, order_index, created_at, updated_at')
+        .select('id, question_text, response_text, response_audio_url, order_index, reviewed_at, created_at, updated_at')
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', req.params.id)
         .order('order_index', { ascending: true }),
       supabase
         .from('contributor_stories')
-        .select('id, contributor_id, client_story_id, title, body, created_at, updated_at')
+        .select('id, contributor_id, client_story_id, title, body, reviewed_at, created_at, updated_at')
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', req.params.id)
         .order('created_at', { ascending: true }),
       supabase
         .from('media_assets')
-        .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption, is_flagged, flagged_reason, created_at')
+        .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption, is_flagged, flagged_reason, reviewed_at, created_at')
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', req.params.id)
         .order('created_at', { ascending: true }),
       supabase
         .from('voice_recordings')
-        .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, duration_seconds, contributor_title, transcript_text, key_quote, is_flagged, flagged_reason, created_at')
+        .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, duration_seconds, contributor_title, transcript_text, key_quote, is_flagged, flagged_reason, reviewed_at, created_at')
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', req.params.id)
         .order('created_at', { ascending: true }),
@@ -543,10 +551,52 @@ router.get('/:id/contributors/:contributorId/submission', authMiddleware, async 
     res.json({
       contributor: enrichedContributor,
       photos: photosWithUrls,
-      responses: responses || [],
+      responses: (responses || []).map((response) => ({
+        ...response,
+        answer_text: response.response_text || '',
+      })),
       stories: stories || [],
       voices: voicesWithUrls,
     })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// PATCH /memorials/:id/contributors/:contributorId/submission/reviewed — organizer opened a content type
+//
+// NS-5: each sub-tab of a submission shows a red dot while it holds items the
+// organizer has not looked at. Opening the sub-tab marks every unreviewed item
+// of that type as reviewed; already-reviewed items keep their original stamp.
+router.patch('/:id/contributors/:contributorId/submission/reviewed', authMiddleware, async (req, res) => {
+  try {
+    const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
+    if (!memorial) return res.status(403).json({ error: 'Not authorized' })
+
+    const type = String(req.body?.type || '').trim().toLowerCase()
+    const table = REVIEWABLE_SUBMISSION_TABLES[type]
+    if (!table) return res.status(400).json({ error: 'Invalid submission content type' })
+
+    const { data: contributor, error: contributorError } = await supabase
+      .from('contributors')
+      .select('id')
+      .eq('id', req.params.contributorId)
+      .eq('memorial_id', req.params.id)
+      .single()
+
+    if (contributorError || !contributor) return res.status(404).json({ error: 'Contributor not found' })
+
+    const reviewedAt = new Date().toISOString()
+    const { data, error } = await supabase
+      .from(table)
+      .update({ reviewed_at: reviewedAt })
+      .eq('contributor_id', contributor.id)
+      .eq('memorial_id', req.params.id)
+      .is('reviewed_at', null)
+      .select('id')
+
+    if (error) return res.status(400).json({ error: error.message })
+    res.json({ type, reviewed_at: reviewedAt, ids: (data || []).map((item) => item.id) })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

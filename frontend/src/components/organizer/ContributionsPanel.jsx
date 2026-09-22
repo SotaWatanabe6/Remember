@@ -18,12 +18,14 @@ import {
   deleteContributorStory,
   getMemorialContributorSubmission,
   getMemorialContributors,
+  markMemorialContributorSubmissionReviewed,
   updateMemorialContributorStatus,
 } from "@/services/contributorService";
 import {
   getPendingSubmissionSections,
   getSubmissionSubTabs,
   isAwaitingReview,
+  markSectionReviewed,
   resolveSubTab,
 } from "@/lib/organizer/contributionReview";
 
@@ -134,6 +136,8 @@ function DeleteItemButton({ onDelete, label = "Delete" }) {
 }
 
 // Figma "archive_button" pill: outlined when idle, filled #9E9384 when active.
+// NS-5: the "notif" dot (10px, #C16341, 8px after the label) marks a sub-tab
+// that still holds items the organizer has not opened.
 function SubTabPills({ tabs, active, onChange }) {
   return (
     <div className="flex flex-wrap gap-5" role="tablist" aria-label="Submission content">
@@ -150,7 +154,17 @@ function SubTabPills({ tabs, active, onChange }) {
               isActive ? "bg-[#9E9384] text-r-modal" : "text-r-muted hover:text-r-text"
             }`}
           >
-            {tab.label}
+            <span className="flex items-start gap-2">
+              {tab.label}
+              {tab.unreviewed && (
+                <span
+                  data-testid={`unreviewed-dot-${tab.key}`}
+                  className="mt-[2px] block size-[10px] shrink-0 rounded-full bg-[#C16341]"
+                >
+                  <span className="sr-only">(has unreviewed items)</span>
+                </span>
+              )}
+            </span>
           </button>
         );
       })}
@@ -279,9 +293,26 @@ function ApprovalDetail({
   onDeleteVoice,
   onDeleteResponse,
   onDeleteStory,
+  onMarkReviewed,
   onRetry,
 }) {
   const [requestedSubTab, setRequestedSubTab] = useState(null);
+
+  // Computed before the early returns so the mark-reviewed effect can hook in.
+  // NS-7: a content type only gets a sub-tab while it has something pending.
+  const sections = getPendingSubmissionSections(detail);
+  const subTabs = getSubmissionSubTabs(sections);
+  const activeSubTab = resolveSubTab(requestedSubTab, subTabs);
+  const activeTabUnreviewed = subTabs.some((tab) => tab.key === activeSubTab && tab.unreviewed);
+  // `detail` can briefly belong to the previous contributor while the next one
+  // loads, so only trust it once it names the contributor on screen.
+  const detailIsCurrent = Boolean(contributor?.id) && detail?.contributor?.id === contributor.id;
+
+  // NS-5: opening a sub-tab is what reviews its items, so the dot clears.
+  useEffect(() => {
+    if (loading || error || !detailIsCurrent || !activeSubTab || !activeTabUnreviewed) return;
+    onMarkReviewed?.(activeSubTab);
+  }, [activeSubTab, activeTabUnreviewed, detailIsCurrent, error, loading, onMarkReviewed]);
 
   if (!contributor) {
     // The tab itself is hidden when nothing is pending (NS-7), so an empty
@@ -313,10 +344,6 @@ function ApprovalDetail({
 
   const currentContributor = detail?.contributor || contributor;
   const submittedDate = formatDate(currentContributor.submitted_at, "No date provided");
-  // NS-7: a content type only gets a sub-tab while it has something pending.
-  const sections = getPendingSubmissionSections(detail);
-  const subTabs = getSubmissionSubTabs(sections);
-  const activeSubTab = resolveSubTab(requestedSubTab, subTabs);
   const { photos, stories, voices, responses } = sections;
 
   return (
@@ -537,6 +564,21 @@ export default function ContributionsPanel({
     }
   }, [actionPending, currentContributorId, memorialId])
 
+  const handleMarkReviewed = useCallback(async (type) => {
+    if (!memorialId || !currentContributorId) return
+    try {
+      const result = await markMemorialContributorSubmissionReviewed(memorialId, currentContributorId, type)
+      setSubmissionDetail((detail) => (
+        detail?.contributor?.id === currentContributorId
+          ? markSectionReviewed(detail, type, result?.reviewed_at || new Date().toISOString())
+          : detail
+      ))
+    } catch {
+      // Marking as reviewed is bookkeeping only; a failure just leaves the dot
+      // in place, so it is not worth interrupting the review with an error.
+    }
+  }, [currentContributorId, memorialId])
+
   const handleApprove = useCallback(async () => {
     if (!memorialId || !currentContributorId || actionPending) return;
 
@@ -628,6 +670,7 @@ export default function ContributionsPanel({
           onDeleteVoice={handleDeleteVoice}
           onDeleteResponse={handleDeleteResponse}
           onDeleteStory={handleDeleteStory}
+          onMarkReviewed={handleMarkReviewed}
           onRetry={loadSubmissionDetail}
         />
       )}

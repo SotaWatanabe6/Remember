@@ -52,6 +52,7 @@ CREATE TABLE questionnaire_responses (
   response_text text,
   response_audio_url text,
   order_index integer,
+  reviewed_at timestamptz,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -63,6 +64,7 @@ CREATE TABLE contributor_stories (
   client_story_id text,
   title text,
   body text,
+  reviewed_at timestamptz,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now(),
   UNIQUE (contributor_id, client_story_id)
@@ -89,6 +91,7 @@ CREATE TABLE media_assets (
   theme_ids jsonb,
   is_flagged boolean DEFAULT false,
   flagged_reason text,
+  reviewed_at timestamptz,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -112,6 +115,7 @@ CREATE TABLE voice_recordings (
   ai_tags jsonb,
   is_flagged boolean DEFAULT false,
   flagged_reason text,
+  reviewed_at timestamptz,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );

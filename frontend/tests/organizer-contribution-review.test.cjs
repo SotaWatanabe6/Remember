@@ -11,7 +11,7 @@ function loadHelpers() {
     .replace(/^export /gm, '');
   // Same realm as the assertions so arrays compare structurally with deepEqual.
   return vm.runInThisContext(`(() => { ${source}
-    return { getManageTabs, resolveManageTab, hasPendingContributions, getPendingSubmissionSections, getSubmissionSubTabs, resolveSubTab }; })()`);
+    return { getManageTabs, resolveManageTab, hasPendingContributions, getPendingSubmissionSections, getSubmissionSubTabs, resolveSubTab, isUnreviewed, hasUnreviewedItems, markSectionReviewed }; })()`);
 }
 
 const helpers = loadHelpers();
@@ -66,4 +66,45 @@ test('a submission with nothing pending has no sub-tabs at all', () => {
   const empty = helpers.getSubmissionSubTabs(helpers.getPendingSubmissionSections({ stories: [{ title: ' ' }], responses: [{}] }));
   assert.deepEqual(empty, []);
   assert.equal(helpers.resolveSubTab('photos', empty), null);
+});
+
+// NS-5: red dot on a sub-tab while it holds items the organizer has not opened.
+test('a sub-tab is unreviewed while any of its pending items lacks reviewed_at', () => {
+  const sections = helpers.getPendingSubmissionSections({
+    photos: [{ id: 'p1', reviewed_at: '2026-09-01T00:00:00.000Z' }, { id: 'p2', reviewed_at: null }],
+    voices: [{ id: 'v1', reviewed_at: '2026-09-01T00:00:00.000Z' }],
+    stories: [{ id: 's1', title: 'Lake', body: '', reviewed_at: undefined }],
+  });
+  const byKey = Object.fromEntries(helpers.getSubmissionSubTabs(sections).map((tab) => [tab.key, tab.unreviewed]));
+  assert.deepEqual(byKey, { photos: true, voices: false, stories: true });
+  assert.equal(helpers.hasUnreviewedItems([]), false);
+  assert.equal(helpers.hasUnreviewedItems(undefined), false);
+  assert.equal(helpers.isUnreviewed({}), true);
+});
+
+test('an empty draft does not keep its sub-tab dotted', () => {
+  // The blank story is not pending content, so it neither shows a tab nor a dot.
+  const sections = helpers.getPendingSubmissionSections({ stories: [{ id: 's0', title: '', body: '' }] });
+  assert.deepEqual(helpers.getSubmissionSubTabs(sections), []);
+});
+
+test('marking a section reviewed stamps only its unreviewed items and clears the dot', () => {
+  const detail = {
+    contributor: { id: 'a' },
+    photos: [{ id: 'p1', reviewed_at: '2026-09-01T00:00:00.000Z' }, { id: 'p2', reviewed_at: null }],
+    voices: [{ id: 'v1', reviewed_at: null }],
+  };
+  const next = helpers.markSectionReviewed(detail, 'photos', '2026-09-21T12:00:00.000Z');
+  assert.deepEqual(next.photos.map((photo) => photo.reviewed_at), ['2026-09-01T00:00:00.000Z', '2026-09-21T12:00:00.000Z']);
+  assert.equal(next.voices, detail.voices, 'other sections are untouched');
+  assert.notEqual(next, detail, 'detail is not mutated');
+  assert.equal(detail.photos[1].reviewed_at, null);
+  const tabs = helpers.getSubmissionSubTabs(helpers.getPendingSubmissionSections(next));
+  assert.deepEqual(tabs.map((tab) => [tab.key, tab.unreviewed]), [['photos', false], ['voices', true]]);
+});
+
+test('marking a section that is absent from the detail is a no-op', () => {
+  const detail = { contributor: { id: 'a' }, photos: [] };
+  assert.equal(helpers.markSectionReviewed(detail, 'stories', 'now'), detail);
+  assert.equal(helpers.markSectionReviewed(null, 'photos', 'now'), null);
 });

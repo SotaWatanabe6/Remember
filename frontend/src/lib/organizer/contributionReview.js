@@ -61,8 +61,31 @@ export function getPendingSubmissionSections(detail) {
   };
 }
 
+// NS-5: an item is unreviewed until the organizer has opened its sub-tab,
+// which stamps `reviewed_at` on it (server-side, per item).
+export function isUnreviewed(item) {
+  return !item?.reviewed_at;
+}
+
+export function hasUnreviewedItems(items) {
+  return Array.isArray(items) && items.some(isUnreviewed);
+}
+
+// Each visible sub-tab carries `unreviewed` so the pill can show its red dot.
 export function getSubmissionSubTabs(sections) {
-  return SUBMISSION_SUB_TABS.filter((tab) => (sections[tab.key] || []).length > 0);
+  return SUBMISSION_SUB_TABS
+    .filter((tab) => (sections[tab.key] || []).length > 0)
+    .map((tab) => ({ ...tab, unreviewed: hasUnreviewedItems(sections[tab.key]) }));
+}
+
+// Local mirror of the PATCH .../submission/reviewed update: stamp every
+// unreviewed item of one type so the dot clears without a refetch.
+export function markSectionReviewed(detail, type, reviewedAt) {
+  if (!detail || !Array.isArray(detail[type])) return detail;
+  return {
+    ...detail,
+    [type]: detail[type].map((item) => (isUnreviewed(item) ? { ...item, reviewed_at: reviewedAt } : item)),
+  };
 }
 
 export function resolveSubTab(requestedKey, subTabs) {
