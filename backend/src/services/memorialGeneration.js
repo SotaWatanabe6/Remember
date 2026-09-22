@@ -829,6 +829,7 @@ function stripStorySlideDisplayFields(slide) {
 function finalizePhotoStorySlides(slides = []) {
   return slides
     .filter((slide) => slide?.slide_type === 'photo' && slide?.photo_id && slide?.photo_url)
+    .filter((slide) => (slide.photo_description || slide.narration || '').trim())
     .map((slide, index) => {
       const storyText = slide.photo_description || slide.narration || ''
 
@@ -861,7 +862,8 @@ function enrichStorySlide(slide, photoById, memorial, index) {
     photo_description: description,
     narration: description === slide.narration ? null : slide.narration || null,
     matched_quote: slide.matched_quote || null,
-    chapter_title: slide.chapter_title || slide.theme_label || null,
+    chapter: slide.chapter || null,
+    chapter_title: slide.chapter_title || CHAPTER_TITLES[slide.chapter] || slide.theme_label || null,
     perspective_label: slide.perspective_label || null,
     contributor_name: slide.contributor_name || photo.contributor_name || null,
     relationship_type: slide.relationship_type || photo.relationship_type || null,
@@ -916,6 +918,39 @@ function sortSlidesByPhotoCatalogOrder(slides = [], photoCatalog = []) {
     .map((slide, index) => ({ ...slide, order_index: index + 1 }))
 }
 
+function sortSlidesByChapterOrder(slides = [], photoCatalog = []) {
+  const photoOrder = new Map(photoCatalog.map((photo, index) => [photo.photo_id, index]))
+  const chapterRank = new Map(CHAPTER_ORDER.map((chapter, index) => [chapter, index]))
+
+  return [...slides]
+    .sort((a, b) => {
+      const chapterA = chapterRank.has(a.chapter) ? chapterRank.get(a.chapter) : CHAPTER_ORDER.length
+      const chapterB = chapterRank.has(b.chapter) ? chapterRank.get(b.chapter) : CHAPTER_ORDER.length
+      if (chapterA !== chapterB) return chapterA - chapterB
+
+      const orderA = photoOrder.has(a.photo_id) ? photoOrder.get(a.photo_id) : Number.MAX_SAFE_INTEGER
+      const orderB = photoOrder.has(b.photo_id) ? photoOrder.get(b.photo_id) : Number.MAX_SAFE_INTEGER
+      return orderA - orderB
+    })
+    .map((slide, index) => ({ ...slide, order_index: index + 1 }))
+}
+
+const CHAPTER_ORDER = [
+  'who_they_were',
+  'where_they_came_from',
+  'what_they_loved',
+  'how_they_treated_people',
+  'how_they_are_remembered',
+]
+
+const CHAPTER_TITLES = {
+  who_they_were: 'Who They Were',
+  where_they_came_from: 'Where They Came From',
+  what_they_loved: 'What They Loved',
+  how_they_treated_people: 'How They Treated People',
+  how_they_are_remembered: 'How People Remember Them Now',
+}
+
 async function composeStorySlideshow({
   subjectName,
   memorial,
@@ -966,32 +1001,44 @@ async function composeStorySlideshow({
 
 LIFE SPAN: ${birthYear ? `Born ${birthYear}` : 'Birth year unknown'}${passingYear ? `, passed ${passingYear}` : ''}.
 
+FIVE-CHAPTER STRUCTURE (critical):
+Every slide must be assigned to exactly one of these five chapters. Chapters are a sorting mechanism, not a rigid formula — a chapter can run shorter if there isn't much material for it. Do not pad a chapter with generic language just to fill it out. A single memory or detail may only be used in ONE chapter total across the whole slideshow — do not repeat the same underlying memory across multiple chapters even if reworded.
+
+- "who_they_were": Core personality and character. Traits and quirks that came up again and again — how they carried themselves, what people noticed about them right away.
+- "where_they_came_from": Background and roots. Family, upbringing, places that shaped them, how they became the person described in the first chapter.
+- "what_they_loved": Passions, hobbies, and the things that visibly lit them up. What they chose to spend their free time and energy on.
+- "how_they_treated_people": Relationships in action. Not an abstract quality like "she was kind" — the concrete things they did for specific people.
+- "how_they_are_remembered": Legacy and reflection. What people carry forward, what they'd want the person to know, how their absence is felt.
+
+ATTRIBUTION RULE (critical):
+For each slide, decide: is this describing one concrete, situated happening (a specific action, place, or exchange that could be pictured as a scene), or is it a summary judgment about the person with no single traceable incident behind it?
+- SITUATED HAPPENING → attribute it. Set matched_quote, contributor_name, and relationship_type to identify who shared it, even while the phrase stays woven naturally into the surrounding photo_description.
+- SUMMARY JUDGMENT → do not attribute it. Leave matched_quote, contributor_name, and relationship_type null. This stays in the narrator's voice with no name attached, even if it's a pattern several contributors converged on.
+- If a contributor pairs a trait with an example ("she was always there for me, like when she drove four hours to my game"), keep only the concrete example and attribute that — drop the trait label itself as unnecessary framing.
+
 OUTPUT RULES (critical):
 - Return EXACTLY ${photoCatalog.length} slides — one per photo in the catalog below.
-- Every slide MUST have slide_type "photo" and a photo_id from the catalog.
-- Do NOT create intro, chapter, perspective, closing, voice, or text-only slides.
+- Every slide MUST have slide_type "photo", a photo_id from the catalog, and a chapter from the five values above.
+- Do NOT create intro, perspective, closing, voice, or text-only slides.
 - Use photo analysis only for broad tone, era, and sequencing. Do not state or imply that a questionnaire memory happened in, is shown by, or is directly connected to a specific photo unless the source data explicitly says so.
 - The vision_description and tags fields exist only to help you sequence photos and judge era/mood. Do not mention any specific object, clothing, physical action, expression, or person that appears in vision_description or tags unless a contributor's questionnaire text independently mentions that same detail. If a visual detail is not corroborated by contributor text, leave it out of photo_description entirely.
 - The description should feel appropriate beside the photo, but it must stand on its own as remembrance language. Do not use phrases that assert the photo depicts the caption's content — no "in this photo", "this moment shows", "here we see", "surrounded by", or similar — unless that detail is independently confirmed by contributor text. Write photo_description as remembrance language that can stand on its own next to any photo from that era, not as a caption describing what is visually happening.
 - photo_description: 2–4 warm, specific, conversational third-person sentences about ${subjectName} when there is enough questionnaire or organizer biography detail to ground the description. Anchor descriptions in concrete source details when available: habits, sayings, quirks, routines, places, roles, accomplishments, repeated memories, or small human details. It should feel like a close friend giving a memorial toast: human, grounded, undecorated, and never AI-written.
-- The first slide should use the organizer-selected memorial photo and function as the opening: include birth/passing context when available and quickly ground the viewer in who ${subjectName} was — their personality, what they loved, or the kind of presence they had.
-- Middle slides should move through ${subjectName}'s life organically. Tell the ${subjectName}'s life by drawing specific stories from the questionnaire responses. Cover their life stories based on the following examples but is not limited to - character, quirks, relationships, roles, significant moments, accomplishments, and repeated details contributors mentioned - without forcing a fixed order.
-- The final slide should function as the closing: honor ${subjectName} with a sincere remembrance, legacy reflection, or natural final words that do not feel abrupt.
 - narration: leave null. All story text belongs in photo_description.
-- matched_quote: optional contributor phrase, max 22 words, copied verbatim or minimally trimmed from the questionnaire text when it clearly fits the slide.
+- matched_quote: optional contributor phrase, max 22 words, copied verbatim or minimally trimmed from the questionnaire text when it clearly fits the slide and passes the attribution rule above.
 - If no contributor phrase clearly fits a slide, set matched_quote to null. Do not invent, paraphrase, or polish a quote into something the contributor did not say.
 - If matched_quote is present, contributor_name and relationship_type must identify the contributor who wrote that phrase.
-- Synthesize all contributors into one cohesive voice across the slideshow. Third person only.
-- Do not preserve the sentence shape of individual contributor answers or attribution lines within the flowing narration (e.g. "one person said", "her daughter recalled"). Blend corroborating details from multiple contributors into a single observation. Attribution belongs only in contributor_name / matched_quote metadata, not in the prose itself, unless a direct quote is being used.
+- For unattributed slides, synthesize all contributors into one cohesive narrator voice. Third person only.
+- Do not preserve the sentence shape of individual contributor answers or attribution lines within the flowing narration (e.g. "one person said", "her daughter recalled"). Blend corroborating details from multiple contributors into a single observation. Attribution belongs only in contributor_name / matched_quote metadata, not in the prose itself, unless a direct quote is being used per the attribution rule.
 - Prefer specific details over general statements. Avoid broad claims like "they were kind" or "they loved family" unless paired with a concrete example from the responses. If multiple contributors said something similar, surface that convergence directly.
 - Do not fabricate details, repeat the same descriptive language across slides, overwrite grief, manufacture emotion, or use sympathy-card filler such as "a life well-lived", "touched many hearts", or "left a lasting impression".
 - Do not include specific timelines or ages about the ${subjectName} in the description.
 - Don't assume relationships of anyone in the photo regardless of the contributor relationship type.
-- Do not include descriptions for the sake of having them. If there are not enough questionnaire responses to give every photo a distinct grounded description, associate multiple adjacent photos with one grounded description by reusing the same photo_description where appropriate.
-- If a photo cannot be associated with a grounded description without inventing or overgeneralizing, set photo_description to an empty string, matched_quote to null, contributor_name to null, and relationship_type to null.
+- Do not include descriptions for the sake of having them. If there are not enough questionnaire responses to give every photo a distinct grounded description, associate multiple adjacent photos with one grounded description by reusing the same photo_description where appropriate, as long as they stay within the same chapter.
+- If a photo cannot be associated with a grounded description without inventing or overgeneralizing, set photo_description to an empty string, matched_quote to null, contributor_name to null, and relationship_type to null. Still assign it a chapter based on photo era/context alone.
 - Light polish only: correct spelling, stray punctuation, filler words ("um", "uh", "like"), false starts, and repeated words from talking out loud. Never change vocabulary, tone, register, sentence structure, or word choice. If a contributor wrote or said something plainly, awkwardly, or informally, preserve that voice exactly.
 
-Photos (LOCKED order — first photo is organizer-selected when present, then youngest to oldest; use photo_id exactly):
+Photos (photo_id exactly as given; final slide order will be sorted by chapter, then by era within each chapter — do not rely on this list's order):
 ${JSON.stringify(photoCatalog.map((p) => ({
   photo_id: p.photo_id,
   subject_life_stage_label: p.subject_life_stage_label,
@@ -1015,6 +1062,7 @@ Return JSON only:
     {
       "order_index": 1,
       "slide_type": "photo",
+      "chapter": "who_they_were",
       "photo_id": "uuid from catalog",
       "photo_description": "grounded biographical caption, repeated grouped caption, or empty string",
       "narration": null,
@@ -1042,7 +1090,7 @@ Return JSON only:
       }))
 
     return finalizePhotoStorySlides(
-      sortSlidesByPhotoCatalogOrder(finalizeStorySlides(aiSlides, photoCatalog, memorial), photoCatalog),
+      sortSlidesByChapterOrder(finalizeStorySlides(aiSlides, photoCatalog, memorial), photoCatalog),
     )
   } catch (err) {
     console.error('[StoryCompose] error:', err.message)
