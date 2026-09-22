@@ -786,7 +786,10 @@ router.get('/:id/output', authMiddleware, async (req, res) => {
       .order('created_at', { ascending: false })
       .limit(1)
       .single()
-    if (error || !output) return res.status(404).json({ error: 'Output not found. Generation may not be complete yet.' })
+    if (error || !output) {
+      console.error('[output] fetch error:', error)
+      return res.status(404).json({ error: 'Output not found. Generation may not be complete yet.' })
+    }
     res.json(output.output_json)
   } catch (err) {
     res.status(500).json({ error: err.message })

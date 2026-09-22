@@ -995,6 +995,8 @@ function ShareModal({ onClose, memorialId }) {
 
 
 function GenerateConfirmModal({ onConfirm, onCancel, subjectName }) {
+  const [readyToGenerate, setReadyToGenerate] = useState(false)
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-6"
@@ -1009,20 +1011,35 @@ function GenerateConfirmModal({ onConfirm, onCancel, subjectName }) {
             className="text-[28px] font-medium leading-[34px] text-r-text"
             style={{ fontFamily: 'var(--font-family-display)' }}
           >
-            Generate {subjectName}&apos;s memorial?
+            Generate a sharable and interactive memorial
           </h2>
           <p className="text-base leading-6 text-r-secondary">
-            This will create the Story, Constellation, Voices, and Photo Archive from all submitted contributions. Generation cannot be undone or re-run once complete.
+            Please note that this feature is the paid portion of the final product. As a participant of testing, this memorial generation will be free.
+          </p>
+          <p className="text-base font-medium leading-6 text-[#C96E43]">
+            Clicking on the "Generate Memorial" button below will finalize and create a curated memorial. Please ensure you have collected all memories before proceeding.
           </p>
         </div>
+
+        <label className="flex items-center gap-3 text-base text-r-text cursor-pointer">
+          <input
+            type="checkbox"
+            checked={readyToGenerate}
+            onChange={(e) => setReadyToGenerate(e.target.checked)}
+            className="h-5 w-5 rounded border-r-border accent-r-text cursor-pointer"
+          />
+          I'm ready to generate the final memorial.
+        </label>
+
         <div className="flex flex-col gap-3">
           <button
             type="button"
             onClick={onConfirm}
-            className="w-full rounded-full py-4 text-base font-medium text-r-btn-text transition hover:opacity-85 border-none"
+            disabled={!readyToGenerate}
+            className="w-full rounded-full py-4 text-base font-medium text-r-btn-text transition hover:opacity-85 border-none disabled:opacity-45 disabled:cursor-not-allowed"
             style={{ backgroundColor: 'var(--color-r-btn)' }}
           >
-            Generate memorial
+            Generate Memorial
           </button>
           <button
             type="button"
