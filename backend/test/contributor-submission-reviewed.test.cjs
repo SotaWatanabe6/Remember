@@ -6,9 +6,10 @@ const { test } = require('node:test')
 const vm = require('node:vm')
 const { createClient } = require('@supabase/supabase-js')
 
-// NS-5: exercise the organizer's mark-reviewed route and the submission
-// payload it feeds, against an in-memory Supabase fixture. No credentials,
-// live records, or storage are used.
+// NS-5: the red dot on a submission sub-tab clears when the organizer acts on
+// that content type — approving the submission, or deleting from it — never on
+// a mere view. Exercised against an in-memory Supabase fixture. No
+// credentials, live records, or storage are used.
 function fixture() {
   const db = {
     memorials: [
@@ -35,6 +36,7 @@ function fixture() {
     ],
   }
   const mutations = []
+  const removedFiles = []
   const json = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), {
     status, headers: { 'Content-Type': 'application/json', ...headers },
   })
@@ -48,6 +50,10 @@ function fixture() {
       if (url.pathname.startsWith('/storage/v1/object/sign/')) {
         return json({ signedURL: '/object/sign/fixture?token=fixture' })
       }
+      if (url.pathname.startsWith('/storage/v1/object/') && method === 'DELETE') {
+        removedFiles.push(...JSON.parse(options.body).prefixes)
+        return json([])
+      }
       const table = url.pathname.split('/').pop()
       assert.ok(db[table], `Unexpected request: ${method} ${url.pathname}`)
       const rows = db[table].filter((row) => [...url.searchParams].every(([key, value]) => {
@@ -56,16 +62,23 @@ function fixture() {
         return true
       }))
       const fields = url.searchParams.get('select')
+      const wantsOne = new Headers(options.headers).get('accept')?.includes('vnd.pgrst.object')
       if (method === 'PATCH') {
         const patch = JSON.parse(options.body)
         mutations.push({ table, ids: rows.map((row) => row.id), patch })
         rows.forEach((row) => Object.assign(row, patch))
-        return json(project(rows, fields))
+        if (wantsOne && rows.length !== 1) return json({ message: 'Not found', code: 'PGRST116' }, 406)
+        const patched = project(rows, fields)
+        return json(wantsOne ? patched[0] : patched)
       }
-      const single = new Headers(options.headers).get('accept')?.includes('vnd.pgrst.object')
-      if (single && rows.length !== 1) return json({ message: 'Not found', code: 'PGRST116' }, 406)
+      if (method === 'DELETE') {
+        mutations.push({ table, method: 'DELETE', ids: rows.map((row) => row.id) })
+        db[table] = db[table].filter((row) => !rows.includes(row))
+        return new Response(null, { status: 204 })
+      }
+      if (wantsOne && rows.length !== 1) return json({ message: 'Not found', code: 'PGRST116' }, 406)
       const projected = project(rows, fields)
-      return json(single ? projected[0] : projected)
+      return json(wantsOne ? projected[0] : projected)
     } },
   })
   const filename = path.resolve(__dirname, '../src/routes/memorials.js')
@@ -91,9 +104,11 @@ function fixture() {
     await handler({ params: { id: 'memorial', contributorId: 'jane', ...params }, body, user: { sub: user } }, response)
     return response
   }
-  const reviewed = (type, options) => call('patch', '/:id/contributors/:contributorId/submission/reviewed', { body: { type }, ...options })
   const submission = (options) => call('get', '/:id/contributors/:contributorId/submission', options)
-  return { db, mutations, reviewed, submission }
+  const setStatus = (status, options) => call('patch', '/:id/contributors/:contributorId/status', { body: { status }, ...options })
+  const remove = (routePath, params, options) => call('delete', routePath, { params, ...options })
+  const stamped = (table) => db[table].map((row) => row.reviewed_at)
+  return { db, mutations, removedFiles, submission, setStatus, remove, stamped }
 }
 
 test('submission payload carries reviewed_at per item and answer_text for responses', async () => {
@@ -106,44 +121,97 @@ test('submission payload carries reviewed_at per item and answer_text for respon
   assert.deepEqual(body.responses.map((response) => [response.answer_text, response.reviewed_at]), [['The lake.', null]])
 })
 
-test('opening a sub-tab stamps only that type and only its unreviewed items', async () => {
+test('reading a submission never stamps anything — a glance is not a review', async () => {
   const f = fixture()
-  const { statusCode, body } = await f.reviewed('photos')
-  assert.equal(statusCode, 200)
-  assert.equal(body.type, 'photos')
-  assert.deepEqual(body.ids, ['p2'])
-  assert.deepEqual(f.mutations, [{ table: 'media_assets', ids: ['p2'], patch: { reviewed_at: body.reviewed_at } }])
-  assert.equal(f.db.media_assets[0].reviewed_at, '2026-09-11T00:00:00.000Z', 'earlier stamp is kept')
-  assert.equal(f.db.media_assets[1].reviewed_at, body.reviewed_at)
-  assert.equal(f.db.media_assets[2].reviewed_at, null, 'other memorial untouched')
-  assert.equal(f.db.voice_recordings[0].reviewed_at, null, 'other types untouched')
-
-  const again = await f.reviewed('photos')
-  assert.equal(again.statusCode, 200)
-  assert.deepEqual(again.body.ids, [], 'second open is a no-op')
+  await f.submission()
+  await f.submission()
+  assert.deepEqual(f.mutations, [])
+  assert.deepEqual(f.stamped('voice_recordings'), [null])
+  assert.deepEqual(f.stamped('contributor_stories'), [null])
 })
 
-for (const [type, table] of [['voices', 'voice_recordings'], ['stories', 'contributor_stories'], ['responses', 'questionnaire_responses']]) {
-  test(`marks ${type} reviewed in ${table}`, async () => {
+test('approving settles every content type at once', async () => {
+  const f = fixture()
+  const { statusCode, body } = await f.setStatus('approved')
+  assert.equal(statusCode, 200)
+  assert.equal(body.contributor.status, 'approved')
+  assert.ok(body.reviewed_at, 'the approve response carries the stamp')
+  assert.deepEqual(f.stamped('voice_recordings'), [body.reviewed_at])
+  assert.deepEqual(f.stamped('contributor_stories'), [body.reviewed_at])
+  assert.deepEqual(f.stamped('questionnaire_responses'), [body.reviewed_at])
+  assert.deepEqual(f.db.media_assets.map((photo) => [photo.id, photo.reviewed_at]), [
+    ['p1', '2026-09-11T00:00:00.000Z'],
+    ['p2', body.reviewed_at],
+    ['p3', null],
+  ], 'earlier stamps and other memorials are untouched')
+})
+
+test('rejecting settles the submission the same way', async () => {
+  const f = fixture()
+  const { body } = await f.setStatus('rejected')
+  assert.deepEqual(f.stamped('contributor_stories'), [body.reviewed_at])
+})
+
+test('a status change that is not a review pass leaves the dots alone', async () => {
+  const f = fixture()
+  const { statusCode, body } = await f.setStatus('in_progress')
+  assert.equal(statusCode, 200)
+  assert.equal(body.reviewed_at, null)
+  assert.deepEqual(f.mutations.filter((mutation) => mutation.patch?.reviewed_at), [])
+  assert.deepEqual(f.stamped('contributor_stories'), [null])
+})
+
+for (const [type, routePath, params, table, otherTable] of [
+  ['photos', '/:id/contributors/:contributorId/photos/:assetId', { assetId: 'p2' }, 'media_assets', 'voice_recordings'],
+  ['voices', '/:id/contributors/:contributorId/voices/:recordingId', { recordingId: 'v1' }, 'voice_recordings', 'contributor_stories'],
+  ['responses', '/:id/contributors/:contributorId/responses/:responseId', { responseId: 'r1' }, 'questionnaire_responses', 'contributor_stories'],
+  ['stories', '/:id/contributors/:contributorId/stories/:storyId', { storyId: 's1' }, 'contributor_stories', 'voice_recordings'],
+]) {
+  test(`deleting from ${type} settles that type and leaves the others dotted`, async () => {
     const f = fixture()
-    const { body } = await f.reviewed(type)
-    assert.equal(f.mutations[0].table, table)
-    assert.equal(f.db[table][0].reviewed_at, body.reviewed_at)
-    const refreshed = await f.submission()
-    assert.equal(refreshed.body[type][0].reviewed_at, body.reviewed_at)
+    const { statusCode, body } = await f.remove(routePath, params)
+    assert.equal(statusCode, 200)
+    assert.equal(body.deleted, true)
+    assert.ok(body.reviewed_at, 'the delete response carries the stamp')
+    assert.equal(f.db[table].every((row) => row.contributor_id !== 'jane' || row.reviewed_at), true)
+    assert.deepEqual(f.stamped(otherTable), [null], 'other types stay dotted')
   })
 }
 
-for (const [name, type, options, expected] of [
-  ['an unknown content type', 'archive', {}, 400],
-  ['a missing content type', '', {}, 400],
-  ['a memorial the user does not own', 'photos', { user: 'someone-else' }, 403],
-  ['a contributor from another memorial', 'photos', { params: { contributorId: 'outsider' } }, 404],
-  ['an unknown contributor', 'photos', { params: { contributorId: 'nobody' } }, 404],
+test('deleting one photo settles the photos left behind', async () => {
+  const f = fixture()
+  // p1 was stamped earlier, p2 was not; removing p2 leaves p1 alone, and a
+  // second photo added to the same submission would still be settled.
+  const { body } = await f.remove('/:id/contributors/:contributorId/photos/:assetId', { assetId: 'p1' })
+  assert.deepEqual(f.db.media_assets.map((photo) => [photo.id, photo.reviewed_at]), [
+    ['p2', body.reviewed_at],
+    ['p3', null],
+  ])
+  assert.deepEqual(f.removedFiles, ['jane/1.jpg'])
+})
+
+for (const [name, options, expected] of [
+  ['a memorial the user does not own', { user: 'someone-else' }, 403],
+  ['a contributor from another memorial', { params: { contributorId: 'outsider' } }, 404],
+  ['an unknown contributor', { params: { contributorId: 'nobody' } }, 404],
 ]) {
-  test(`rejects ${name} without stamping anything`, async () => {
+  test(`approving ${name} settles nothing`, async () => {
     const f = fixture()
-    assert.equal((await f.reviewed(type, options)).statusCode, expected)
-    assert.equal(f.mutations.length, 0)
+    assert.equal((await f.setStatus('approved', options)).statusCode, expected)
+    assert.deepEqual(f.mutations.filter((mutation) => mutation.patch?.reviewed_at), [])
   })
 }
+
+test('an invalid status is rejected before anything is settled', async () => {
+  const f = fixture()
+  assert.equal((await f.setStatus('bogus')).statusCode, 400)
+  assert.deepEqual(f.mutations, [])
+})
+
+test("deleting another memorial's item settles nothing", async () => {
+  const f = fixture()
+  const { statusCode } = await f.remove('/:id/contributors/:contributorId/photos/:assetId', { assetId: 'p3' })
+  assert.equal(statusCode, 404)
+  assert.deepEqual(f.mutations, [])
+  assert.deepEqual(f.removedFiles, [])
+})

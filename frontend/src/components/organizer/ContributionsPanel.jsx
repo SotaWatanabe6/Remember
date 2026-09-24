@@ -18,7 +18,6 @@ import {
   deleteContributorStory,
   getMemorialContributorSubmission,
   getMemorialContributors,
-  markMemorialContributorSubmissionReviewed,
   updateMemorialContributorStatus,
 } from "@/services/contributorService";
 import {
@@ -293,26 +292,14 @@ function ApprovalDetail({
   onDeleteVoice,
   onDeleteResponse,
   onDeleteStory,
-  onMarkReviewed,
   onRetry,
 }) {
   const [requestedSubTab, setRequestedSubTab] = useState(null);
 
-  // Computed before the early returns so the mark-reviewed effect can hook in.
   // NS-7: a content type only gets a sub-tab while it has something pending.
   const sections = getPendingSubmissionSections(detail);
   const subTabs = getSubmissionSubTabs(sections);
   const activeSubTab = resolveSubTab(requestedSubTab, subTabs);
-  const activeTabUnreviewed = subTabs.some((tab) => tab.key === activeSubTab && tab.unreviewed);
-  // `detail` can briefly belong to the previous contributor while the next one
-  // loads, so only trust it once it names the contributor on screen.
-  const detailIsCurrent = Boolean(contributor?.id) && detail?.contributor?.id === contributor.id;
-
-  // NS-5: opening a sub-tab is what reviews its items, so the dot clears.
-  useEffect(() => {
-    if (loading || error || !detailIsCurrent || !activeSubTab || !activeTabUnreviewed) return;
-    onMarkReviewed?.(activeSubTab);
-  }, [activeSubTab, activeTabUnreviewed, detailIsCurrent, error, loading, onMarkReviewed]);
 
   if (!contributor) {
     // The tab itself is hidden when nothing is pending (NS-7), so an empty
@@ -498,9 +485,9 @@ export default function ContributionsPanel({
     if (!confirmed) return
     setActionPending(true)
     try {
-      await deleteContributorPhoto(memorialId, currentContributorId, assetId)
+      const result = await deleteContributorPhoto(memorialId, currentContributorId, assetId)
       setSubmissionDetail((detail) => detail
-        ? { ...detail, photos: detail.photos.filter((p) => p.id !== assetId) }
+        ? markSectionReviewed({ ...detail, photos: detail.photos.filter((p) => p.id !== assetId) }, "photos", result?.reviewed_at || new Date().toISOString())
         : detail
       )
     } catch (err) {
@@ -516,9 +503,9 @@ export default function ContributionsPanel({
     if (!confirmed) return
     setActionPending(true)
     try {
-      await deleteContributorVoice(memorialId, currentContributorId, recordingId)
+      const result = await deleteContributorVoice(memorialId, currentContributorId, recordingId)
       setSubmissionDetail((detail) => detail
-        ? { ...detail, voices: detail.voices.filter((v) => v.id !== recordingId) }
+        ? markSectionReviewed({ ...detail, voices: detail.voices.filter((v) => v.id !== recordingId) }, "voices", result?.reviewed_at || new Date().toISOString())
         : detail
       )
     } catch (err) {
@@ -534,9 +521,9 @@ export default function ContributionsPanel({
     if (!confirmed) return
     setActionPending(true)
     try {
-      await deleteContributorResponse(memorialId, currentContributorId, responseId)
+      const result = await deleteContributorResponse(memorialId, currentContributorId, responseId)
       setSubmissionDetail((detail) => detail
-        ? { ...detail, responses: detail.responses.filter((r) => r.id !== responseId) }
+        ? markSectionReviewed({ ...detail, responses: detail.responses.filter((r) => r.id !== responseId) }, "responses", result?.reviewed_at || new Date().toISOString())
         : detail
       )
     } catch (err) {
@@ -552,9 +539,9 @@ export default function ContributionsPanel({
     if (!confirmed) return
     setActionPending(true)
     try {
-      await deleteContributorStory(memorialId, currentContributorId, storyId)
+      const result = await deleteContributorStory(memorialId, currentContributorId, storyId)
       setSubmissionDetail((detail) => detail
-        ? { ...detail, stories: detail.stories.filter((s) => s.id !== storyId) }
+        ? markSectionReviewed({ ...detail, stories: detail.stories.filter((s) => s.id !== storyId) }, "stories", result?.reviewed_at || new Date().toISOString())
         : detail
       )
     } catch (err) {
@@ -563,21 +550,6 @@ export default function ContributionsPanel({
       setActionPending(false)
     }
   }, [actionPending, currentContributorId, memorialId])
-
-  const handleMarkReviewed = useCallback(async (type) => {
-    if (!memorialId || !currentContributorId) return
-    try {
-      const result = await markMemorialContributorSubmissionReviewed(memorialId, currentContributorId, type)
-      setSubmissionDetail((detail) => (
-        detail?.contributor?.id === currentContributorId
-          ? markSectionReviewed(detail, type, result?.reviewed_at || new Date().toISOString())
-          : detail
-      ))
-    } catch {
-      // Marking as reviewed is bookkeeping only; a failure just leaves the dot
-      // in place, so it is not worth interrupting the review with an error.
-    }
-  }, [currentContributorId, memorialId])
 
   const handleApprove = useCallback(async () => {
     if (!memorialId || !currentContributorId || actionPending) return;
@@ -670,7 +642,6 @@ export default function ContributionsPanel({
           onDeleteVoice={handleDeleteVoice}
           onDeleteResponse={handleDeleteResponse}
           onDeleteStory={handleDeleteStory}
-          onMarkReviewed={handleMarkReviewed}
           onRetry={loadSubmissionDetail}
         />
       )}

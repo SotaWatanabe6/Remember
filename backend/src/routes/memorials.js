@@ -20,6 +20,8 @@ const REVIEWABLE_SUBMISSION_TABLES = {
   responses: 'questionnaire_responses',
 }
 
+const REVIEWED_ON_STATUSES = new Set(['approved', 'rejected'])
+
 async function getOwnedMemorial(memorialId, userId) {
   const { data, error } = await supabase
     .from('memorials')
@@ -563,44 +565,26 @@ router.get('/:id/contributors/:contributorId/submission', authMiddleware, async 
   }
 })
 
-// PATCH /memorials/:id/contributors/:contributorId/submission/reviewed — organizer opened a content type
-//
-// NS-5: each sub-tab of a submission shows a red dot while it holds items the
-// organizer has not looked at. Opening the sub-tab marks every unreviewed item
-// of that type as reviewed; already-reviewed items keep their original stamp.
-router.patch('/:id/contributors/:contributorId/submission/reviewed', authMiddleware, async (req, res) => {
-  try {
-    const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
-    if (!memorial) return res.status(403).json({ error: 'Not authorized' })
+// NS-5: each sub-tab of a pending submission shows a red dot until the
+// organizer has acted on that content type. Approving (or rejecting) the
+// submission settles every type; deleting an item settles the type it came
+// from, because curating a type is the organizer's first pass over it.
+// Merely opening a sub-tab is not review, so nothing here runs on a read.
+// Items already stamped keep their original timestamp.
+async function markSubmissionReviewed(memorialId, contributorId, types) {
+  const reviewedAt = new Date().toISOString()
 
-    const type = String(req.body?.type || '').trim().toLowerCase()
-    const table = REVIEWABLE_SUBMISSION_TABLES[type]
-    if (!table) return res.status(400).json({ error: 'Invalid submission content type' })
+  const results = await Promise.all(types.map((type) => supabase
+    .from(REVIEWABLE_SUBMISSION_TABLES[type])
+    .update({ reviewed_at: reviewedAt })
+    .eq('contributor_id', contributorId)
+    .eq('memorial_id', memorialId)
+    .is('reviewed_at', null)
+    .select('id')))
 
-    const { data: contributor, error: contributorError } = await supabase
-      .from('contributors')
-      .select('id')
-      .eq('id', req.params.contributorId)
-      .eq('memorial_id', req.params.id)
-      .single()
-
-    if (contributorError || !contributor) return res.status(404).json({ error: 'Contributor not found' })
-
-    const reviewedAt = new Date().toISOString()
-    const { data, error } = await supabase
-      .from(table)
-      .update({ reviewed_at: reviewedAt })
-      .eq('contributor_id', contributor.id)
-      .eq('memorial_id', req.params.id)
-      .is('reviewed_at', null)
-      .select('id')
-
-    if (error) return res.status(400).json({ error: error.message })
-    res.json({ type, reviewed_at: reviewedAt, ids: (data || []).map((item) => item.id) })
-  } catch (err) {
-    res.status(500).json({ error: err.message })
-  }
-})
+  const failed = results.find((result) => result.error)
+  return { reviewed_at: reviewedAt, error: failed?.error || null }
+}
 
 // PATCH /memorials/:id/contributors/:contributorId/status — organizer review status
 router.patch('/:id/contributors/:contributorId/status', authMiddleware, async (req, res) => {
@@ -622,7 +606,16 @@ router.patch('/:id/contributors/:contributorId/status', authMiddleware, async (r
       .single()
 
     if (error || !data) return res.status(404).json({ error: 'Contributor not found' })
-    res.json({ contributor: data })
+
+    // A first approve/reject pass settles every content type at once.
+    let reviewedAt = null
+    if (REVIEWED_ON_STATUSES.has(status)) {
+      const reviewed = await markSubmissionReviewed(req.params.id, data.id, Object.keys(REVIEWABLE_SUBMISSION_TABLES))
+      if (reviewed.error) return res.status(400).json({ error: reviewed.error.message })
+      reviewedAt = reviewed.reviewed_at
+    }
+
+    res.json({ contributor: data, reviewed_at: reviewedAt })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -727,7 +720,11 @@ router.delete('/:id/contributors/:contributorId/photos/:assetId', authMiddleware
 
     if (deleteError) return res.status(400).json({ error: deleteError.message })
 
-    res.json({ deleted: true })
+    // Curating this type counts as the organizer's first pass over it.
+    const reviewed = await markSubmissionReviewed(req.params.id, req.params.contributorId, ['photos'])
+    if (reviewed.error) return res.status(400).json({ error: reviewed.error.message })
+
+    res.json({ deleted: true, reviewed_at: reviewed.reviewed_at })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -762,7 +759,11 @@ router.delete('/:id/contributors/:contributorId/voices/:recordingId', authMiddle
 
     if (deleteError) return res.status(400).json({ error: deleteError.message })
 
-    res.json({ deleted: true })
+    // Curating this type counts as the organizer's first pass over it.
+    const reviewed = await markSubmissionReviewed(req.params.id, req.params.contributorId, ['voices'])
+    if (reviewed.error) return res.status(400).json({ error: reviewed.error.message })
+
+    res.json({ deleted: true, reviewed_at: reviewed.reviewed_at })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -791,7 +792,11 @@ router.delete('/:id/contributors/:contributorId/responses/:responseId', authMidd
 
     if (deleteError) return res.status(400).json({ error: deleteError.message })
 
-    res.json({ deleted: true })
+    // Curating this type counts as the organizer's first pass over it.
+    const reviewed = await markSubmissionReviewed(req.params.id, req.params.contributorId, ['responses'])
+    if (reviewed.error) return res.status(400).json({ error: reviewed.error.message })
+
+    res.json({ deleted: true, reviewed_at: reviewed.reviewed_at })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -820,7 +825,11 @@ router.delete('/:id/contributors/:contributorId/stories/:storyId', authMiddlewar
 
     if (deleteError) return res.status(400).json({ error: deleteError.message })
 
-    res.json({ deleted: true })
+    // Curating this type counts as the organizer's first pass over it.
+    const reviewed = await markSubmissionReviewed(req.params.id, req.params.contributorId, ['stories'])
+    if (reviewed.error) return res.status(400).json({ error: reviewed.error.message })
+
+    res.json({ deleted: true, reviewed_at: reviewed.reviewed_at })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

@@ -68,8 +68,9 @@ test('a submission with nothing pending has no sub-tabs at all', () => {
   assert.equal(helpers.resolveSubTab('photos', empty), null);
 });
 
-// NS-5: red dot on a sub-tab while it holds items the organizer has not opened.
-test('a sub-tab is unreviewed while any of its pending items lacks reviewed_at', () => {
+// NS-5: red dot on a sub-tab until the organizer has acted on that content
+// type. Opening a sub-tab is not review, so the dot survives a glance.
+test('a sub-tab stays dotted while any of its pending items is unsettled', () => {
   const sections = helpers.getPendingSubmissionSections({
     photos: [{ id: 'p1', reviewed_at: '2026-09-01T00:00:00.000Z' }, { id: 'p2', reviewed_at: null }],
     voices: [{ id: 'v1', reviewed_at: '2026-09-01T00:00:00.000Z' }],
@@ -88,7 +89,7 @@ test('an empty draft does not keep its sub-tab dotted', () => {
   assert.deepEqual(helpers.getSubmissionSubTabs(sections), []);
 });
 
-test('marking a section reviewed stamps only its unreviewed items and clears the dot', () => {
+test('settling a section stamps only its unreviewed items and clears its dot', () => {
   const detail = {
     contributor: { id: 'a' },
     photos: [{ id: 'p1', reviewed_at: '2026-09-01T00:00:00.000Z' }, { id: 'p2', reviewed_at: null }],
@@ -107,4 +108,32 @@ test('marking a section that is absent from the detail is a no-op', () => {
   const detail = { contributor: { id: 'a' }, photos: [] };
   assert.equal(helpers.markSectionReviewed(detail, 'stories', 'now'), detail);
   assert.equal(helpers.markSectionReviewed(null, 'photos', 'now'), null);
+});
+
+test('a sub-tab the organizer only looked at keeps its dot', () => {
+  // Nothing in the helpers clears a dot on read: only markSectionReviewed,
+  // which mirrors the server's stamping on approve/delete, does.
+  const detail = { contributor: { id: 'a' }, photos: [{ id: 'p1', reviewed_at: null }], voices: [{ id: 'v1', reviewed_at: null }] };
+  const dotted = () => helpers.getSubmissionSubTabs(helpers.getPendingSubmissionSections(detail))
+    .filter((tab) => tab.unreviewed).map((tab) => tab.key);
+  assert.deepEqual(dotted(), ['photos', 'voices']);
+  assert.equal(helpers.resolveSubTab('voices', helpers.getSubmissionSubTabs(helpers.getPendingSubmissionSections(detail))), 'voices');
+  assert.deepEqual(dotted(), ['photos', 'voices'], 'switching sub-tabs settles nothing');
+});
+
+test('an approve pass settles every type, so no sub-tab is dotted', () => {
+  // The server stamps all four types on approve; mirror that locally.
+  const approved = ['photos', 'voices', 'stories', 'responses'].reduce(
+    (detail, type) => helpers.markSectionReviewed(detail, type, '2026-09-24T12:00:00.000Z'),
+    {
+      contributor: { id: 'a' },
+      photos: [{ id: 'p1', reviewed_at: null }],
+      voices: [{ id: 'v1', reviewed_at: null }],
+      stories: [{ id: 's1', title: 'Lake', body: 'We swam.', reviewed_at: null }],
+      responses: [{ id: 'r1', answer_text: 'Gardening.', reviewed_at: null }],
+    },
+  );
+  const tabs = helpers.getSubmissionSubTabs(helpers.getPendingSubmissionSections(approved));
+  assert.deepEqual(tabs.map((tab) => tab.key), ['photos', 'voices', 'stories', 'responses']);
+  assert.deepEqual(tabs.filter((tab) => tab.unreviewed), []);
 });
