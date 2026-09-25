@@ -1021,7 +1021,7 @@ function GenerateConfirmModal({ onConfirm, onCancel, subjectName }) {
             or the phrase &ldquo;In loving memory&rdquo;.
           </p>
           <p className="text-base font-medium leading-6 text-[#C96E43]">
-            Clicking on the "Generate Memorial" button below will finalize and create a curated memorial. Please ensure you have collected all memories before proceeding.
+            Clicking on the &ldquo;Generate Memorial&rdquo; button below will finalize and create a curated memorial. Please ensure you have collected all memories before proceeding.
           </p>
         </div>
 

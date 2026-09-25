@@ -934,6 +934,7 @@ async function composeStorySlideshow({
   analyzedPhotos,
   responses,
   contributors,
+  voiceRecordings = [],
 }) {
   const memories = buildMemoryCorpus(responses, contributors, subjectName, memorial)
   const birthYear = resolveMemorialBirthYear(memorial)
@@ -947,7 +948,7 @@ async function composeStorySlideshow({
     ),
   )
   const finishStory = (slides) => addStoryBookends(slides, {
-    memorial, subjectName, responses, contributors, client: openai,
+    memorial, subjectName, responses, contributors, voiceRecordings, client: openai,
   })
 
   const buildFallbackSlideshow = () =>

@@ -34,3 +34,20 @@ test('plain farewell survives normalization without a photo or narration', () =>
   assert.equal(slides[0].farewellMessage, 'In loving memory');
   assert.equal(slides[0].contributorId, null);
 });
+
+test('farewell and all credits stay at the end of a long story', () => {
+  const people = Array.from({ length: 30 }, (_, i) => ({ contributor_id: `c${i}`, contributor_name: 'Anonymous', relationship_type: 'aunt_uncle', quote: i ? null : 'A selected quote.' }));
+  const story = [
+    { slide_type: 'opening', subject_name: 'Robin', order_index: 1 },
+    ...Array.from({ length: 20 }, (_, i) => ({ photo_url: 'photo.jpg', order_index: i + 2 })),
+    { slide_type: 'farewell', farewell_message: 'In loving memory', order_index: 22 },
+    { slide_type: 'credits', contributors: people, order_index: 23 },
+  ];
+  const slides = normalizeStorySlides({}, [...story].reverse());
+  assert.equal(slides.length, 23);
+  assert.equal(slides.at(-2).slideType, 'farewell');
+  assert.equal(slides.at(-1).slideType, 'credits');
+  assert.equal(slides.at(-1).credits.length, 30);
+  assert.equal(slides.at(-1).credits[0].relationshipLabel, 'Aunt Uncle');
+  assert.equal(slides.at(-1).credits[0].quote, 'A selected quote.');
+});
