@@ -111,10 +111,11 @@ function fixture() {
   }
   const submission = (options) => call('get', '/:id/contributors/:contributorId/submission', options)
   const approveType = (type, options) => call('patch', '/:id/contributors/:contributorId/submission/approve', { body: { type }, ...options })
+  const approveSelected = (type, ids, options) => call('patch', '/:id/contributors/:contributorId/submission/approve', { body: { type, ids }, ...options })
   const setStatus = (status, options) => call('patch', '/:id/contributors/:contributorId/status', { body: { status }, ...options })
   const remove = (routePath, params, options) => call('delete', routePath, { params, ...options })
   const stamped = (table) => db[table].map((row) => row.reviewed_at)
-  return { db, mutations, removedFiles, submission, setStatus, remove, stamped, approveType }
+  return { db, mutations, removedFiles, submission, setStatus, remove, stamped, approveType, approveSelected }
 }
 
 test('submission payload carries reviewed_at per item and answer_text for responses', async () => {
@@ -290,3 +291,80 @@ for (const [name, type, options, expected] of [
     assert.deepEqual(f.mutations.filter((mutation) => mutation.patch?.approved_at), [])
   })
 }
+
+// NS-6: "Approve selected" keeps what the organizer ticked and permanently
+// deletes the rest of that type, files included.
+test('approving a selection deletes the unselected items of that type', async () => {
+  const f = fixture()
+  const { statusCode, body } = await f.approveSelected('photos', ['p2'])
+  assert.equal(statusCode, 200)
+  assert.deepEqual(body.ids, ['p2'])
+  assert.deepEqual(body.deleted_ids, ['p1'])
+  assert.deepEqual(f.db.media_assets.map((photo) => [photo.id, Boolean(photo.approved_at)]), [
+    ['p2', true], ['p3', false],
+  ], "another memorial's photos are untouched")
+  assert.deepEqual(f.removedFiles, ['jane/1.jpg'])
+  assert.equal(f.db.voice_recordings.length, 1, 'other types are untouched')
+})
+
+test('approving an empty selection removes every item of that type', async () => {
+  const f = fixture()
+  const { body } = await f.approveSelected('voices', [])
+  assert.deepEqual(body.ids, [])
+  assert.deepEqual(body.deleted_ids, ['v1'])
+  assert.deepEqual(f.db.voice_recordings, [])
+  assert.deepEqual(f.removedFiles, ['jane/v.m4a'])
+})
+
+test('types without files delete rows only', async () => {
+  const f = fixture()
+  const { body } = await f.approveSelected('stories', [])
+  assert.deepEqual(body.deleted_ids, ['s1'])
+  assert.deepEqual(f.db.contributor_stories, [])
+  assert.deepEqual(f.removedFiles, [])
+})
+
+test('a stale selection never deletes or re-stamps approved items', async () => {
+  const f = fixture()
+  const first = await f.approveSelected('photos', ['p1'])
+  assert.deepEqual(first.body.deleted_ids, ['p2'])
+
+  const again = await f.approveSelected('photos', [])
+  assert.deepEqual(again.body.ids, [])
+  assert.deepEqual(again.body.deleted_ids, [], 'p1 was already approved')
+  assert.equal(f.db.media_assets.find((photo) => photo.id === 'p1').approved_at, first.body.approved_at)
+})
+
+test("ids from another contributor are ignored, not approved", async () => {
+  const f = fixture()
+  const { body } = await f.approveSelected('photos', ['p1', 'p2', 'p3'])
+  assert.deepEqual(body.ids, ['p1', 'p2'])
+  assert.equal(f.db.media_assets.find((photo) => photo.id === 'p3').approved_at, undefined)
+})
+
+test('deleting the unselected items can finish the submission', async () => {
+  const f = fixture()
+  await f.approveSelected('photos', ['p1'])
+  await f.approveSelected('voices', [])
+  await f.approveSelected('stories', ['s1'])
+  const { body } = await f.approveSelected('responses', [])
+  assert.equal(body.awaiting_approval, 0)
+  assert.equal(f.db.contributors[0].status, 'approved')
+})
+
+test('a malformed selection is rejected before anything changes', async () => {
+  const f = fixture()
+  for (const ids of ['p1', [1], null]) {
+    assert.equal((await f.approveSelected('photos', ids)).statusCode, 400, JSON.stringify(ids))
+  }
+  assert.deepEqual(f.mutations, [])
+  assert.deepEqual(f.removedFiles, [])
+})
+
+test('the submission payload says what is already approved', async () => {
+  const f = fixture()
+  await f.approveSelected('photos', ['p2'])
+  const { body } = await f.submission()
+  assert.deepEqual(body.photos.map((photo) => [photo.id, Boolean(photo.approved_at)]), [['p2', true]])
+  assert.deepEqual(body.stories.map((story) => story.approved_at), [undefined])
+})

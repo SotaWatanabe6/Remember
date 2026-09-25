@@ -110,14 +110,39 @@ export function resolveSubTab(requestedKey, subTabs) {
   return subTabs[0]?.key || null;
 }
 
-// Local mirror of the per-type approve: every item of that type leaves the
-// queue, which also settles its dot.
-export function markSectionApproved(detail, type, approvedAt) {
+// Local mirror of the per-type approve: approved items leave the queue, which
+// also settles their dot. NS-6: with a selection, the server says which items
+// it approved and which unselected ones it deleted; without one, the whole
+// type was approved.
+export function markSectionApproved(detail, type, approvedAt, { approvedIds, deletedIds = [] } = {}) {
   if (!detail || !Array.isArray(detail[type])) return detail;
+  const approved = approvedIds ? new Set(approvedIds) : null;
+  const deleted = new Set(deletedIds);
   return {
     ...detail,
-    [type]: detail[type].map((item) => (isApproved(item)
-      ? item
-      : { ...item, approved_at: approvedAt, reviewed_at: item.reviewed_at || approvedAt })),
+    [type]: detail[type]
+      .filter((item) => !deleted.has(item.id))
+      .map((item) => (isApproved(item) || (approved && !approved.has(item.id))
+        ? item
+        : { ...item, approved_at: approvedAt, reviewed_at: item.reviewed_at || approvedAt })),
   };
+}
+
+// NS-6: every item starts selected, so nothing is deleted unless the
+// organizer unticks it. Selection state is the ids unticked, per type.
+export function getSelectedIds(items, unselected, type) {
+  const unticked = new Set(unselected?.[type] || []);
+  return (items || []).map((item) => item.id).filter((id) => !unticked.has(id));
+}
+
+export function toggleSelected(unselected, type, id) {
+  const unticked = unselected?.[type] || [];
+  return {
+    ...unselected,
+    [type]: unticked.includes(id) ? unticked.filter((item) => item !== id) : [...unticked, id],
+  };
+}
+
+export function setAllSelected(unselected, type, items, selected) {
+  return { ...unselected, [type]: selected ? [] : (items || []).map((item) => item.id) };
 }

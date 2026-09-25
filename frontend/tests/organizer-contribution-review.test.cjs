@@ -11,7 +11,7 @@ function loadHelpers() {
     .replace(/^export /gm, '');
   // Same realm as the assertions so arrays compare structurally with deepEqual.
   return vm.runInThisContext(`(() => { ${source}
-    return { getManageTabs, resolveManageTab, hasPendingContributions, getPendingSubmissionSections, getSubmissionSubTabs, resolveSubTab, isUnreviewed, hasUnreviewedItems, markSectionReviewed, isApproved, markSectionApproved, getSubTabNoun, SUBMISSION_SUB_TABS }; })()`);
+    return { getManageTabs, resolveManageTab, hasPendingContributions, getPendingSubmissionSections, getSubmissionSubTabs, resolveSubTab, isUnreviewed, hasUnreviewedItems, markSectionReviewed, isApproved, markSectionApproved, getSubTabNoun, SUBMISSION_SUB_TABS, getSelectedIds, toggleSelected, setAllSelected }; })()`);
 }
 
 const helpers = loadHelpers();
@@ -188,4 +188,43 @@ test('each content type names itself the way the approval dialog reads', () => {
   assert.deepEqual(helpers.SUBMISSION_SUB_TABS.map((tab) => tab.noun), ['photo', 'audio', 'story', 'Q&A']);
   assert.equal(helpers.getSubTabNoun('voices'), 'audio');
   assert.equal(helpers.getSubTabNoun('nope'), '');
+});
+
+// NS-6: "Approve selected" approves what is ticked and deletes the rest.
+test('everything starts selected, so nothing is deleted by default', () => {
+  const photos = [{ id: 'p1' }, { id: 'p2' }];
+  assert.deepEqual(helpers.getSelectedIds(photos, {}, 'photos'), ['p1', 'p2']);
+  assert.deepEqual(helpers.getSelectedIds(photos, undefined, 'photos'), ['p1', 'p2']);
+});
+
+test('unticking and re-ticking an item', () => {
+  const photos = [{ id: 'p1' }, { id: 'p2' }];
+  const off = helpers.toggleSelected({}, 'photos', 'p1');
+  assert.deepEqual(helpers.getSelectedIds(photos, off, 'photos'), ['p2']);
+  assert.deepEqual(helpers.getSelectedIds([{ id: 'p1' }], off, 'voices'), ['p1'], 'other types keep their own selection');
+  const on = helpers.toggleSelected(off, 'photos', 'p1');
+  assert.deepEqual(helpers.getSelectedIds(photos, on, 'photos'), ['p1', 'p2']);
+});
+
+test('select all ticks or unticks a whole type', () => {
+  const photos = [{ id: 'p1' }, { id: 'p2' }];
+  const none = helpers.setAllSelected(helpers.toggleSelected({}, 'voices', 'v1'), 'photos', photos, false);
+  assert.deepEqual(helpers.getSelectedIds(photos, none, 'photos'), []);
+  assert.deepEqual(none.voices, ['v1'], 'other types are untouched');
+  const all = helpers.setAllSelected(none, 'photos', photos, true);
+  assert.deepEqual(helpers.getSelectedIds(photos, all, 'photos'), ['p1', 'p2']);
+});
+
+test('approving a selection drops the deleted items and stamps only the approved ones', () => {
+  const detail = {
+    photos: [{ id: 'p1' }, { id: 'p2' }, { id: 'p3', approved_at: '2026-09-01T00:00:00.000Z' }],
+  };
+  const next = helpers.markSectionApproved(detail, 'photos', '2026-09-24T12:00:00.000Z', {
+    approvedIds: ['p2'], deletedIds: ['p1'],
+  });
+  assert.deepEqual(next.photos.map((photo) => [photo.id, photo.approved_at]), [
+    ['p2', '2026-09-24T12:00:00.000Z'],
+    ['p3', '2026-09-01T00:00:00.000Z'],
+  ]);
+  assert.deepEqual(keys(helpers.getSubmissionSubTabs(helpers.getPendingSubmissionSections(next))), [], 'nothing of the type is left pending');
 });

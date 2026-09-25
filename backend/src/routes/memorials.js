@@ -20,6 +20,9 @@ const REVIEWABLE_SUBMISSION_TABLES = {
   responses: 'questionnaire_responses',
 }
 
+// Submission types whose rows point at a file in storage.
+const STORED_SUBMISSION_TYPES = new Set(['photos', 'voices'])
+
 const REVIEWED_ON_STATUSES = new Set(['approved', 'rejected'])
 
 async function getOwnedMemorial(memorialId, userId) {
@@ -531,25 +534,25 @@ router.get('/:id/contributors/:contributorId/submission', authMiddleware, async 
     ] = await Promise.all([
       supabase
         .from('questionnaire_responses')
-        .select('id, question_text, response_text, response_audio_url, order_index, reviewed_at, created_at, updated_at')
+        .select('id, question_text, response_text, response_audio_url, order_index, reviewed_at, approved_at, created_at, updated_at')
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', req.params.id)
         .order('order_index', { ascending: true }),
       supabase
         .from('contributor_stories')
-        .select('id, contributor_id, client_story_id, title, body, reviewed_at, created_at, updated_at')
+        .select('id, contributor_id, client_story_id, title, body, reviewed_at, approved_at, created_at, updated_at')
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', req.params.id)
         .order('created_at', { ascending: true }),
       supabase
         .from('media_assets')
-        .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption, is_flagged, flagged_reason, reviewed_at, created_at')
+        .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption, is_flagged, flagged_reason, reviewed_at, approved_at, created_at')
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', req.params.id)
         .order('created_at', { ascending: true }),
       supabase
         .from('voice_recordings')
-        .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, duration_seconds, contributor_title, transcript_text, key_quote, is_flagged, flagged_reason, reviewed_at, created_at')
+        .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, duration_seconds, contributor_title, transcript_text, key_quote, is_flagged, flagged_reason, reviewed_at, approved_at, created_at')
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', req.params.id)
         .order('created_at', { ascending: true }),
@@ -622,6 +625,10 @@ async function countPendingApproval(memorialId, contributorId) {
 // type also settles its red dot. Once nothing of the contributor's is left
 // awaiting approval, the contributor itself counts as approved, which is what
 // the archive listing and the generation gate read.
+//
+// NS-6: with `ids`, only those items are approved and every other item of the
+// type still awaiting approval is permanently deleted, files included. An
+// empty `ids` deletes them all. Without `ids`, the whole type is approved.
 router.patch('/:id/contributors/:contributorId/submission/approve', authMiddleware, async (req, res) => {
   try {
     const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
@@ -640,16 +647,69 @@ router.patch('/:id/contributors/:contributorId/submission/approve', authMiddlewa
 
     if (contributorError || !contributor) return res.status(404).json({ error: 'Contributor not found' })
 
-    const approvedAt = new Date().toISOString()
-    const { data: approved, error: approveError } = await supabase
+    const selectedIds = req.body?.ids
+    if (selectedIds !== undefined && (!Array.isArray(selectedIds) || selectedIds.some((id) => typeof id !== 'string'))) {
+      return res.status(400).json({ error: 'ids must be an array of item ids' })
+    }
+
+    const hasFiles = STORED_SUBMISSION_TYPES.has(type)
+    const { data: awaiting, error: awaitingError } = await supabase
       .from(table)
-      .update({ approved_at: approvedAt, reviewed_at: approvedAt })
+      .select(hasFiles ? 'id, storage_path, storage_bucket' : 'id')
       .eq('contributor_id', contributor.id)
       .eq('memorial_id', req.params.id)
       .is('approved_at', null)
-      .select('id')
 
-    if (approveError) return res.status(400).json({ error: approveError.message })
+    if (awaitingError) return res.status(400).json({ error: awaitingError.message })
+
+    // Only items still awaiting approval are in play, so a stale selection
+    // can neither re-stamp nor delete anything already approved.
+    const selected = selectedIds === undefined ? null : new Set(selectedIds)
+    const toApprove = (awaiting || []).filter((item) => !selected || selected.has(item.id))
+    const toDelete = (awaiting || []).filter((item) => selected && !selected.has(item.id))
+
+    // Approve first: if the delete then fails, the unselected items are still
+    // awaiting approval and the organizer can simply try again.
+    const approvedAt = new Date().toISOString()
+    if (toApprove.length) {
+      const { error: approveError } = await supabase
+        .from(table)
+        .update({ approved_at: approvedAt, reviewed_at: approvedAt })
+        .eq('contributor_id', contributor.id)
+        .eq('memorial_id', req.params.id)
+        .in('id', toApprove.map((item) => item.id))
+        .is('approved_at', null)
+
+      if (approveError) return res.status(400).json({ error: approveError.message })
+    }
+
+    if (toDelete.length) {
+      if (hasFiles) {
+        const pathsByBucket = toDelete.reduce((groups, item) => {
+          if (!item.storage_path) return groups
+          const bucket = item.storage_bucket || 'memorial-assets'
+          groups[bucket] = groups[bucket] || []
+          groups[bucket].push(item.storage_path)
+          return groups
+        }, {})
+
+        const removed = await Promise.all(Object.entries(pathsByBucket).map(([bucket, paths]) => (
+          supabase.storage.from(bucket).remove(paths)
+        )))
+        const storageError = removed.find((result) => result.error)?.error
+        if (storageError) return res.status(400).json({ error: storageError.message })
+      }
+
+      const { error: deleteError } = await supabase
+        .from(table)
+        .delete()
+        .eq('contributor_id', contributor.id)
+        .eq('memorial_id', req.params.id)
+        .in('id', toDelete.map((item) => item.id))
+        .is('approved_at', null)
+
+      if (deleteError) return res.status(400).json({ error: deleteError.message })
+    }
 
     const pending = await countPendingApproval(req.params.id, contributor.id)
     if (pending.error) return res.status(400).json({ error: pending.error.message })
@@ -671,7 +731,8 @@ router.patch('/:id/contributors/:contributorId/submission/approve', authMiddlewa
     res.json({
       type,
       approved_at: approvedAt,
-      ids: (approved || []).map((item) => item.id),
+      ids: toApprove.map((item) => item.id),
+      deleted_ids: toDelete.map((item) => item.id),
       awaiting_approval: pending.count,
       contributor: updatedContributor,
     })
