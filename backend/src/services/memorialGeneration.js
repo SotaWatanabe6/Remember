@@ -1,6 +1,7 @@
 require('dotenv').config()
 const OpenAI = require('openai')
 const { addStoryBookends } = require('./storyBookends')
+const { buildMemoryConstellation } = require('./constellationMemories')
 const { resolveQuestionPrompt } = require('../lib/questionnaireQuestions')
 
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null
@@ -531,11 +532,12 @@ Return JSON only:
   "photo_description": "2–3 observant sentences: who is present, what they are doing, setting, clothing/era clues, mood",
   "emotion": "visible mood if clear, else neutral",
   "people_count": number,
+  "people_description": "visible ages, group size, positions and activities; do not invent identities or relationships",
   "setting": "indoor|outdoor|home|celebration|medical|nature|work|unknown",
   "tags": ["5-8 concrete visual tags"],
   "visual_mood": "e.g. calm, lively, formal",
   "life_moment_type": "e.g. everyday_routine, celebration, caregiving, travel, childhood, gathering, portrait",
-  "subject_in_photo": true or false — is ${subjectName} visible?,
+  "subject_in_photo": true, false or null — use null when identity is unknown; a name alone cannot identify someone,
   "subject_apparent_age": number or null — best estimate of how old ${subjectName} looks if they are in the photo,
   "subject_life_stage": "infancy|early_childhood|childhood|pre_teen|teenager|young_adult|twenties|thirties|forties|fifties|sixties|seventies|eighties|nineties|elderly|unknown",
   "subject_life_stage_label": "short human label e.g. As a young child, In her thirties, Later years",
@@ -1145,251 +1147,8 @@ Return JSON: { "quotes": [{ "text": "...", "contributor_name": "...", "relations
   }
 }
 
-function buildConstellationPhotoSummary(photo) {
-  return {
-    photo_id: photo.id,
-    year: resolvePhotoYear(photo),
-    era_label: resolvePhotoEraLabel(photo),
-    scene: photo.analysis?.scene || '',
-    setting: photo.analysis?.setting || '',
-    life_moment_type: photo.analysis?.life_moment_type || '',
-    tags: photo.analysis?.tags || [],
-    visual_mood: photo.analysis?.visual_mood || '',
-    deceased_present: photo.analysis?.deceased_present ?? photo.photo_identity?.deceased_present ?? null,
-    people_count: photo.analysis?.people_count ?? null,
-  }
-}
-
-function scorePhotoAgainstConstellationTheme(photoAnalysis, theme) {
-  const photoText = [
-    photoAnalysis?.scene,
-    photoAnalysis?.setting,
-    photoAnalysis?.visual_mood,
-    photoAnalysis?.life_moment_type,
-    ...(photoAnalysis?.tags || []),
-    resolvePhotoYear({ analysis: photoAnalysis }),
-    resolvePhotoEraLabel({ analysis: photoAnalysis }),
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase()
-
-  const themeText = [
-    theme.label,
-    theme.summary,
-    ...(theme.matching_keywords || []),
-    ...(theme.memory_anchors || []),
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase()
-
-  const keywords = themeText.split(/\W+/).filter((w) => w.length > 3)
-  return keywords.filter((kw) => photoText.includes(kw)).length
-}
-
-function pickBestConstellationTheme(photo, themes) {
-  if (!themes.length) return null
-  const scored = themes
-    .map((theme) => ({
-      id: theme.id,
-      score: scorePhotoAgainstConstellationTheme(photo.analysis, theme),
-    }))
-    .sort((a, b) => b.score - a.score)
-  return scored[0]?.id || themes[0].id
-}
-
-// function averageThemeYear(theme, photoById) {
-//   const years = (theme.photo_ids || [])
-//     .map((id) => Number(resolvePhotoYear(photoById[id] || {})))
-//     .filter((y) => Number.isFinite(y))
-//   if (!years.length) return 9999
-//   return years.reduce((sum, y) => sum + y, 0) / years.length
-// }
-
-function buildConstellationEdges(themes, centerNodeId = 'center') {
-  if (!themes.length) return []
-  return themes.map((theme) => ({
-    source: centerNodeId,
-    target: theme.id,
-    relationship_type: 'theme',
-    weight: 0.5 + Math.min(0.4, (theme.photo_ids?.length || 0) / 20),
-  }))
-}
-
-function buildConstellationPhotoQuotes(themePhotos, contributors = []) {
-  return themePhotos
-    .filter((p) => p.analysis?.scene || p.caption)
-    .slice(0, 3)
-    .map((p) => {
-      const contributor = contributors.find((c) => c.id === p.contributor_id)
-      return {
-        text: p.caption || p.analysis?.scene || '',
-        contributor_name: contributor?.name || 'A contributor',
-        relationship_type: contributor?.relationship_type || 'unknown',
-      }
-    })
-}
-
-/**
- * Constellation themes — photo-only, separate from albums and questionnaire discovery.
- * Every photo is assigned to exactly one theme; themes with zero photos are dropped.
- */
-async function buildConstellationFromPhotos(analyzedPhotos, subjectName, contributors = []) {
-  if (!analyzedPhotos?.length) {
-    return { themes: [], photos: [], edges: [] }
-  }
-
-  const photoSummaries = analyzedPhotos.map(buildConstellationPhotoSummary)
-  const photoById = Object.fromEntries(analyzedPhotos.map((p) => [p.id, p]))
-
-  let rawThemes = []
-  if (!openai) {
-    rawThemes = [
-      {
-        id: 'constellation_001',
-        label: `Life in pictures`,
-        category: 'life_chapter',
-        summary: `Photos that show ${subjectName} across different moments.`,
-        prominence_score: 0.9,
-        matching_keywords: [],
-        memory_anchors: [],
-        photo_ids: analyzedPhotos.map((p) => p.id),
-      },
-    ]
-  } else {
-    try {
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        max_tokens: 2000,
-        messages: [{
-          role: 'user',
-          content: `You are building a PHOTO CONSTELLATION for ${subjectName}'s memorial — a map of discovery themes drawn ONLY from contributor photos.
-
-This is NOT a photo album. Albums group by setting/activity (kitchen, garden, parties). The constellation groups photos into LIFE DISCOVERY chapters — what someone can learn about ${subjectName} by exploring connected images (life stages, eras, relationships visible in frames, recurring places, kinds of moments over time).
-
-STRICT RULES:
-- Use ONLY visual information from the photo analyses below
-- Do NOT use questionnaire text or biography
-- Partition ALL ${analyzedPhotos.length} photos: each photo_id appears in EXACTLY ONE theme
-- Every theme MUST contain at least one photo — do not create empty themes
-- Labels: 3–7 words, discovery-oriented (e.g. "Her early years", "People she held close", "Everyday quiet moments")
-- Summary: 2 neutral sentences describing what these photos reveal visually
-- 3–6 themes total, or fewer if there are very few photos
-- matching_keywords: visual tags/eras/settings from the photos in that theme
-
-Photo analyses:
-${JSON.stringify(photoSummaries, null, 2)}
-
-Return JSON only:
-{
-  "themes": [
-    {
-      "id": "constellation_001",
-      "label": "...",
-      "category": "life_chapter|relationships|place|era|moments",
-      "summary": "...",
-      "prominence_score": 0.0 to 1.0,
-      "matching_keywords": ["visual tag or era"],
-      "memory_anchors": ["short visual anchor"],
-      "photo_ids": ["uuid"]
-    }
-  ]
-}`,
-        }],
-      })
-      const parsed = parseJson(completion.choices[0].message.content)
-      rawThemes = parsed.themes || []
-    } catch (err) {
-      console.error('[ConstellationPhotos] error:', err.message)
-      rawThemes = []
-    }
-  }
-
-  const assignedPhotoIds = new Set()
-  const themes = []
-
-  for (const theme of rawThemes) {
-    const photoIds = (theme.photo_ids || []).filter(
-      (id) => photoById[id] && !assignedPhotoIds.has(id),
-    )
-    if (!photoIds.length) continue
-    photoIds.forEach((id) => assignedPhotoIds.add(id))
-    themes.push({
-      ...theme,
-      id: theme.id || `constellation_${String(themes.length + 1).padStart(3, '0')}`,
-      photo_ids: photoIds,
-      photo_count: photoIds.length,
-    })
-  }
-
-  const unassigned = analyzedPhotos.filter((p) => !assignedPhotoIds.has(p.id))
-  if (unassigned.length) {
-    if (!themes.length) {
-      themes.push({
-        id: 'constellation_001',
-        label: 'Memories in pictures',
-        category: 'moments',
-        summary: `Contributor photos of ${subjectName}.`,
-        prominence_score: 0.8,
-        matching_keywords: [],
-        memory_anchors: [],
-        photo_ids: unassigned.map((p) => p.id),
-        photo_count: unassigned.length,
-      })
-      unassigned.forEach((p) => assignedPhotoIds.add(p.id))
-    } else {
-      for (const photo of unassigned) {
-        const themeId = pickBestConstellationTheme(photo, themes)
-        const theme = themes.find((t) => t.id === themeId) || themes[0]
-        theme.photo_ids.push(photo.id)
-        theme.photo_count = theme.photo_ids.length
-        assignedPhotoIds.add(photo.id)
-      }
-    }
-  }
-
-  const photosWithThemes = analyzedPhotos.map((photo) => {
-    const theme = themes.find((t) => t.photo_ids.includes(photo.id))
-    return {
-      ...photo,
-      constellation_theme_id: theme?.id || themes[0]?.id || null,
-    }
-  })
-
-  const activeThemes = themes
-    .filter((t) => t.photo_ids.length > 0)
-    .map((t) => ({
-      ...t,
-      prominence_score: Math.min(
-        1,
-        0.4 + t.photo_ids.length / Math.max(analyzedPhotos.length, 1),
-      ),
-      photo_count: t.photo_ids.length,
-    }))
-    .sort((a, b) => b.photo_count - a.photo_count)
-
-  const edges = buildConstellationEdges(activeThemes)
-
-  return {
-    themes: activeThemes,
-    photos: photosWithThemes,
-    edges,
-    buildNodePayload: (theme) => {
-      const themePhotos = theme.photo_ids.map((id) => photoById[id]).filter(Boolean)
-      return {
-        id: theme.id,
-        label: theme.label,
-        category: theme.category,
-        summary: theme.summary,
-        prominence_score: theme.prominence_score,
-        photo_urls: themePhotos.map((p) => p.storage_path),
-        photo_ids: theme.photo_ids,
-        photo_count: themePhotos.length,
-        quotes: buildConstellationPhotoQuotes(themePhotos, contributors),
-      }
-    },
-  }
+async function buildConstellationFromMemories(input) {
+  return buildMemoryConstellation({ ...input, client: openai })
 }
 
 module.exports = {
@@ -1398,7 +1157,7 @@ module.exports = {
   extractPhotoAlbumThemes,
   analyzePhotoWithVision,
   assignPhotosToThemes,
-  buildConstellationFromPhotos,
+  buildConstellationFromMemories,
   composeStorySlideshow,
   composeThemeQuotes,
   fallbackMatchPhotoToThemes,
