@@ -2,27 +2,33 @@
 
 export const CONTRIBUTOR_RELATIONSHIP_FAMILY = "Family";
 export const CONTRIBUTOR_RELATIONSHIP_FRIEND = "Friend";
+export const CONTRIBUTOR_RELATIONSHIP_PARTNER = "Partner";
 export const CONTRIBUTOR_RELATIONSHIP_COLLEAGUE = "Colleague";
 export const CONTRIBUTOR_RELATIONSHIP_OTHER = "Other";
 
-// Top-level relationship types — shown as the four cards on the main
+// Top-level relationship types — shown as the five cards on the main
 // "Who were you to {name}?" page. These map directly to the relationship
-// colors used on the viewer's constellation page (Family/Friend/Colleague/Other).
+// colors used on the viewer's constellation page.
 export const CONTRIBUTOR_RELATIONSHIP_OPTIONS = [
   CONTRIBUTOR_RELATIONSHIP_FAMILY,
   CONTRIBUTOR_RELATIONSHIP_FRIEND,
+  CONTRIBUTOR_RELATIONSHIP_PARTNER,
   CONTRIBUTOR_RELATIONSHIP_COLLEAGUE,
   CONTRIBUTOR_RELATIONSHIP_OTHER,
 ];
 
 // Sub-types shown only when "Family" is selected — saved as relationship_label.
+// Each label is the contributor's role (e.g. "Parent" = the contributor is the
+// subject's parent) and selects the matching question set.
 export const CONTRIBUTOR_FAMILY_RELATIONSHIP_OPTIONS = [
+  "Spouse",
   "Parent",
-  "Child",
   "Sibling",
-  "Cousin",
+  "Grandparent",
   "Aunt/Uncle",
-  "Grandchildren",
+  "Cousin",
+  "Child",
+  "Grandchild",
 ];
 
 // Relationship types that require a relationship_label before continuing:

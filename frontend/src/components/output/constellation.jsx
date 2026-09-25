@@ -47,7 +47,9 @@ const familyRelationship = [
   "Child",
   "Sibling",
   "Partner / Spouse",
+  "Spouse",
   "Aunt",
+  "Aunt/Uncle",
   "Uncle",
   "Cousin",
   "Grandparent",
@@ -59,6 +61,7 @@ const otherRelationship = [
   "Other",
   "Others",
   "Friend",
+  "Partner",
   "Colleague",
   "Classmate",
   "Neighbor",
@@ -252,6 +255,9 @@ export default function ConstellationGraph({
 
   const categoriesColor = {
     "Partner / Spouse": "#c65def",        
+    "Partner": "#c65def",
+    "Spouse": "#d9719f",
+    "Aunt/Uncle": "#e79947",
     "Uncle": "#A98F7A",        
     "Grandparent": "#94de9b",  
     "Grandchild": "#ffac6d",   
