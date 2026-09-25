@@ -7,6 +7,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import Image from "next/image";
+import { buildConstellationNodes } from "@/lib/constellationNodes.mjs";
 
 import { usePathname } from "next/navigation";
 import { getContributorsPhotos,getContributorsResponse } from "@/lib/api"
@@ -31,7 +32,9 @@ function getNodeLabelLines(label, maxLineLength = 14) {
     const currentLine = lines[lines.length - 1] || '';
     const nextLine = currentLine ? `${currentLine} ${word}` : word;
 
-    if (!currentLine || nextLine.length <= maxLineLength || lines.length >= 2) {
+    if (!currentLine) {
+      lines.push(word);
+    } else if (nextLine.length <= maxLineLength || lines.length >= 2) {
       lines[lines.length - 1] = nextLine;
     } else {
       lines.push(word);
@@ -136,18 +139,16 @@ export default function ConstellationGraph({
   height,
 }) {
   const ref = useRef(null);
+  const hasMemoryNodes = ai_output?.constellation?.version === 2;
   const pathname = usePathname();  
   const [selectedImage, setSelectedImage] = useState(null);
   const [themes,setThemes] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
-  const [photoCarroussel, setPhotoCarroussel] = useState([
-    {
-      photo_url : memorial?.cover_photo_url
-    }
-  ]);
+  const [photoCarroussel, setPhotoCarroussel] = useState([]);
   const [quoteNode, setQuoteNode] = useState('No quote available for this contributor.');
   
-  const [tab, setTab] = useState(page==1 ? "Themes":"Relationships");
+  const [selectedTab, setTab] = useState(page === 1 ? "Themes" : "Relationships");
+  const tab = hasMemoryNodes ? "Relationships" : selectedTab;
   const currentPage = pathname.includes("output") || pathname.includes("share") ? "Viewer" : "Organizer";
   const showRelationshipLabels = currentPage === "Organizer";
   const [hiddenContributors, setHiddenContributors] = useState({});
@@ -159,7 +160,7 @@ export default function ConstellationGraph({
 
   useEffect(() => {
     async function loadPhotoContributor() {
-      if (currentPage !== "Viewer" || tab !== "Relationships" || !selectedNode) {
+      if (currentPage !== "Viewer" || tab !== "Relationships" || !selectedNode || selectedNode.category === "memory") {
         return;
       }
 
@@ -209,40 +210,18 @@ export default function ConstellationGraph({
       [id]: !prev[id],
     }));
   };  
-  const finalnodes = ai_output?.constellation?.nodes?.map(t => ({
-        id: t.id,
-        name: t.label,
-        group: capitalizeFirstLetter(t.category),
-        prominence: t.prominence_score,
-        summary: t.summary,
-        photo_urls: t.photo_urls || [],
-        photos: t.photos || t.photo_ids || [],
-        quotes: t.quotes || [],
-        contributions: (t.photo_urls || []).length,
-      })) || []
-  const [nodes, setNodes] = useState(
-    [...finalnodes, 
-        {
-          id: memorial?.id || 'memorial-center',
-          name: memorial?.subject_name || memorial?.deceased_name || 'Memorial',
-          relationship_type: 'Memorial',
-          prominence: 1,
-          summary: '',
-          photos: [],
-          quotes: [],
-          contributions: 0,
-        },    
-      ]
-  );
-  const [links, setLinks] = useState(
-    ai_output?.constellation?.nodes?.map(d => ({
-      source: memorial?.id || 'memorial-center',
-      target: d.id,
-      type: capitalizeFirstLetter(d.relationship_type),
-      weight: d.weight
-    })) || []
-  );
-  
+  const nodes = useMemo(() => [
+    ...buildConstellationNodes(ai_output?.constellation),
+    {
+      id: memorial?.id || 'memorial-center',
+      name: memorial?.subject_name || memorial?.deceased_name || 'Memorial',
+      relationship_type: 'Memorial', prominence: 1, summary: '', photos: [], photo_urls: [], quotes: [], contributions: 0,
+    },
+  ], [ai_output?.constellation, memorial?.id, memorial?.subject_name, memorial?.deceased_name]);
+  const links = useMemo(() => nodes.filter((node) => node.relationship_type !== 'Memorial').map((node) => ({
+    source: memorial?.id || 'memorial-center', target: node.id, type: node.relationship_type, weight: 1,
+  })), [nodes, memorial?.id]);
+
   const [indexPhoto, setIndexPhoto] = useState(0);
   useEffect(() => {
     if(photoCarroussel.length!=0){
@@ -288,8 +267,8 @@ export default function ConstellationGraph({
     [contributor, memorial?.id, memorial?.subject_name, memorial?.deceased_name, relationships],
   );
   const {familyCounts , otherRelatedCounts} = buildRelationshipCounts(relationshipGraph.nodes || []);
-  const graphNodes = tab === "Relationships" ? relationshipGraph.nodes : nodes;
-  const graphLinks = tab === "Relationships" ? relationshipGraph.links : links;
+  const graphNodes = tab === "Relationships" && !hasMemoryNodes ? relationshipGraph.nodes : nodes;
+  const graphLinks = tab === "Relationships" && !hasMemoryNodes ? relationshipGraph.links : links;
 
   const sortPhotoTheme = (value) => {
     console.log("Normal ",selectedNode.photo_urls);
@@ -346,15 +325,23 @@ export default function ConstellationGraph({
       );
       displayLink = graphLinks.filter((link) => !hiddenRelationshipType[link.type]);
       displayNode = displayNode.filter(
-        (item) => item.id === centerId || !hiddenContributors[item.id],
+        (item) => item.id === centerId || !hiddenContributors[item.contributor_id || item.id],
       );
       displayLink = displayLink.filter(
         (link) =>
           !hiddenContributors[
-            typeof link.target === 'object' ? link.target.id : link.target
+            typeof link.target === 'object' ? (link.target.contributor_id || link.target.id) : (nodes.find((node) => node.id === link.target)?.contributor_id || link.target)
           ],
       );
     }
+
+    // Both contributor filters and individual memory toggles must keep edges in sync.
+    displayNode = displayNode.filter((item) => !hiddenThemes[item.id]);
+    const visibleIds = new Set(displayNode.map((item) => item.id));
+    displayLink = displayLink.filter((item) =>
+      visibleIds.has(typeof item.source === 'object' ? item.source.id : item.source) &&
+      visibleIds.has(typeof item.target === 'object' ? item.target.id : item.target),
+    );
 
     const svg = d3
       .select(ref.current)
@@ -419,13 +406,24 @@ export default function ConstellationGraph({
     )
     .style("cursor", "pointer");
     console.log(currentPage);
-    if (currentPage=="Viewer"){
-      node.on("click", (_, d) => {
+    if (currentPage==="Viewer" || hasMemoryNodes){
+      const selectNode = (_, d) => {
           if (d.relationship_type!="Memorial"){
             setSelectedNode(d);    
-            setPhotoCarroussel(d.photo_urls);               
+            setIndexPhoto(0);
+            setPhotoCarroussel(d.photo_urls || []);
           }
-      });
+      };
+      node.attr('role', (d) => d.relationship_type === 'Memorial' ? null : 'button')
+        .attr('tabindex', (d) => d.relationship_type === 'Memorial' ? null : 0)
+        .attr('aria-label', (d) => d.relationship_type === 'Memorial' ? null : `Read ${d.name || d.label}`)
+        .on('click', selectNode)
+        .on('keydown', (event, d) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            selectNode(event, d);
+          }
+        });
     }
     let label = svg
     .append("g")
@@ -509,6 +507,7 @@ export default function ConstellationGraph({
         <div>
           <div className="flex justify-between items-center px-15 pt-8">
             <div className="flex gap-10 cursor-pointer text-lg">
+              {!hasMemoryNodes && (
               <button className={tab==="Themes" ? "text-[#3c3c3c] border-[#3c3c3c] border-b pb-2" : "text-[#8a8a8a] border-[#8a8a8a] border-b pb-2"}
                 onClick={() => {
                   setThemes(null);
@@ -519,6 +518,7 @@ export default function ConstellationGraph({
               >
                 Themes
               </button>
+              )}
 
               <button className={tab==="Relationships" ? "text-[#3c3c3c] border-[#3c3c3c] border-b pb-2" : "text-[#8a8a8a] border-[#8a8a8a] border-b pb-2"}
                 onClick={() => {
@@ -596,7 +596,7 @@ export default function ConstellationGraph({
                           </div>
                         ))}
                         {!selectedNode?.photo_urls?.length ? (
-                          <p className="text-[11px] text-gray-500 py-8 text-center">No photos matched this theme yet.</p>
+                          <p className="text-[11px] text-gray-500 py-8 text-center">No matching photo.</p>
                         ) : null}
 
                       </div>
@@ -613,6 +613,7 @@ export default function ConstellationGraph({
               </button>
 
               <div className="flex flex-col lg:flex-row items-center gap-8 ml-[80px]">
+                  {(selectedNode.category !== "memory" || photoCarroussel.length > 0) && (
                   <div className="relative flex items-center">
                     <div className="w-[140px] h-[2px] bg-[#75835F]" />
                     <div className="w-[260px] h-[260px] rounded-full border border-[#75835F] overflow-hidden bg-gray-100 flex items-center justify-center">
@@ -633,15 +634,20 @@ export default function ConstellationGraph({
                       </div>
                     </div>
                   </div>
+                  )}
                   {
-                    tab === "Themes" ? (
+                    tab === "Themes" || selectedNode.category === "memory" ? (
                       <div className="max-w-md">
                         <h1 className="text-5xl font-serif text-[#4A443E] mb-6">
                           {selectedNode.name || selectedNode.label}
                         </h1>
                         <p className="text-[#6B655F] leading-relaxed mb-12">
-                          {selectedNode.summary || "No summary available for this theme."}
+                          {selectedNode.summary || "No summary available for this memory."}
                         </p>
+                        {selectedNode.category === "memory" && (
+                          <p className="text-sm text-[#6B655F]">Shared by {selectedNode.contributor_name || "a contributor"}</p>
+                        )}
+                        {selectedNode.category !== "memory" && (
                         <button 
                           className="bg-[#D2C2AA] hover:bg-[#C7B499] transition-colors px-10 py-4 rounded-full text-[#4A443E]"
                           onClick={() => {
@@ -650,6 +656,7 @@ export default function ConstellationGraph({
                         >
                           View all
                         </button>
+                        )}
                       </div>
                     ) : (
                       <div className="max-w-md">
@@ -720,10 +727,10 @@ export default function ConstellationGraph({
       {
         currentPage === "Organizer" && (
         <div>
-          {tab === "Themes" &&  (
+          {(tab === "Themes" || hasMemoryNodes) &&  (
           <div>
             <h2 className="mt-8 mb-4 text-2xl font-serif italic">
-              Themes
+              {hasMemoryNodes ? "Memories" : "Themes"}
             </h2>        
             <div className="bg-[#f4f0ea] p-4">
                 <div className="space-y-4">
@@ -756,7 +763,7 @@ export default function ConstellationGraph({
                         </p>
 
                         <p className="text-[10px] mt-3 font-medium text-gray-800">
-                          {(item?.photo_urls?.length ?? item?.contributions ?? 0)} tagged photo{(item?.photo_urls?.length ?? item?.contributions ?? 0) === 1 ? '' : 's'}
+                          {(item?.photo_urls?.length ?? item?.contributions ?? 0)} matched photo{(item?.photo_urls?.length ?? item?.contributions ?? 0) === 1 ? '' : 's'}
                         </p>
                       </div>
                       <div className="flex-1 w-[240px] h-full rounded-sm lg:w-[430px] overflow-y-auto ">
@@ -777,7 +784,7 @@ export default function ConstellationGraph({
                             </div>
                           ))}
                           {!item?.photo_urls?.length ? (
-                            <p className="text-[11px] text-gray-500 py-8 text-center">No photos matched this theme yet.</p>
+                            <p className="text-[11px] text-gray-500 py-8 text-center">No matching photo.</p>
                           ) : null}
                         </div>
                       </div>
