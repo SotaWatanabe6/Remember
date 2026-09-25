@@ -1016,6 +1016,10 @@ function GenerateConfirmModal({ onConfirm, onCancel, subjectName }) {
           <p className="text-base leading-6 text-r-secondary">
             Please note that this feature is the paid portion of the final product. As a participant of testing, this memorial generation will be free.
           </p>
+          <p className="text-base leading-6 text-r-secondary">
+            The Story farewell will use a contributor&apos;s own closing words when available,
+            or the phrase &ldquo;In loving memory&rdquo;.
+          </p>
           <p className="text-base font-medium leading-6 text-[#C96E43]">
             Clicking on the "Generate Memorial" button below will finalize and create a curated memorial. Please ensure you have collected all memories before proceeding.
           </p>
@@ -1028,7 +1032,7 @@ function GenerateConfirmModal({ onConfirm, onCancel, subjectName }) {
             onChange={(e) => setReadyToGenerate(e.target.checked)}
             className="h-5 w-5 rounded border-r-border accent-r-text cursor-pointer"
           />
-          I'm ready to generate the final memorial.
+          I approve this farewell approach and am ready to generate the final memorial.
         </label>
 
         <div className="flex flex-col gap-3">

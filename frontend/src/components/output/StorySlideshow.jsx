@@ -149,6 +149,14 @@ export default function StorySlideshow({
                   ) : null}
                 </div>
               </div>
+            ) : slide.slideType === 'farewell' ? (
+              <div className="flex h-full flex-col items-center justify-center gap-7 overflow-y-auto bg-r-bg px-16 py-10 text-center text-r-text sm:px-24">
+                {slide.dateOfPassing ? <p className="text-sm text-r-secondary sm:text-base">{formatStoryDate(slide.dateOfPassing)}</p> : null}
+                <p className="max-w-xl font-display text-3xl font-medium leading-snug sm:text-[40px]">{slide.farewellMessage}</p>
+                {slide.contributorId ? (
+                  <p className="text-sm text-r-secondary">{[slide.contributorName, slide.relationshipLabel].filter(Boolean).join(' · ')}</p>
+                ) : null}
+              </div>
             ) : <>
             {slide.photoUrl ? (
               <img src={slide.photoUrl} alt={altText} className="h-full w-full object-cover" />

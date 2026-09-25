@@ -6,6 +6,7 @@ const path = require('node:path')
 const vm = require('node:vm')
 const { buildOpeningSlide } = require('../src/services/storyBookends')
 const { resolveOutputMediaUrls } = require('../src/services/storageUrls')
+const { addStoryBookends, buildQuoteCandidates } = require('../src/services/storyBookends')
 
 function composer(create) {
   const filename = path.resolve(__dirname, '../src/services/memorialGeneration.js')
@@ -59,4 +60,45 @@ test('opening cover supports the legacy cover bucket when signing output URLs', 
     : { error: { message: 'Not in this bucket' } } }) } }
   const output = await resolveOutputMediaUrls(supabase, { story: [buildOpeningSlide(memorial)] })
   assert.equal(output.story[0].photo_url, 'https://fixture.invalid/memorial_cover_photo/cover/robin.jpg')
+})
+
+const contributors = [{ id: 'c1', name: 'Jane', relationship_type: 'child' }]
+const responses = [{ contributor_id: 'c1', question_id: 'child_6', response_text: 'I will carry your love of the sea with me.' }]
+const selecting = (result) => ({ chat: { completions: { create: async () => ({ choices: [{ message: { content: JSON.stringify(result) } }] }) } } })
+
+test('farewell reuses an exact closing sentence with source attribution', async () => {
+  const slides = await addStoryBookends([], { memorial, contributors, responses, client: selecting({ farewell: 0 }) })
+  const farewell = slides.at(-1)
+  assert.equal(farewell.slide_type, 'farewell')
+  assert.equal(farewell.farewell_message, responses[0].response_text)
+  assert.equal(farewell.contributor_id, 'c1')
+  assert.equal(farewell.contributor_name, 'Jane')
+  assert.equal(farewell.date_of_passing, memorial.date_of_passing)
+})
+
+test('missing, invented, or invalid selections always use the fixed unattributed farewell', async () => {
+  for (const client of [undefined, selecting({ farewell: null }), selecting({ farewell: 99 }), selecting({ farewell: -1 }), selecting({ farewell: '0' }), selecting({ farewell: 'A life well lived.' }), selecting({ farewell: 0.5 })]) {
+    const slides = await addStoryBookends([], { memorial: {}, contributors, responses, client })
+    assert.equal(slides.at(-1).farewell_message, 'In loving memory')
+    assert.equal(slides.at(-1).contributor_name, null)
+    assert.equal(slides.at(-1).date_of_passing, null)
+  }
+})
+
+test('only known, unflagged contributors supply candidates; anonymous attribution stays anonymous', () => {
+  const candidates = buildQuoteCandidates([
+    ...responses,
+    { ...responses[0], contributor_id: 'unknown' },
+    { ...responses[0], is_flagged: true },
+    { ...responses[0], response_text: 'I do not know. ' + 'word '.repeat(60) },
+  ], [{ ...contributors[0], is_anonymous: true }])
+  assert.equal(candidates.length, 1)
+  assert.equal(candidates[0].contributor_name, 'Anonymous')
+  assert.ok(candidates.every((candidate) => candidate.text.length <= 320))
+})
+
+test('selection failure keeps a usable farewell', async () => {
+  const client = { chat: { completions: { create: async () => { throw new Error('offline') } } } }
+  const slides = await addStoryBookends([], { memorial, contributors, responses, client })
+  assert.equal(slides.at(-1).farewell_message, 'In loving memory')
 })

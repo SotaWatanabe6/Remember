@@ -946,7 +946,9 @@ async function composeStorySlideshow({
       buildPhotoCatalogEntry(p, contributors, themes, memorial),
     ),
   )
-  const finishStory = (slides) => addStoryBookends(slides, { memorial, subjectName })
+  const finishStory = (slides) => addStoryBookends(slides, {
+    memorial, subjectName, responses, contributors, client: openai,
+  })
 
   const buildFallbackSlideshow = () =>
     finishStory(finalizePhotoStorySlides(

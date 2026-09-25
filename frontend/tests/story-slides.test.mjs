@@ -26,3 +26,11 @@ test('date-only values retain their calendar day regardless of local timezone', 
   assert.equal(formatStoryDate(null), '');
   assert.equal(formatStoryDate('bad-date'), '');
 });
+
+test('plain farewell survives normalization without a photo or narration', () => {
+  const slides = normalizeStorySlides({}, [{ slide_type: 'farewell', farewell_message: 'In loving memory', date_of_passing: '2026-02-03' }]);
+  assert.equal(slides.length, 1);
+  assert.equal(slides[0].slideType, 'farewell');
+  assert.equal(slides[0].farewellMessage, 'In loving memory');
+  assert.equal(slides[0].contributorId, null);
+});

@@ -103,6 +103,7 @@ export function normalizeStorySlides(output, story) {
         subjectName: slide.subject_name || '',
         dateOfBirth: slide.date_of_birth || null,
         dateOfPassing: slide.date_of_passing || null,
+        farewellMessage: slide.farewell_message || '',
         photoUrl,
         photoDescription: photoDescription || fallbackQuote,
         narration,
@@ -111,13 +112,14 @@ export function normalizeStorySlides(output, story) {
         photoEraLabel,
         photoYearSort,
         contributorName,
+        contributorId: slide.contributor_id || null,
         relationshipLabel: formatRelationship(
           slide.relationship_type || contributor.relationship_type || matchedPhoto.relationship_type,
         ),
         themeLabel: slide.theme_label || slide.theme || slide.ai_theme || '',
       };
     })
-    .filter((slide) => slide.slideType === 'opening' || slide.photoUrl || slide.photoDescription || slide.narration)
+    .filter((slide) => ['opening', 'farewell'].includes(slide.slideType) || slide.photoUrl || slide.photoDescription || slide.narration)
     .sort((a, b) => a.orderIndex - b.orderIndex);
 
   // The pipeline owns chapter order and slide selection. Resampling here can
