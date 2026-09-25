@@ -383,18 +383,21 @@ router.get('/:id/archive', authMiddleware, async (req, res) => {
     const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
     if (!memorial) return res.status(403).json({ error: 'Not authorized' })
 
+    // NS-5: content is approved per type, so a contributor can have approved
+    // photos while their stories are still awaiting review. The archive holds
+    // every approved item, whoever it came from.
     const { data: contributors, error: contributorsError } = await supabase
       .from('contributors')
       .select('id, name, relationship_type, relationship_label, status, submitted_at, created_at, updated_at')
       .eq('memorial_id', req.params.id)
-      .eq('status', 'approved')
+      .in('status', ['submitted', 'approved'])
       .order('submitted_at', { ascending: false })
 
     if (contributorsError) return res.status(400).json({ error: contributorsError.message })
 
-    const approvedIds = (contributors || []).map((contributor) => contributor.id)
+    const reviewedIds = (contributors || []).map((contributor) => contributor.id)
 
-    if (!approvedIds.length) {
+    if (!reviewedIds.length) {
       return res.json({ contributors: [], photos: [], voices: [], stories: [], responses: [] })
     }
 
@@ -408,30 +411,39 @@ router.get('/:id/archive', authMiddleware, async (req, res) => {
         .from('questionnaire_responses')
         .select('id, contributor_id, question_text, response_text, response_audio_url, order_index, created_at, updated_at')
         .eq('memorial_id', req.params.id)
-        .in('contributor_id', approvedIds)
+        .in('contributor_id', reviewedIds)
+        .not('approved_at', 'is', null)
         .order('order_index', { ascending: true }),
       supabase
         .from('contributor_stories')
         .select('id, contributor_id, client_story_id, title, body, created_at, updated_at')
         .eq('memorial_id', req.params.id)
-        .in('contributor_id', approvedIds)
+        .in('contributor_id', reviewedIds)
+        .not('approved_at', 'is', null)
         .order('created_at', { ascending: true }),
       supabase
         .from('media_assets')
         .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption, is_flagged, flagged_reason, created_at')
         .eq('memorial_id', req.params.id)
-        .in('contributor_id', approvedIds)
+        .in('contributor_id', reviewedIds)
+        .not('approved_at', 'is', null)
         .order('created_at', { ascending: false }),
       supabase
         .from('voice_recordings')
         .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, duration_seconds, contributor_title, transcript_text, key_quote, is_flagged, flagged_reason, created_at')
         .eq('memorial_id', req.params.id)
-        .in('contributor_id', approvedIds)
+        .in('contributor_id', reviewedIds)
+        .not('approved_at', 'is', null)
         .order('created_at', { ascending: false }),
     ])
 
     const archiveError = responsesError || storiesError || photosError || voicesError
     if (archiveError) return res.status(400).json({ error: archiveError.message })
+
+    // A contributor only belongs in the archive once something of theirs is approved.
+    const withApproved = new Set([...(photos || []), ...(voices || []), ...(stories || []), ...(responses || [])]
+      .map((item) => item.contributor_id))
+    const archivedContributors = (contributors || []).filter((contributor) => withApproved.has(contributor.id))
 
     const contributorNames = new Map((contributors || []).map((contributor) => [contributor.id, contributor.name || null]))
     const withContributorName = (items = []) => (items || []).map((item) => ({
@@ -443,7 +455,7 @@ router.get('/:id/archive', authMiddleware, async (req, res) => {
     const voicesWithUrls = await createSignedAssetUrls(voices, 'audio_url')
 
     res.json({
-      contributors: enrichContributors(contributors, stories, photos, voices),
+      contributors: enrichContributors(archivedContributors, stories, photos, voices),
       photos: withContributorName(photosWithUrls),
       voices: withContributorName(voicesWithUrls),
       stories: withContributorName(stories),
@@ -586,6 +598,88 @@ async function markSubmissionReviewed(memorialId, contributorId, types) {
   return { reviewed_at: reviewedAt, error: failed?.error || null }
 }
 
+// How many of a contributor's items are still awaiting approval, across every
+// content type. Zero means the whole submission has been through approval.
+async function countPendingApproval(memorialId, contributorId) {
+  const results = await Promise.all(Object.values(REVIEWABLE_SUBMISSION_TABLES).map((table) => supabase
+    .from(table)
+    .select('id', { count: 'exact', head: true })
+    .eq('contributor_id', contributorId)
+    .eq('memorial_id', memorialId)
+    .is('approved_at', null)))
+
+  const failed = results.find((result) => result.error)
+  return {
+    count: results.reduce((total, result) => total + (result.count || 0), 0),
+    error: failed?.error || null,
+  }
+}
+
+// PATCH /memorials/:id/contributors/:contributorId/submission/approve — approve one content type
+//
+// NS-5: the organizer approves a submission one content type at a time, so
+// photos can be settled while the stories are still under review. Approving a
+// type also settles its red dot. Once nothing of the contributor's is left
+// awaiting approval, the contributor itself counts as approved, which is what
+// the archive listing and the generation gate read.
+router.patch('/:id/contributors/:contributorId/submission/approve', authMiddleware, async (req, res) => {
+  try {
+    const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
+    if (!memorial) return res.status(403).json({ error: 'Not authorized' })
+
+    const type = String(req.body?.type || '').trim().toLowerCase()
+    const table = REVIEWABLE_SUBMISSION_TABLES[type]
+    if (!table) return res.status(400).json({ error: 'Invalid submission content type' })
+
+    const { data: contributor, error: contributorError } = await supabase
+      .from('contributors')
+      .select('id, status')
+      .eq('id', req.params.contributorId)
+      .eq('memorial_id', req.params.id)
+      .single()
+
+    if (contributorError || !contributor) return res.status(404).json({ error: 'Contributor not found' })
+
+    const approvedAt = new Date().toISOString()
+    const { data: approved, error: approveError } = await supabase
+      .from(table)
+      .update({ approved_at: approvedAt, reviewed_at: approvedAt })
+      .eq('contributor_id', contributor.id)
+      .eq('memorial_id', req.params.id)
+      .is('approved_at', null)
+      .select('id')
+
+    if (approveError) return res.status(400).json({ error: approveError.message })
+
+    const pending = await countPendingApproval(req.params.id, contributor.id)
+    if (pending.error) return res.status(400).json({ error: pending.error.message })
+
+    let updatedContributor = contributor
+    if (!pending.count && contributor.status !== 'approved') {
+      const { data, error } = await supabase
+        .from('contributors')
+        .update({ status: 'approved', updated_at: new Date().toISOString() })
+        .eq('id', contributor.id)
+        .eq('memorial_id', req.params.id)
+        .select('id, name, is_anonymous, relationship_type, relationship_label, status, questionnaire_done, photos_done, voice_done, submitted_at, created_at, updated_at')
+        .single()
+
+      if (error || !data) return res.status(400).json({ error: error?.message || 'Failed to approve contributor' })
+      updatedContributor = data
+    }
+
+    res.json({
+      type,
+      approved_at: approvedAt,
+      ids: (approved || []).map((item) => item.id),
+      awaiting_approval: pending.count,
+      contributor: updatedContributor,
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // PATCH /memorials/:id/contributors/:contributorId/status — organizer review status
 router.patch('/:id/contributors/:contributorId/status', authMiddleware, async (req, res) => {
   try {
@@ -613,6 +707,20 @@ router.patch('/:id/contributors/:contributorId/status', authMiddleware, async (r
       const reviewed = await markSubmissionReviewed(req.params.id, data.id, Object.keys(REVIEWABLE_SUBMISSION_TABLES))
       if (reviewed.error) return res.status(400).json({ error: reviewed.error.message })
       reviewedAt = reviewed.reviewed_at
+
+      // Approving the contributor outright approves whatever is left of theirs.
+      if (status === 'approved') {
+        const approved = await Promise.all(Object.values(REVIEWABLE_SUBMISSION_TABLES).map((table) => supabase
+          .from(table)
+          .update({ approved_at: reviewedAt })
+          .eq('contributor_id', data.id)
+          .eq('memorial_id', req.params.id)
+          .is('approved_at', null)
+          .select('id')))
+
+        const approveError = approved.find((result) => result.error)
+        if (approveError) return res.status(400).json({ error: approveError.error.message })
+      }
     }
 
     res.json({ contributor: data, reviewed_at: reviewedAt })

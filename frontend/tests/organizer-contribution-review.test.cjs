@@ -11,7 +11,7 @@ function loadHelpers() {
     .replace(/^export /gm, '');
   // Same realm as the assertions so arrays compare structurally with deepEqual.
   return vm.runInThisContext(`(() => { ${source}
-    return { getManageTabs, resolveManageTab, hasPendingContributions, getPendingSubmissionSections, getSubmissionSubTabs, resolveSubTab, isUnreviewed, hasUnreviewedItems, markSectionReviewed }; })()`);
+    return { getManageTabs, resolveManageTab, hasPendingContributions, getPendingSubmissionSections, getSubmissionSubTabs, resolveSubTab, isUnreviewed, hasUnreviewedItems, markSectionReviewed, isApproved, markSectionApproved, getSubTabNoun, SUBMISSION_SUB_TABS }; })()`);
 }
 
 const helpers = loadHelpers();
@@ -136,4 +136,56 @@ test('an approve pass settles every type, so no sub-tab is dotted', () => {
   const tabs = helpers.getSubmissionSubTabs(helpers.getPendingSubmissionSections(approved));
   assert.deepEqual(tabs.map((tab) => tab.key), ['photos', 'voices', 'stories', 'responses']);
   assert.deepEqual(tabs.filter((tab) => tab.unreviewed), []);
+});
+
+// NS-5: approval is per content type — photos can be settled while the
+// stories are still awaiting review.
+test('approved content leaves the queue, one type at a time', () => {
+  const detail = {
+    photos: [{ id: 'p1', approved_at: '2026-09-24T00:00:00.000Z' }, { id: 'p2' }],
+    stories: [{ id: 's1', title: 'Lake', body: 'We swam.' }],
+  };
+  const sections = helpers.getPendingSubmissionSections(detail);
+  assert.deepEqual(sections.photos.map((photo) => photo.id), ['p2'], 'approved photos are gone');
+  assert.deepEqual(keys(helpers.getSubmissionSubTabs(sections)), ['photos', 'stories']);
+});
+
+test("a fully approved type loses its sub-tab while the rest stays", () => {
+  const detail = {
+    photos: [{ id: 'p1', approved_at: '2026-09-24T00:00:00.000Z' }],
+    stories: [{ id: 's1', title: 'Lake', body: 'We swam.' }],
+  };
+  const subTabs = helpers.getSubmissionSubTabs(helpers.getPendingSubmissionSections(detail));
+  assert.deepEqual(keys(subTabs), ['stories']);
+  assert.equal(helpers.resolveSubTab('photos', subTabs), 'stories', 'the pills fall back to what is left');
+});
+
+test('approving a section settles it locally, including its dot', () => {
+  const detail = {
+    contributor: { id: 'a' },
+    photos: [{ id: 'p1', reviewed_at: null }, { id: 'p2', reviewed_at: '2026-09-20T00:00:00.000Z' }],
+    stories: [{ id: 's1', title: 'Lake', body: 'We swam.', reviewed_at: null }],
+  };
+  const next = helpers.markSectionApproved(detail, 'photos', '2026-09-24T12:00:00.000Z');
+  assert.deepEqual(next.photos.map((photo) => photo.approved_at), ['2026-09-24T12:00:00.000Z', '2026-09-24T12:00:00.000Z']);
+  assert.deepEqual(next.photos.map((photo) => photo.reviewed_at), ['2026-09-24T12:00:00.000Z', '2026-09-20T00:00:00.000Z'], 'an earlier review stamp is kept');
+  assert.equal(next.stories, detail.stories, 'other types are untouched');
+  assert.equal(detail.photos[0].approved_at, undefined, 'detail is not mutated');
+
+  const tabs = helpers.getSubmissionSubTabs(helpers.getPendingSubmissionSections(next));
+  assert.deepEqual(keys(tabs), ['stories'], 'the approved type is out of the queue');
+});
+
+test('an already approved item keeps its original approval stamp', () => {
+  const detail = { photos: [{ id: 'p1', approved_at: '2026-09-01T00:00:00.000Z' }] };
+  const next = helpers.markSectionApproved(detail, 'photos', '2026-09-24T12:00:00.000Z');
+  assert.deepEqual(next.photos.map((photo) => photo.approved_at), ['2026-09-01T00:00:00.000Z']);
+  assert.equal(helpers.isApproved(next.photos[0]), true);
+  assert.equal(helpers.isApproved({}), false);
+});
+
+test('each content type names itself the way the approval dialog reads', () => {
+  assert.deepEqual(helpers.SUBMISSION_SUB_TABS.map((tab) => tab.noun), ['photo', 'audio', 'story', 'Q&A']);
+  assert.equal(helpers.getSubTabNoun('voices'), 'audio');
+  assert.equal(helpers.getSubTabNoun('nope'), '');
 });

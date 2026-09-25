@@ -53,6 +53,7 @@ CREATE TABLE questionnaire_responses (
   response_audio_url text,
   order_index integer,
   reviewed_at timestamptz,
+  approved_at timestamptz,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -65,6 +66,7 @@ CREATE TABLE contributor_stories (
   title text,
   body text,
   reviewed_at timestamptz,
+  approved_at timestamptz,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now(),
   UNIQUE (contributor_id, client_story_id)
@@ -92,6 +94,7 @@ CREATE TABLE media_assets (
   is_flagged boolean DEFAULT false,
   flagged_reason text,
   reviewed_at timestamptz,
+  approved_at timestamptz,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -116,6 +119,7 @@ CREATE TABLE voice_recordings (
   is_flagged boolean DEFAULT false,
   flagged_reason text,
   reviewed_at timestamptz,
+  approved_at timestamptz,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );

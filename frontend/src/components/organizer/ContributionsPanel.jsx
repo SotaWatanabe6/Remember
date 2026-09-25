@@ -11,6 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 import {
+  approveMemorialContributorSubmissionType,
   deleteMemorialContributor,
   deleteContributorPhoto,
   deleteContributorVoice,
@@ -23,7 +24,9 @@ import {
 import {
   getPendingSubmissionSections,
   getSubmissionSubTabs,
+  getSubTabNoun,
   isAwaitingReview,
+  markSectionApproved,
   markSectionReviewed,
   resolveSubTab,
 } from "@/lib/organizer/contributionReview";
@@ -95,7 +98,7 @@ function TabEmpty({ title, message }) {
   );
 }
 
-function ActionButtons({ disabled, onApprove, onDelete }) {
+function ActionButtons({ disabled, approveLabel, onApprove, onDelete }) {
   return (
     <div className="flex items-center gap-6">
       <button
@@ -103,7 +106,7 @@ function ActionButtons({ disabled, onApprove, onDelete }) {
         disabled={disabled}
         onClick={onApprove}
         className="text-[#3F3A33] transition hover:opacity-70 disabled:opacity-30"
-        aria-label="Approve submission"
+        aria-label={approveLabel}
       >
         <Check size={34} strokeWidth={2.2} />
       </button>
@@ -279,6 +282,63 @@ function ResponsesSection({ responses, submittedDate, onDeleteResponse }) {
   )
 }
 
+// Figma "Approve Selection/{Photos,Audio,Story}": one content type at a time,
+// gated on the organizer confirming they are finished reviewing it.
+function ApproveTypeModal({ noun, count, pending, onConfirm, onCancel }) {
+  const [finishedReviewing, setFinishedReviewing] = useState(false);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-6"
+      onClick={onCancel}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Approve ${noun} submissions`}
+    >
+      <div
+        className="flex w-full max-w-xl flex-col gap-6 rounded-2xl bg-r-modal p-8 text-center"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 className="text-[28px] font-medium leading-[34px] text-r-text [font-family:var(--font-family-display)]">
+          Approve {noun} submissions for memorial?
+        </h2>
+        <p className="text-base font-medium leading-6 text-[#C16341]">
+          Approving moves {count === 1 ? "this" : `all ${count}`} {noun} submission{count === 1 ? "" : "s"} to the
+          archive and this action can not be undone. Remove anything you do not want included first.
+        </p>
+
+        <label className="flex cursor-pointer items-center justify-center gap-3 text-base text-r-text">
+          <input
+            type="checkbox"
+            checked={finishedReviewing}
+            onChange={(event) => setFinishedReviewing(event.target.checked)}
+            className="h-5 w-5 rounded border-r-border accent-r-text"
+          />
+          I am finished reviewing the {noun} submissions
+        </label>
+
+        <div className="flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={!finishedReviewing || pending}
+            className="w-full rounded-full bg-r-btn py-4 text-base font-medium text-r-btn-text transition hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {pending ? "Approving..." : "Approve"}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="w-full rounded-full border border-r-border py-4 text-base font-medium text-r-text transition hover:opacity-70"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ApprovalDetail({
   contributor,
   detail,
@@ -292,9 +352,11 @@ function ApprovalDetail({
   onDeleteVoice,
   onDeleteResponse,
   onDeleteStory,
+  onApproveType,
   onRetry,
 }) {
   const [requestedSubTab, setRequestedSubTab] = useState(null);
+  const [approvingType, setApprovingType] = useState(null);
 
   // NS-7: a content type only gets a sub-tab while it has something pending.
   const sections = getPendingSubmissionSections(detail);
@@ -353,8 +415,29 @@ function ApprovalDetail({
         {subTabs.length > 0 ? (
           <SubTabPills tabs={subTabs} active={activeSubTab} onChange={setRequestedSubTab} />
         ) : <span />}
-        <ActionButtons disabled={actionPending} onApprove={onApprove} onDelete={onDelete} />
+        {/* NS-5: approval is per content type. A submission with nothing left
+            to approve still needs a way out of the queue, so the check falls
+            back to approving the contributor. */}
+        <ActionButtons
+          disabled={actionPending}
+          approveLabel={activeSubTab ? `Approve ${getSubTabNoun(activeSubTab)} submissions` : "Approve submission"}
+          onApprove={() => (activeSubTab ? setApprovingType(activeSubTab) : onApprove())}
+          onDelete={onDelete}
+        />
       </div>
+
+      {approvingType && (
+        <ApproveTypeModal
+          noun={getSubTabNoun(approvingType)}
+          count={(sections[approvingType] || []).length}
+          pending={actionPending}
+          onCancel={() => setApprovingType(null)}
+          onConfirm={async () => {
+            await onApproveType?.(approvingType);
+            setApprovingType(null);
+          }}
+        />
+      )}
 
       {subTabs.length === 0 && (
         <TabEmpty
@@ -551,6 +634,34 @@ export default function ContributionsPanel({
     }
   }, [actionPending, currentContributorId, memorialId])
 
+  const handleApproveType = useCallback(async (type) => {
+    if (!memorialId || !currentContributorId || actionPending) return;
+
+    setActionPending(true);
+    try {
+      const result = await approveMemorialContributorSubmissionType(memorialId, currentContributorId, type);
+      const approvedAt = result?.approved_at || new Date().toISOString();
+
+      setSubmissionDetail((detail) => (
+        detail?.contributor?.id === currentContributorId
+          ? {
+            ...markSectionApproved(detail, type, approvedAt),
+            contributor: { ...detail.contributor, ...(result?.contributor || {}) },
+          }
+          : detail
+      ));
+      // The server approves the contributor once nothing of theirs is left,
+      // which is what drops them out of the queue.
+      setContributors((items) => items.map((item) => (
+        item.id === currentContributorId ? { ...item, ...(result?.contributor || {}) } : item
+      )));
+    } catch (approveTypeError) {
+      setDetailError(approveTypeError instanceof Error ? approveTypeError.message : "Failed to approve submissions");
+    } finally {
+      setActionPending(false);
+    }
+  }, [actionPending, currentContributorId, memorialId, setContributors]);
+
   const handleApprove = useCallback(async () => {
     if (!memorialId || !currentContributorId || actionPending) return;
 
@@ -642,6 +753,7 @@ export default function ContributionsPanel({
           onDeleteVoice={handleDeleteVoice}
           onDeleteResponse={handleDeleteResponse}
           onDeleteStory={handleDeleteStory}
+          onApproveType={handleApproveType}
           onRetry={loadSubmissionDetail}
         />
       )}

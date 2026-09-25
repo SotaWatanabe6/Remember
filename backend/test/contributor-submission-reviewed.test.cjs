@@ -59,6 +59,8 @@ function fixture() {
       const rows = db[table].filter((row) => [...url.searchParams].every(([key, value]) => {
         if (value.startsWith('eq.')) return String(row[key]) === value.slice(3)
         if (value === 'is.null') return row[key] === null || row[key] === undefined
+        if (value === 'not.is.null') return row[key] !== null && row[key] !== undefined
+        if (value.startsWith('in.')) return value.slice(4, -1).split(',').includes(String(row[key]))
         return true
       }))
       const fields = url.searchParams.get('select')
@@ -70,6 +72,9 @@ function fixture() {
         if (wantsOne && rows.length !== 1) return json({ message: 'Not found', code: 'PGRST116' }, 406)
         const patched = project(rows, fields)
         return json(wantsOne ? patched[0] : patched)
+      }
+      if (method === 'HEAD') {
+        return new Response(null, { headers: { 'content-range': `0-0/${rows.length}` } })
       }
       if (method === 'DELETE') {
         mutations.push({ table, method: 'DELETE', ids: rows.map((row) => row.id) })
@@ -105,10 +110,11 @@ function fixture() {
     return response
   }
   const submission = (options) => call('get', '/:id/contributors/:contributorId/submission', options)
+  const approveType = (type, options) => call('patch', '/:id/contributors/:contributorId/submission/approve', { body: { type }, ...options })
   const setStatus = (status, options) => call('patch', '/:id/contributors/:contributorId/status', { body: { status }, ...options })
   const remove = (routePath, params, options) => call('delete', routePath, { params, ...options })
   const stamped = (table) => db[table].map((row) => row.reviewed_at)
-  return { db, mutations, removedFiles, submission, setStatus, remove, stamped }
+  return { db, mutations, removedFiles, submission, setStatus, remove, stamped, approveType }
 }
 
 test('submission payload carries reviewed_at per item and answer_text for responses', async () => {
@@ -215,3 +221,72 @@ test("deleting another memorial's item settles nothing", async () => {
   assert.deepEqual(f.mutations, [])
   assert.deepEqual(f.removedFiles, [])
 })
+
+// NS-5: the organizer approves one content type at a time.
+test('approving one type settles only that type', async () => {
+  const f = fixture()
+  const { statusCode, body } = await f.approveType('photos')
+  assert.equal(statusCode, 200)
+  assert.equal(body.type, 'photos')
+  assert.deepEqual(body.ids, ['p1', 'p2'])
+  assert.deepEqual(f.db.media_assets.map((photo) => [photo.id, Boolean(photo.approved_at)]), [
+    ['p1', true], ['p2', true], ['p3', false],
+  ], "another memorial's photos are untouched")
+  assert.equal(f.db.voice_recordings[0].approved_at, undefined, 'voices stay awaiting approval')
+  assert.equal(f.db.contributor_stories[0].approved_at, undefined, 'stories stay awaiting approval')
+})
+
+test('approving a type also settles its red dot', async () => {
+  const f = fixture()
+  const { body } = await f.approveType('voices')
+  assert.equal(f.db.voice_recordings[0].reviewed_at, body.approved_at)
+})
+
+test('the contributor stays in the queue while any type is unapproved', async () => {
+  const f = fixture()
+  const { body } = await f.approveType('photos')
+  assert.ok(body.awaiting_approval > 0)
+  assert.equal(body.contributor.status, 'submitted')
+  assert.equal(f.db.contributors[0].status, 'submitted')
+})
+
+test('approving the last type approves the contributor', async () => {
+  const f = fixture()
+  for (const type of ['photos', 'voices', 'stories']) await f.approveType(type)
+  assert.equal(f.db.contributors[0].status, 'submitted', 'Q&A is still awaiting approval')
+
+  const { body } = await f.approveType('responses')
+  assert.equal(body.awaiting_approval, 0)
+  assert.equal(body.contributor.status, 'approved')
+  assert.equal(f.db.contributors[0].status, 'approved')
+})
+
+test('approving a type twice is a no-op that keeps the first stamp', async () => {
+  const f = fixture()
+  const first = await f.approveType('stories')
+  const again = await f.approveType('stories')
+  assert.deepEqual(again.body.ids, [])
+  assert.equal(f.db.contributor_stories[0].approved_at, first.body.approved_at)
+})
+
+test('approving the whole submission approves every type left', async () => {
+  const f = fixture()
+  const { body } = await f.setStatus('approved')
+  for (const table of ['media_assets', 'voice_recordings', 'contributor_stories', 'questionnaire_responses']) {
+    assert.equal(f.db[table].every((row) => row.contributor_id !== 'jane' || row.approved_at), true, table)
+  }
+  assert.equal(f.db.media_assets[2].approved_at, undefined, 'other memorials are untouched')
+  assert.ok(body.reviewed_at)
+})
+
+for (const [name, type, options, expected] of [
+  ['an unknown content type', 'archive', {}, 400],
+  ['a memorial the user does not own', 'photos', { user: 'someone-else' }, 403],
+  ['a contributor from another memorial', 'photos', { params: { contributorId: 'outsider' } }, 404],
+]) {
+  test(`approving ${name} approves nothing`, async () => {
+    const f = fixture()
+    assert.equal((await f.approveType(type, options)).statusCode, expected)
+    assert.deepEqual(f.mutations.filter((mutation) => mutation.patch?.approved_at), [])
+  })
+}

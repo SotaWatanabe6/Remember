@@ -14,12 +14,18 @@ const ALL_MANAGE_TABS = [ARCHIVE_TAB, APPROVE_TAB, OUTPUTS_TAB];
 // Sub-tabs of a submission, in the order Figma shows them. Q&A is not in the
 // approval wireframes but the organizer still needs to review answers before
 // approving, so it stays as a fourth pill using the Archive tab's label.
+// `noun` is how the approval modal names the content ("Approve photo
+// submissions for memorial?"), following the Figma approve dialogs.
 export const SUBMISSION_SUB_TABS = [
-  { key: "photos", label: "Photos" },
-  { key: "voices", label: "Voice" },
-  { key: "stories", label: "Stories" },
-  { key: "responses", label: "Q&A" },
+  { key: "photos", label: "Photos", noun: "photo" },
+  { key: "voices", label: "Voice", noun: "audio" },
+  { key: "stories", label: "Stories", noun: "story" },
+  { key: "responses", label: "Q&A", noun: "Q&A" },
 ];
+
+export function getSubTabNoun(key) {
+  return SUBMISSION_SUB_TABS.find((tab) => tab.key === key)?.noun || "";
+}
 
 export function isAwaitingReview(contributor) {
   return String(contributor?.status || "").toLowerCase() === "submitted";
@@ -45,17 +51,26 @@ function hasText(value) {
   return Boolean(String(value || "").trim());
 }
 
+// NS-5: approval is per content type, so an approved item has left the queue
+// even while the rest of the submission is still awaiting review.
+export function isApproved(item) {
+  return Boolean(item?.approved_at);
+}
+
 // Per content type, the items that are actually pending in a submission.
-// Empty drafts (a story with no title or body, a response with no answer)
-// are not pending content, so their sub-tab is hidden too.
+// Approved items are done with; empty drafts (a story with no title or body,
+// a response with no answer) were never pending content. Either way their
+// sub-tab is hidden once nothing of that type is left.
 export function getPendingSubmissionSections(detail) {
+  const pending = (items) => (Array.isArray(items) ? items : []).filter((item) => !isApproved(item));
+
   return {
-    photos: Array.isArray(detail?.photos) ? detail.photos : [],
-    voices: Array.isArray(detail?.voices) ? detail.voices : [],
-    stories: (Array.isArray(detail?.stories) ? detail.stories : []).filter(
+    photos: pending(detail?.photos),
+    voices: pending(detail?.voices),
+    stories: pending(detail?.stories).filter(
       (story) => hasText(story?.title) || hasText(story?.body),
     ),
-    responses: (Array.isArray(detail?.responses) ? detail.responses : []).filter(
+    responses: pending(detail?.responses).filter(
       (response) => hasText(response?.answer_text),
     ),
   };
@@ -81,6 +96,7 @@ export function getSubmissionSubTabs(sections) {
 
 // Local mirror of the server's stamping on approve/delete: settle every
 // unreviewed item of one type so the dot clears without a refetch.
+// [[markSectionApproved]] does the same for approval.
 export function markSectionReviewed(detail, type, reviewedAt) {
   if (!detail || !Array.isArray(detail[type])) return detail;
   return {
@@ -92,4 +108,16 @@ export function markSectionReviewed(detail, type, reviewedAt) {
 export function resolveSubTab(requestedKey, subTabs) {
   if (subTabs.some((tab) => tab.key === requestedKey)) return requestedKey;
   return subTabs[0]?.key || null;
+}
+
+// Local mirror of the per-type approve: every item of that type leaves the
+// queue, which also settles its dot.
+export function markSectionApproved(detail, type, approvedAt) {
+  if (!detail || !Array.isArray(detail[type])) return detail;
+  return {
+    ...detail,
+    [type]: detail[type].map((item) => (isApproved(item)
+      ? item
+      : { ...item, approved_at: approvedAt, reviewed_at: item.reviewed_at || approvedAt })),
+  };
 }
