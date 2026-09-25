@@ -1,5 +1,6 @@
 require('dotenv').config()
 const OpenAI = require('openai')
+const { addStoryBookends } = require('./storyBookends')
 const { resolveQuestionPrompt } = require('../lib/questionnaireQuestions')
 
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null
@@ -768,31 +769,6 @@ function buildPhotoCatalogEntry(photo, contributors, themes, memorial) {
   }
 }
 
-function buildOrganizerCoverPhotoCatalogEntry(memorial, subjectName) {
-  if (!memorial?.cover_photo_url) return null
-
-  return {
-    photo_id: `organizer_cover_${memorial.id || 'photo'}`,
-    storage_path: memorial.cover_photo_url,
-    contributor_name: 'Organizer',
-    relationship_type: '',
-    theme_label: null,
-    scene: 'Organizer-selected memorial photo',
-    vision_description: `Organizer-selected memorial photo for ${subjectName}.`,
-    visual_mood: '',
-    life_moment_type: 'memorial_cover',
-    tags: ['organizer selected', 'memorial cover'],
-    subject_in_photo: null,
-    subject_apparent_age: null,
-    subject_life_stage: 'unknown',
-    subject_life_stage_label: null,
-    chronological_sort_key: 0,
-    photo_year: null,
-    photo_era_label: null,
-    taken_at: null,
-  }
-}
-
 function buildStorySlideFromCatalog(photo, index) {
   return {
     order_index: index + 1,
@@ -965,26 +941,20 @@ async function composeStorySlideshow({
     ? new Date(memorial.date_of_passing).getFullYear()
     : null
 
-  const selectedPhotoCatalog = selectStoryPhotoCatalog(
+  const photoCatalog = selectStoryPhotoCatalog(
     sortPhotosChronologically(analyzedPhotos, memorial).map((p) =>
       buildPhotoCatalogEntry(p, contributors, themes, memorial),
     ),
   )
-  const organizerCoverPhoto = buildOrganizerCoverPhotoCatalogEntry(memorial, subjectName)
-  const photoCatalog = organizerCoverPhoto
-    ? [
-        organizerCoverPhoto,
-        ...selectedPhotoCatalog.filter((p) => p.storage_path !== organizerCoverPhoto.storage_path),
-      ].slice(0, MAX_STORY_SLIDES)
-    : selectedPhotoCatalog
+  const finishStory = (slides) => addStoryBookends(slides, { memorial, subjectName })
 
   const buildFallbackSlideshow = () =>
-    finalizePhotoStorySlides(
+    finishStory(finalizePhotoStorySlides(
       sortSlidesByPhotoCatalogOrder(finalizeStorySlides([], photoCatalog, memorial), photoCatalog),
-    )
+    ))
 
   if (!photoCatalog.length) {
-    return []
+    return finishStory([])
   }
 
   if (!openai) {
@@ -1089,9 +1059,9 @@ Return JSON only:
         slide_type: 'photo',
       }))
 
-    return finalizePhotoStorySlides(
+    return finishStory(finalizePhotoStorySlides(
       sortSlidesByChapterOrder(finalizeStorySlides(aiSlides, photoCatalog, memorial), photoCatalog),
-    )
+    ))
   } catch (err) {
     console.error('[StoryCompose] error:', err.message)
     return buildFallbackSlideshow()

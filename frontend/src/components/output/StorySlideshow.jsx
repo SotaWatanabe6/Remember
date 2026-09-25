@@ -3,156 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 
-const MAX_STORY_SLIDES = 12;
-
-function formatRelationship(relationshipType) {
-  if (!relationshipType) return '';
-  return relationshipType
-    .replace(/[_-]/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function getStorySource(output, story) {
-  if (Array.isArray(story)) return story;
-  if (Array.isArray(story?.slides)) return story.slides;
-  if (Array.isArray(output?.story)) return output.story;
-  if (Array.isArray(output?.story?.slides)) return output.story.slides;
-  if (Array.isArray(output?.tabs?.story)) return output.tabs.story;
-  if (Array.isArray(output?.tabs?.story?.slides)) return output.tabs.story.slides;
-  if (Array.isArray(output?.memorialOutput?.story)) return output.memorialOutput.story;
-  if (Array.isArray(output?.memorialOutput?.story?.slides)) return output.memorialOutput.story.slides;
-  return [];
-}
-
-function buildContributorLookup(output) {
-  const contributors = [
-    ...(Array.isArray(output?.contributors) ? output.contributors : []),
-    ...(Array.isArray(output?.contributions) ? output.contributions : []),
-  ];
-
-  return contributors.reduce((lookup, item) => {
-    const contributor = item.contributor || item;
-    if (contributor?.id) {
-      lookup[contributor.id] = contributor;
-    }
-    return lookup;
-  }, {});
-}
-
-function buildPhotoLookup(output) {
-  const raw = output?.photos;
-  const albums = Array.isArray(raw) ? raw : raw?.albums || [];
-
-  return albums.reduce((lookup, album) => {
-    (album.photos || []).forEach((photo) => {
-      if (photo?.id) {
-        lookup[photo.id] = photo;
-      }
-    });
-    return lookup;
-  }, {});
-}
-
-function resolveSlideYear(slide, matchedPhoto) {
-  const fromSlide = slide.photo_year || slide.year
-  if (fromSlide) return String(fromSlide)
-  if (matchedPhoto?.year) return String(matchedPhoto.year)
-  if (matchedPhoto?.taken_at) {
-    const y = new Date(matchedPhoto.taken_at).getFullYear()
-    if (Number.isFinite(y)) return String(y)
-  }
-  return null
-}
-
-function selectStorySlides(slides) {
-  if (slides.length <= MAX_STORY_SLIDES) return slides;
-
-  const selected = new Map();
-  const lastIndex = slides.length - 1;
-
-  for (let i = 0; i < MAX_STORY_SLIDES; i += 1) {
-    const index = Math.round((i * lastIndex) / (MAX_STORY_SLIDES - 1));
-    const slide = slides[index];
-    if (slide?.id) selected.set(slide.id, slide);
-  }
-
-  for (const slide of slides) {
-    if (selected.size >= MAX_STORY_SLIDES) break;
-    if (slide?.id && !selected.has(slide.id)) {
-      selected.set(slide.id, slide);
-    }
-  }
-
-  return [...selected.values()].sort((a, b) => {
-    if (a.photoYearSort !== b.photoYearSort) return a.photoYearSort - b.photoYearSort;
-    return a.orderIndex - b.orderIndex;
-  });
-}
-
-function normalizeStorySlides(output, story) {
-  const contributorLookup = buildContributorLookup(output);
-  const photoLookup = buildPhotoLookup(output);
-
-  const normalizedSlides = getStorySource(output, story)
-    .map((slide, index) => {
-      const contributor = contributorLookup[slide.contributor_id] || {};
-      const matchedPhoto = photoLookup[slide.photo_id] || {};
-      const contributorName =
-        slide.contributor_name ||
-        contributor.name ||
-        contributor.contributor_name ||
-        matchedPhoto.contributor_name ||
-        'Contributor';
-      const photoUrl =
-        slide.photo_url ||
-        slide.url ||
-        slide.photo?.url ||
-        matchedPhoto.url ||
-        matchedPhoto.photo_url ||
-        null;
-      const photoDescription =
-        slide.photo_description || slide.photoDescription || slide.scene || '';
-      const narration = slide.narration || '';
-      const fallbackQuote = slide.quote || slide.memory || slide.caption || '';
-      const photoYear = resolveSlideYear(slide, matchedPhoto);
-      const photoEraLabel =
-        slide.photo_era_label ||
-        slide.photoEraLabel ||
-        slide.subject_life_stage_label ||
-        matchedPhoto.era_label ||
-        null;
-      const chronologicalSortKey = Number(slide.chronological_sort_key);
-      const photoYearSort = Number.isFinite(chronologicalSortKey) && chronologicalSortKey < 9999
-        ? chronologicalSortKey
-        : photoYear
-          ? Number(photoYear)
-          : 9999;
-
-      return {
-        id: slide.id || slide.photo_id || `${index}-${contributorName}`,
-        orderIndex: Number.isFinite(Number(slide.order_index)) ? Number(slide.order_index) : index,
-        photoUrl,
-        photoDescription: photoDescription || fallbackQuote,
-        narration,
-        matchedQuote: slide.matched_quote || slide.matchedQuote || '',
-        photoYear,
-        photoEraLabel,
-        photoYearSort,
-        contributorName,
-        relationshipLabel: formatRelationship(
-          slide.relationship_type || contributor.relationship_type || matchedPhoto.relationship_type,
-        ),
-        themeLabel: slide.theme_label || slide.theme || slide.ai_theme || '',
-      };
-    })
-    .filter((slide) => slide.photoUrl || slide.photoDescription || slide.narration)
-    .sort((a, b) => {
-      if (a.photoYearSort !== b.photoYearSort) return a.photoYearSort - b.photoYearSort;
-      return a.orderIndex - b.orderIndex;
-    });
-
-  return selectStorySlides(normalizedSlides);
-}
+import { normalizeStorySlides, formatStoryDate } from '@/lib/storySlides.mjs';
 
 function ChevronLeftIcon() {
   return (
@@ -284,6 +135,21 @@ export default function StorySlideshow({
             exit={shouldReduceMotion ? { opacity: 1 } : { opacity: 0 }}
             transition={slideTransition}
           >
+            {slide.slideType === 'opening' ? (
+              <div className="flex h-full flex-col items-center justify-center gap-5 overflow-y-auto bg-r-bg px-16 py-8 text-center text-r-text sm:gap-7 sm:px-24">
+                {slide.photoUrl ? (
+                  <img src={slide.photoUrl} alt={slide.subjectName} className="min-h-0 max-h-[60%] w-auto max-w-full object-contain" />
+                ) : null}
+                <div className="shrink-0">
+                  <h2 className="font-display text-3xl font-medium leading-tight sm:text-[40px]">{slide.subjectName}</h2>
+                  {(slide.dateOfBirth || slide.dateOfPassing) ? (
+                    <p className="mt-3 text-sm text-r-secondary sm:text-base">
+                      {[formatStoryDate(slide.dateOfBirth), formatStoryDate(slide.dateOfPassing)].filter(Boolean).join(' – ')}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            ) : <>
             {slide.photoUrl ? (
               <img src={slide.photoUrl} alt={altText} className="h-full w-full object-cover" />
             ) : (
@@ -310,6 +176,7 @@ export default function StorySlideshow({
                 
               </div>
             </div>
+            </>}
           </motion.div>
         </AnimatePresence>
 
@@ -318,7 +185,7 @@ export default function StorySlideshow({
           onClick={() => setRequestedIndex(Math.max(currentIndex - 1, 0))}
           disabled={isFirst}
           aria-label="Previous story slide"
-          className="absolute left-3 top-1/2 z-20 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-white/20 text-white transition hover:bg-white/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-35 sm:left-5 sm:size-14"
+          className="absolute left-3 top-1/2 z-20 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-white/20 text-r-text transition hover:bg-white/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-r-text disabled:cursor-not-allowed disabled:opacity-35 sm:left-5 sm:size-14"
         >
           <ChevronLeftIcon />
         </button>
@@ -328,7 +195,7 @@ export default function StorySlideshow({
           onClick={() => setRequestedIndex(Math.min(currentIndex + 1, slides.length - 1))}
           disabled={isLast}
           aria-label="Next story slide"
-          className="absolute right-3 top-1/2 z-20 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-white/20 text-white transition hover:bg-white/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-35 sm:right-5 sm:size-14"
+          className="absolute right-3 top-1/2 z-20 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-white/20 text-r-text transition hover:bg-white/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-r-text disabled:cursor-not-allowed disabled:opacity-35 sm:right-5 sm:size-14"
         >
           <ChevronRightIcon />
         </button>

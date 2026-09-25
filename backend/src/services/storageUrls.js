@@ -61,7 +61,9 @@ async function resolveOutputMediaUrls(supabase, output) {
   if (Array.isArray(resolved.story)) {
     resolved.story = await Promise.all(
       resolved.story.map(async (slide) => {
-        const photoUrl = await resolveStorageUrl(supabase, slide.photo_url || slide.url)
+        const photoUrl = slide.slide_type === 'opening'
+          ? await resolveMemorialCoverUrl(supabase, slide.photo_url || slide.url)
+          : await resolveStorageUrl(supabase, slide.photo_url || slide.url)
         const audioUrl = await resolveStorageUrl(
           supabase,
           slide.audio_url,
