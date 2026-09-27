@@ -9,6 +9,7 @@ const upload = multer()
 
 // After the existing requires:
 const { enrichMemorialsForClient, enrichMemorialForClient } = require('../services/storageUrls')
+const { getContributorHighlights } = require('../services/contributorHighlights')
 
 const CONTRIBUTOR_REVIEW_STATUSES = new Set(['in_progress', 'submitted', 'approved', 'rejected'])
 
@@ -318,6 +319,7 @@ router.post('/:id/invite-link', authMiddleware, async (req, res) => {
       .from('invite_links')
       .select('*')
       .eq('memorial_id', req.params.id)
+      .eq('link_type', 'contribute')
       .eq('is_active', true)
       .single()
 
@@ -341,6 +343,7 @@ router.post('/:id/invite-link', authMiddleware, async (req, res) => {
         token,
         created_by: req.user.sub,
         is_active: true,
+        link_type: 'contribute',
         expires_at: expires_at || null,
         max_uses: max_uses || null,
         use_count: 0
@@ -364,12 +367,19 @@ router.post('/:id/invite-link', authMiddleware, async (req, res) => {
 // PATCH /memorials/:id/invite-link — deactivate or reactivate invite link
 router.patch('/:id/invite-link', authMiddleware, async (req, res) => {
   try {
+    const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
+    if (!memorial) return res.status(403).json({ error: 'Not authorized' })
+
     const { is_active } = req.body
+    if (typeof is_active !== 'boolean') {
+      return res.status(400).json({ error: 'is_active must be true or false' })
+    }
 
     const { data, error } = await supabase
       .from('invite_links')
       .update({ is_active })
       .eq('memorial_id', req.params.id)
+      .eq('link_type', 'contribute')
       .select()
       .single()
 
@@ -506,6 +516,21 @@ router.get('/:id/contributors', authMiddleware, async (req, res) => {
     if (countError) return res.status(400).json({ error: countError.message })
 
     res.json({ contributors: enrichContributors(contributors, stories, photos, voices) })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// GET /memorials/:id/contributors/:contributorId/highlights — one contributor's
+// photos and quote for the organizer's constellation view
+router.get('/:id/contributors/:contributorId/highlights', authMiddleware, async (req, res) => {
+  try {
+    const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
+    if (!memorial) return res.status(403).json({ error: 'Not authorized' })
+
+    const highlights = await getContributorHighlights(supabase, memorial.id, req.params.contributorId)
+    if (!highlights) return res.status(404).json({ error: 'Contributor not found' })
+    res.json(highlights)
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -1007,6 +1032,9 @@ router.delete('/:id/contributors/:contributorId/stories/:storyId', authMiddlewar
 // GET /memorials/:id/output
 router.get('/:id/output', authMiddleware, async (req, res) => {
   try {
+    const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
+    if (!memorial) return res.status(403).json({ error: 'Not authorized' })
+
     const { data: output, error } = await supabase
       .from('ai_outputs')
       .select('*')
@@ -1033,7 +1061,7 @@ router.post('/:id/share', authMiddleware, async (req, res) => {
     const token = crypto.randomBytes(12).toString('hex')
     const { data, error } = await supabase
       .from('invite_links')
-      .insert({ memorial_id: req.params.id, token, created_by: req.user.sub, is_active: true })
+      .insert({ memorial_id: req.params.id, token, created_by: req.user.sub, is_active: true, link_type: 'share' })
       .select().single()
     if (error) return res.status(400).json({ error: error.message })
     res.status(201).json({ share_link: { token: data.token, url: `${process.env.NEXT_PUBLIC_APP_URL}/share/${data.token}` } })

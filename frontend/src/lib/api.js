@@ -722,44 +722,27 @@ export async function getContributors(memorialId) {
 }
 
 /**
- * GET /contribute/:contributorid/photosUrls
- * Returns all contributors photos for a memorial. Protected.
- * Used by Mendrika's viewer page.
- * TODO: Replace with real fetch() on Day 9.
+ * GET /share/:shareToken/contributors/:contributorId/highlights (share viewers)
+ * GET /memorials/:id/contributors/:contributorId/highlights (organizer, protected)
+ * Returns one contributor's photos and quote for the constellation node.
  */
-export async function getContributorsPhotos(contributorId) {
+export async function getContributorHighlights({ contributorId, memorialId, shareToken }) {
+  const empty = { photos: [], quote: null };
+  if (!contributorId) return empty;
+
   try {
+    const contributorPath = `contributors/${encodeURIComponent(contributorId)}/highlights`;
+    if (shareToken) {
+      return await requestJson(`/share/${encodeURIComponent(shareToken)}/${contributorPath}`);
+    }
+
     const token = await getAuthToken();
-    const response = await fetch(`${API_URL}/contribute/${encodeURIComponent(contributorId)}/photoUrls`, {
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    if (!token || !memorialId) return empty;
+    return await requestJson(`/memorials/${encodeURIComponent(memorialId)}/${contributorPath}`, {
+      headers: { Authorization: `Bearer ${token}` },
     });
-    if (!response.ok) throw new Error('Failed to fetch photos from contributor');
-    return response.json();
   } catch {
-    // Fallback to mock — prevents constellation page from crashing
-    await delay(MOCK_DELAY);
-    return { contributors: MOCK_CONTRIBUTORS };
-  }
-}
-/**
- * GET /contribute/questionnaire-responses/:contributorid
- * Returns all contributors response questionnary for a memorial. Protected.
- * Used by Mendrika's viewer page.
- * TODO: Replace with real fetch() on Day 9.
- */
-export async function getContributorsResponse(contributorId) {
-  try {
-    const token = await getAuthToken();
-    console.log(token);
-    const response = await fetch(`${API_URL}/contribute/questionnaire-responses/${encodeURIComponent(contributorId)}`, {
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) throw new Error('Failed to fetch response from contributor');
-    return response.json();
-  } catch {
-    // Fallback to mock — prevents constellation page from crashing
-    await delay(MOCK_DELAY);
-    return { contributors: MOCK_CONTRIBUTORS };
+    return empty;
   }
 }
 

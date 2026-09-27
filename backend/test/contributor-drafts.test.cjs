@@ -7,10 +7,13 @@ const { createContributorDraftRouter } = require('../src/routes/contributorDraft
 // isolated transport. These tests never touch a real memorial or storage bucket.
 function fixture({ status = 'in_progress', submittedAt = null, active = true, expired = false, storageFails = false, updateFails = false } = {}) {
   const db = {
-    invite_links: [{ id: 'invite', token: 'invite-token', memorial_id: 'memorial', is_active: active, expires_at: expired ? '2020-01-01' : null }],
+    invite_links: [
+      { id: 'invite', token: 'invite-token', link_type: 'contribute', memorial_id: 'memorial', is_active: active, expires_at: expired ? '2020-01-01' : null },
+      { id: 'share', token: 'share-token', link_type: 'share', memorial_id: 'memorial', is_active: true, expires_at: null },
+    ],
     contributors: [
-      { id: 'owner', memorial_id: 'memorial', status, submitted_at: submittedAt, voice_done: true },
-      { id: 'outsider', memorial_id: 'other-memorial', status: 'in_progress' },
+      { id: 'owner', session_token: 'owner-session', memorial_id: 'memorial', status, submitted_at: submittedAt, voice_done: true },
+      { id: 'outsider', session_token: 'outsider-session', memorial_id: 'other-memorial', status: 'in_progress' },
     ],
     contributor_stories: [
       { id: 'own-story', client_story_id: 'draft-1', contributor_id: 'owner', memorial_id: 'memorial', title: 'Old title', body: 'First line\nSecond line' },
@@ -58,7 +61,7 @@ function fixture({ status = 'in_progress', submittedAt = null, active = true, ex
     } },
   })
   const router = createContributorDraftRouter(supabase)
-  async function call(method, { kind = 'voice', id = kind === 'stories' ? 'own-story' : 'own-voice', contributorToken = 'owner', token = 'invite-token', body = {} } = {}) {
+  async function call(method, { kind = 'voice', id = kind === 'stories' ? 'own-story' : 'own-voice', contributorToken = 'owner-session', token = 'invite-token', body = {} } = {}) {
     const path = method === 'get' ? `/:token/${kind}` : `/:token/${kind}/:${kind === 'stories' ? 'storyId' : 'recordingId'}`
     const route = router.stack.find((layer) => layer.route?.path === path && layer.route.methods[method]).route
     const response = { statusCode: 200, body: null, status(code) { this.statusCode = code; return this }, json(body) { this.body = body; return this } }
@@ -122,8 +125,9 @@ for (const method of ['patch', 'delete']) {
   for (const [name, args, expected] of [
     ['another contributor', { id: 'other-voice' }, 404],
     ['another memorial', { id: 'cross-memorial-voice' }, 404],
-    ['foreign session', { contributorToken: 'outsider' }, 404],
+    ['foreign session', { contributorToken: 'outsider-session' }, 404],
     ['missing session', { contributorToken: null }, 400],
+    ['contributor id used as a session token', { contributorToken: 'owner' }, 404],
     ['invalid invite', { token: 'invalid' }, 410],
   ]) {
     test(`${method} rejects ${name}`, async () => {
@@ -142,6 +146,12 @@ for (const options of [{ active: false }, { expired: true }]) {
     for (const method of ['get', 'patch', 'delete']) assert.equal((await f.call(method)).statusCode, 410)
   })
 }
+
+test('a viewer share link cannot be used to access contributor drafts', async () => {
+  const f = fixture()
+  for (const method of ['get', 'patch', 'delete']) assert.equal((await f.call(method, { token: 'share-token' })).statusCode, 410)
+  assert.equal(f.db.voice_recordings.find((row) => row.id === 'own-voice').contributor_title, 'Original title')
+})
 
 test('storage failure retains the recording and flag for retry', async () => {
   const f = fixture({ storageFails: true })
@@ -209,7 +219,7 @@ for (const method of ['patch', 'delete']) {
   })
   for (const [args, expected] of [
     [{ id: 'other-story' }, 404], [{ id: 'cross-memorial-story' }, 404],
-    [{ contributorToken: 'outsider' }, 404], [{ contributorToken: null }, 400], [{ token: 'invalid' }, 410],
+    [{ contributorToken: 'outsider-session' }, 404], [{ contributorToken: null }, 400], [{ token: 'invalid' }, 410],
   ]) {
     test(`story ${method} rejects unauthorized access ${JSON.stringify(args)}`, async () => {
       const f = fixture()
@@ -249,7 +259,7 @@ test('the existing story upsert route cannot bypass the post-submission edit loc
     }, { filename })
     const route = module.exports.stack.find(layer => layer.route?.path === '/:token/stories' && layer.route.methods.post).route
     const response = { statusCode: 200, status(code) { this.statusCode = code; return this }, json() { return this } }
-    await route.stack[0].handle({ params: { token: 'invite-token' }, body: { contributor_token: 'owner', client_story_id: 'draft-1', title: 'Bypass attempt', body: 'Changed text' } }, response)
+    await route.stack[0].handle({ params: { token: 'invite-token' }, body: { contributor_token: 'owner-session', client_story_id: 'draft-1', title: 'Bypass attempt', body: 'Changed text' } }, response)
     assert.equal(response.statusCode, 403)
     assert.equal(JSON.stringify(f.db), before)
   }

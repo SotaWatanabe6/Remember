@@ -43,7 +43,13 @@ function getStoredContributorSession(inviteToken) {
   }
 
   try {
-    return JSON.parse(storedSession);
+    const session = JSON.parse(storedSession);
+    // Sessions from before the API issued secret session tokens stored the
+    // contributor id as the token, which the API no longer accepts.
+    if (session?.contributorToken && session.contributorToken === session.contributorId) {
+      throw new Error("Contributor session predates session tokens.");
+    }
+    return session;
   } catch (error) {
     console.warn("Discarding invalid contributor session.", error);
     try {
