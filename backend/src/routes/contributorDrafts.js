@@ -2,9 +2,16 @@ const express = require('express')
 
 // Match the contributor session used by the invitation flow and NS-2. Never
 // authorize an item by its ID alone, or allow a previously submitted draft.
-async function getContributorForInvite(supabase, req, res, requireDraft = true) {
-  const contributorToken = req.body?.contributor_token || req.query?.contributor_token
-  if (!contributorToken) {
+// contributor_token is the contributor's secret session_token, not their id:
+// ids are shown to organizers and in generated output, so they grant nothing.
+async function getContributorForInvite(
+  supabase,
+  req,
+  res,
+  requireDraft = true,
+  contributorToken = req.body?.contributor_token || req.query?.contributor_token,
+) {
+  if (!contributorToken || typeof contributorToken !== 'string') {
     res.status(400).json({ error: 'contributor_token is required' })
     return null
   }
@@ -23,8 +30,8 @@ async function getContributorForInvite(supabase, req, res, requireDraft = true) 
 
   const { data: contributor, error } = await supabase
     .from('contributors')
-    .select('id, memorial_id, status, submitted_at')
-    .eq('id', contributorToken)
+    .select('id, memorial_id, status, submitted_at, relationship_type, relationship_label')
+    .eq('session_token', contributorToken)
     .eq('memorial_id', invite.memorial_id)
     .single()
   if (error || !contributor) {

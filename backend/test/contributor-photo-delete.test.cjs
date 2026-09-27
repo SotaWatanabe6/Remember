@@ -12,8 +12,8 @@ function fixture({ status = 'in_progress', submittedAt = null, active = true, st
   const db = {
     invite_links: [{ id: 'invite', token: 'invite-token', link_type: 'contribute', memorial_id: 'memorial', is_active: active }],
     contributors: [
-      { id: 'owner', memorial_id: 'memorial', status, submitted_at: submittedAt, photos_done: true },
-      { id: 'outsider', memorial_id: 'other-memorial', status: 'in_progress', submitted_at: null },
+      { id: 'owner', session_token: 'owner-session', memorial_id: 'memorial', status, submitted_at: submittedAt, photos_done: true },
+      { id: 'outsider', session_token: 'outsider-session', memorial_id: 'other-memorial', status: 'in_progress', submitted_at: null },
     ],
     media_assets: [
       { id: 'own-photo', contributor_id: 'owner', memorial_id: 'memorial', storage_path: 'owner/photo.jpg', storage_bucket: 'photos' },
@@ -76,7 +76,7 @@ function fixture({ status = 'in_progress', submittedAt = null, active = true, st
     },
   }, { filename })
 
-  async function call(method = 'delete', { assetId = 'own-photo', contributorToken = 'owner', token = 'invite-token' } = {}) {
+  async function call(method = 'delete', { assetId = 'own-photo', contributorToken = 'owner-session', token = 'invite-token' } = {}) {
     const routePath = method === 'get' ? '/:token/photos' : '/:token/photos/:assetId'
     const route = module.exports.stack.find((layer) => layer.route?.path === routePath && layer.route.methods[method]).route
     const response = { statusCode: 200, body: null, status(code) { this.statusCode = code; return this }, json(body) { this.body = body; return this } }
@@ -116,8 +116,9 @@ test('a previous submission timestamp prevents deletion even if status was reset
 
 for (const [name, args, expected] of [
   ['another contributor photo', { assetId: 'other-photo' }, 404],
-  ['another memorial contributor', { contributorToken: 'outsider' }, 404],
+  ['another memorial contributor', { contributorToken: 'outsider-session' }, 404],
   ['missing contributor token', { contributorToken: null }, 400],
+  ['contributor id used as a session token', { contributorToken: 'owner' }, 404],
   ['missing photo', { assetId: 'missing' }, 404],
   ['invalid invitation', { token: 'invalid' }, 410],
 ]) {
