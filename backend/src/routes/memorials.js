@@ -367,7 +367,13 @@ router.post('/:id/invite-link', authMiddleware, async (req, res) => {
 // PATCH /memorials/:id/invite-link — deactivate or reactivate invite link
 router.patch('/:id/invite-link', authMiddleware, async (req, res) => {
   try {
+    const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
+    if (!memorial) return res.status(403).json({ error: 'Not authorized' })
+
     const { is_active } = req.body
+    if (typeof is_active !== 'boolean') {
+      return res.status(400).json({ error: 'is_active must be true or false' })
+    }
 
     const { data, error } = await supabase
       .from('invite_links')
