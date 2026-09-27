@@ -1,6 +1,6 @@
 require('dotenv').config()
 const express = require('express')
-const { randomUUID } = require('crypto')
+const { randomBytes, randomUUID } = require('crypto')
 const { Readable } = require('stream')
 const router = express.Router()
 const supabase = require('../supabase')
@@ -130,6 +130,7 @@ router.get('/:token', async (req, res) => {
       .from('invite_links')
       .select('*')
       .eq('token', req.params.token)
+      .eq('link_type', 'contribute')
       .single()
 
     if (error || !invite) {
@@ -192,40 +193,22 @@ router.post('/:token/start', async (req, res) => {
     // Store names with each word capitalized so "sungjun" is saved as "Sungjun".
     const displayName = formatPersonName(name)
     if (!displayName) return res.status(400).json({ error: 'Name is required' })
-    const normalizedName = displayName.toLowerCase()
 
     const { data: invite, error } = await supabase
       .from('invite_links')
       .select('*')
       .eq('token', req.params.token)
+      .eq('link_type', 'contribute')
       .single()
 
     if (error || !invite || !invite.is_active) {
       return res.status(410).json({ error: 'This link is no longer active.' })
     }
 
-    // ── FIX-12: Return existing session if same person re-opens the link ──
-    const { data: existingContributor } = await supabase
-      .from('contributors')
-      .select('id, memorial_id, name, status')
-      .eq('invite_link_id', invite.id)
-      .ilike('name', normalizedName)   // ilike = case-insensitive match in Postgres
-      .neq('status', 'submitted')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
-
-    if (existingContributor) {
-      return res.status(200).json({
-        contributor: {
-          id: existingContributor.id,
-          memorial_id: existingContributor.memorial_id,
-          name: existingContributor.name,
-          status: existingContributor.status,
-        },
-        contributor_token: existingContributor.id,
-      })
-    }
+    // Each start gets a fresh secret session. Returning visitors resume from
+    // the session stored in their browser; matching by name would let anyone
+    // with the invite link take over another contributor's draft.
+    const sessionToken = randomBytes(32).toString('hex')
 
     const { data: contributor, error: contribError } = await supabase
       .from('contributors')
@@ -234,9 +217,10 @@ router.post('/:token/start', async (req, res) => {
         invite_link_id: invite.id,
         name: displayName,
         email: email || null,
-        status: 'in_progress'
+        status: 'in_progress',
+        session_token: sessionToken
       })
-      .select()
+      .select('id, memorial_id, name, status')
       .single()
 
     if (contribError) return res.status(400).json({ error: contribError.message })
@@ -253,7 +237,7 @@ router.post('/:token/start', async (req, res) => {
         name: contributor.name,
         status: contributor.status
       },
-      contributor_token: contributor.id
+      contributor_token: sessionToken
     })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -263,16 +247,19 @@ router.post('/:token/start', async (req, res) => {
 // POST /contribute/:token/privacy — save whether the contributor stays anonymous
 router.post('/:token/privacy', async (req, res) => {
   try {
-    const { contributor_token, is_anonymous } = req.body
-    if (!contributor_token || typeof is_anonymous !== 'boolean') {
+    const { is_anonymous } = req.body
+    if (typeof is_anonymous !== 'boolean') {
       return res.status(400).json({ error: 'contributor_token and is_anonymous are required' })
     }
+
+    const contributor = await getContributorForInvite(supabase, req, res)
+    if (!contributor) return
 
     const { data, error } = await supabase
       .from('contributors')
       .update({ is_anonymous, updated_at: new Date().toISOString() })
-      .eq('id', contributor_token)
-      .select()
+      .eq('id', contributor.id)
+      .select('id, is_anonymous')
       .single()
 
     if (error) return res.status(400).json({ error: error.message })
@@ -285,8 +272,8 @@ router.post('/:token/privacy', async (req, res) => {
 // POST /contribute/:token/relationship — save relationship type
 router.post('/:token/relationship', async (req, res) => {
   try {
-    const { contributor_token, relationship_type, relationship_label } = req.body
-    if (!contributor_token || !relationship_type) {
+    const { relationship_type, relationship_label } = req.body
+    if (!relationship_type) {
       return res.status(400).json({ error: 'contributor_token and relationship_type are required' })
     }
     if (
@@ -296,14 +283,17 @@ router.post('/:token/relationship', async (req, res) => {
       return res.status(400).json({ error: 'relationship_label is required for this relationship type' })
     }
 
+    const contributor = await getContributorForInvite(supabase, req, res)
+    if (!contributor) return
+
     const { data, error } = await supabase
       .from('contributors')
       .update({
         relationship_type,
         relationship_label: relationship_label || null,
       })
-      .eq('id', contributor_token)
-      .select()
+      .eq('id', contributor.id)
+      .select('id, relationship_type')
       .single()
 
     if (error) return res.status(400).json({ error: error.message })
@@ -316,23 +306,18 @@ router.post('/:token/relationship', async (req, res) => {
 // POST /contribute/:token/responses — save questionnaire responses
 router.post('/:token/responses', async (req, res) => {
   try {
-    const { contributor_token, responses } = req.body
-    if (!contributor_token || !responses || !responses.length) {
+    const { responses } = req.body
+    if (!Array.isArray(responses) || !responses.length) {
       return res.status(400).json({ error: 'contributor_token and responses are required' })
     }
 
-    const { data: contributor } = await supabase
-      .from('contributors')
-      .select('memorial_id')
-      .eq('id', contributor_token)
-      .single()
-
-    if (!contributor) return res.status(404).json({ error: 'Contributor not found' })
+    const contributor = await getContributorForInvite(supabase, req, res)
+    if (!contributor) return
 
     const now = new Date().toISOString()
     const rows = responses.map(r => ({
       memorial_id: contributor.memorial_id,
-      contributor_id: contributor_token,
+      contributor_id: contributor.id,
       question_text: r.question_text,
       response_text: r.response_text,
       order_index: r.order_index,
@@ -347,7 +332,7 @@ router.post('/:token/responses', async (req, res) => {
       const { error: deleteError } = await supabase
         .from('questionnaire_responses')
         .delete()
-        .eq('contributor_id', contributor_token)
+        .eq('contributor_id', contributor.id)
         .in('order_index', orderIndexes)
 
       if (deleteError) return res.status(400).json({ error: deleteError.message })
@@ -361,7 +346,7 @@ router.post('/:token/responses', async (req, res) => {
     await supabase
       .from('contributors')
       .update({ updated_at: now })
-      .eq('id', contributor_token)
+      .eq('id', contributor.id)
 
     res.json({ saved: true })
   } catch (err) {
@@ -372,34 +357,8 @@ router.post('/:token/responses', async (req, res) => {
 // POST /contribute/:token/submit — finalize contribution
 router.post('/:token/submit', async (req, res) => {
   try {
-    const { contributor_token } = req.body
-    if (!contributor_token) {
-      return res.status(400).json({ error: 'contributor_token is required' })
-    }
-
-    const { data: invite, error: inviteError } = await supabase
-      .from('invite_links')
-      .select('memorial_id, is_active')
-      .eq('token', req.params.token)
-      .single()
-
-    if (inviteError || !invite || !invite.is_active) {
-      return res.status(410).json({ error: 'This link is no longer active.' })
-    }
-
-    const { data: contributor, error: contributorError } = await supabase
-      .from('contributors')
-      .select('id, memorial_id, relationship_type, relationship_label')
-      .eq('id', contributor_token)
-      .single()
-
-    if (contributorError || !contributor) {
-      return res.status(404).json({ error: 'Contributor not found' })
-    }
-
-    if (contributor.memorial_id !== invite.memorial_id) {
-      return res.status(403).json({ error: 'Contributor does not belong to this invitation.' })
-    }
+    const contributor = await getContributorForInvite(supabase, req, res)
+    if (!contributor) return
 
     const relationshipType = String(contributor.relationship_type || '').trim()
     const relationshipLabel = String(contributor.relationship_label || '').trim()
@@ -415,7 +374,7 @@ router.post('/:token/submit', async (req, res) => {
     const { data: responses, error: responsesError } = await supabase
       .from('questionnaire_responses')
       .select('order_index, question_text, response_text')
-      .eq('contributor_id', contributor_token)
+      .eq('contributor_id', contributor.id)
 
     if (responsesError) return res.status(400).json({ error: responsesError.message })
 
@@ -444,7 +403,7 @@ router.post('/:token/submit', async (req, res) => {
     const { data, error } = await supabase
       .from('contributors')
       .update({ status: 'submitted', submitted_at: new Date().toISOString() })
-      .eq('id', contributor_token)
+      .eq('id', contributor.id)
       .select()
       .single()
 
@@ -499,29 +458,8 @@ router.post('/:token/stories', async (req, res) => {
 // GET /contribute/:token/photos — list saved contributor photos
 router.get('/:token/photos', async (req, res) => {
   try {
-    const contributor_token = req.query.contributor_token
-    if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
-
-    const { data: invite, error: inviteError } = await supabase
-      .from('invite_links')
-      .select('id, memorial_id, is_active')
-      .eq('token', req.params.token)
-      .single()
-
-    if (inviteError || !invite || !invite.is_active) {
-      return res.status(410).json({ error: 'This link is no longer active.' })
-    }
-
-    const { data: contributor } = await supabase
-      .from('contributors')
-      .select('id, memorial_id, status, submitted_at')
-      .eq('id', contributor_token)
-      .single()
-
-    if (!contributor) return res.status(404).json({ error: 'Contributor not found' })
-    if (contributor.memorial_id !== invite.memorial_id) {
-      return res.status(403).json({ error: 'Contributor does not belong to this invitation.' })
-    }
+    const contributor = await getContributorForInvite(supabase, req, res, false)
+    if (!contributor) return
 
     const { data: photos, error } = await supabase
       .from('media_assets')
@@ -577,26 +515,8 @@ router.post('/:token/photos', async (req, res) => {
       })
     }
 
-    const { data: invite, error: inviteError } = await supabase
-      .from('invite_links')
-      .select('id, memorial_id, is_active')
-      .eq('token', req.params.token)
-      .single()
-
-    if (inviteError || !invite || !invite.is_active) {
-      return res.status(410).json({ error: 'This link is no longer active.' })
-    }
-
-    const { data: contributor } = await supabase
-      .from('contributors')
-      .select('id, memorial_id')
-      .eq('id', contributor_token)
-      .single()
-
-    if (!contributor) return res.status(404).json({ error: 'Contributor not found' })
-    if (contributor.memorial_id !== invite.memorial_id) {
-      return res.status(403).json({ error: 'Contributor does not belong to this invitation.' })
-    }
+    const contributor = await getContributorForInvite(supabase, req, res, true, contributor_token)
+    if (!contributor) return
 
     const uploadErrors = []
     const validFiles = []
@@ -713,26 +633,21 @@ router.post('/:token/photos', async (req, res) => {
 // PATCH /contribute/:token/photos/:assetId — update caption
 router.patch('/:token/photos/:assetId', async (req, res) => {
   try {
-    const { contributor_token, caption } = req.body
-    if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
-
-    const { data: asset, error: assetError } = await supabase
-      .from('media_assets')
-      .select('id, contributor_id')
-      .eq('id', req.params.assetId)
-      .eq('contributor_id', contributor_token)
-      .single()
-
-    if (assetError || !asset) return res.status(404).json({ error: 'Photo not found' })
+    const { caption } = req.body
+    const contributor = await getContributorForInvite(supabase, req, res)
+    if (!contributor) return
 
     const { data, error } = await supabase
       .from('media_assets')
       .update({ caption: caption ?? null })
       .eq('id', req.params.assetId)
+      .eq('contributor_id', contributor.id)
+      .eq('memorial_id', contributor.memorial_id)
       .select('id, caption')
-      .single()
+      .maybeSingle()
 
     if (error) return res.status(400).json({ error: error.message })
+    if (!data) return res.status(404).json({ error: 'Photo not found' })
     res.json({ asset: data })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -742,40 +657,15 @@ router.patch('/:token/photos/:assetId', async (req, res) => {
 // DELETE /contribute/:token/photos/:assetId
 router.delete('/:token/photos/:assetId', async (req, res) => {
   try {
-    const { contributor_token } = req.body || {}
-
-    if (!contributor_token) return res.status(400).json({ error: 'contributor_token is required' })
-
-    const { data: invite, error: inviteError } = await supabase
-      .from('invite_links')
-      .select('id, memorial_id, is_active')
-      .eq('token', req.params.token)
-      .single()
-
-    if (inviteError || !invite || !invite.is_active) {
-      return res.status(410).json({ error: 'This link is no longer active.' })
-    }
-
-    const { data: contributor, error: contributorError } = await supabase
-      .from('contributors')
-      .select('id, memorial_id, status, submitted_at')
-      .eq('id', contributor_token)
-      .eq('memorial_id', invite.memorial_id)
-      .single()
-
-    if (contributorError || !contributor) {
-      return res.status(404).json({ error: 'Contributor not found for this invitation.' })
-    }
-    if (contributor.status !== 'in_progress' || contributor.submitted_at) {
-      return res.status(403).json({ error: 'Photos cannot be removed after your contribution has been submitted.' })
-    }
+    const contributor = await getContributorForInvite(supabase, req, res)
+    if (!contributor) return
 
     const { data: asset, error: assetError } = await supabase
       .from('media_assets')
       .select('id, contributor_id, memorial_id, storage_path, storage_bucket')
       .eq('id', req.params.assetId)
-      .eq('contributor_id', contributor_token)
-      .eq('memorial_id', invite.memorial_id)
+      .eq('contributor_id', contributor.id)
+      .eq('memorial_id', contributor.memorial_id)
       .single()
 
     if (assetError || !asset) return res.status(404).json({ error: 'Photo not found' })
@@ -796,13 +686,13 @@ router.delete('/:token/photos/:assetId', async (req, res) => {
     const { count } = await supabase
       .from('media_assets')
       .select('id', { count: 'exact', head: true })
-      .eq('contributor_id', contributor_token)
+      .eq('contributor_id', contributor.id)
 
     if (count === 0) {
       await supabase
         .from('contributors')
         .update({ photos_done: false, updated_at: new Date().toISOString() })
-        .eq('id', contributor_token)
+        .eq('id', contributor.id)
     }
 
     res.json({ deleted: true })
@@ -831,26 +721,8 @@ router.post('/:token/voice', async (req, res) => {
     const validationError = validateVoiceFile(submittedFile)
     if (validationError) return res.status(400).json({ error: validationError })
 
-    const { data: invite, error: inviteError } = await supabase
-      .from('invite_links')
-      .select('id, memorial_id, is_active')
-      .eq('token', req.params.token)
-      .single()
-
-    if (inviteError || !invite || !invite.is_active) {
-      return res.status(410).json({ error: 'This link is no longer active.' })
-    }
-
-    const { data: contributor } = await supabase
-      .from('contributors')
-      .select('id, memorial_id')
-      .eq('id', contributor_token)
-      .single()
-
-    if (!contributor) return res.status(404).json({ error: 'Contributor not found' })
-    if (contributor.memorial_id !== invite.memorial_id) {
-      return res.status(403).json({ error: 'Contributor does not belong to this invitation.' })
-    }
+    const contributor = await getContributorForInvite(supabase, req, res, true, contributor_token)
+    if (!contributor) return
 
     const safeFileName = sanitizeFileName(submittedFile.name || 'voice-recording')
     const storagePath = `memorials/${contributor.memorial_id}/contributions/${contributor.id}/voice/${randomUUID()}-${safeFileName}`
@@ -891,7 +763,7 @@ router.post('/:token/voice', async (req, res) => {
     await supabase
       .from('contributors')
       .update({ voice_done: true, updated_at: new Date().toISOString() })
-      .eq('id', contributor_token)
+      .eq('id', contributor.id)
 
     res.status(201).json({
       recording
@@ -900,88 +772,5 @@ router.post('/:token/voice', async (req, res) => {
     res.status(err.status || 500).json({ error: err.message })
   }
 })
-
-// GET /contribute/:contributorid/photoUrls — list saved contributor photos on a memorial
-router.get('/:contributorid/photoUrls', async (req, res) => {
-  try {
-    const contributor_id = req.params.contributorid
-    console.log(contributor_id);
-    if (!contributor_id) return res.status(400).json({ error: 'contributor id is required' })
-    const { data: contributor } = await supabase
-      .from('contributors')
-      .select('id, memorial_id')
-      .eq('id', contributor_id)
-      .single()
-
-    if (!contributor) return res.status(404).json({ error: 'Contributor not found' })
-
-    const { data: photos, error } = await supabase
-      .from('media_assets')
-      .select('id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption, created_at')
-      .eq('contributor_id', contributor.id)
-      .eq('memorial_id', contributor.memorial_id)
-      .order('created_at', { ascending: true })
-
-    if (error) return res.status(400).json({ error: error.message })
-
-    const photosWithUrls = await Promise.all((photos || []).map(async (photo) => {
-      const { data } = await supabase.storage
-        .from(photo.storage_bucket || PHOTO_STORAGE_BUCKET)
-        .createSignedUrl(photo.storage_path, 60 * 60)
-
-      return {
-        ...photo,
-        url: data?.signedUrl || null,
-        photo_url: data?.signedUrl || null
-      }
-    }))
-
-    res.json({
-      photos: photosWithUrls,
-      count: photosWithUrls.length,
-      max_photos: MAX_CONTRIBUTOR_PHOTOS,
-      remaining: Math.max(MAX_CONTRIBUTOR_PHOTOS - photosWithUrls.length, 0)
-    })
-  } catch (err) {
-    res.status(500).json({ error: err.message })
-  }
-})
-
-router.get('/questionnaire-responses/:contributorid', async (req, res) => {
-  try {
-    const contributorId  = req.params.contributorid;
-
-    if (!contributorId) {
-      return res.status(400).json({
-        error: 'contributorId are required',
-      });
-    }
-
-    const { data, error } = await supabase
-      .from('questionnaire_responses')
-      .select('*')
-      .eq('contributor_id', contributorId)
-
-    if (error) {
-      console.error('Supabase error:', error);
-
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to retrieve questionnaire responses',
-        error: error.message,
-      });
-    }
-
-    return res.status(200).json({
-      data
-    });
-  } catch (err) {
-    console.error('Server error:', err);
-
-    return res.status(500).json({
-      error: 'Internal server error',
-    });
-  }
-});
 
 module.exports = router

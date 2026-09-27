@@ -9,8 +9,10 @@ import {
   Play,
   Search,
   Trash2,
+  X,
 } from "lucide-react";
 import {
+  approveMemorialContributorSubmissionType,
   deleteMemorialContributor,
   deleteContributorPhoto,
   deleteContributorVoice,
@@ -22,9 +24,15 @@ import {
 } from "@/services/contributorService";
 import {
   getPendingSubmissionSections,
+  getSelectedIds,
   getSubmissionSubTabs,
+  getSubTabNoun,
   isAwaitingReview,
+  markSectionApproved,
+  markSectionReviewed,
   resolveSubTab,
+  setAllSelected,
+  toggleSelected,
 } from "@/lib/organizer/contributionReview";
 
 function formatDate(value, fallback = "No date provided") {
@@ -97,15 +105,17 @@ function TabEmpty({ title, message }) {
 function ActionButtons({ disabled, onApprove, onDelete }) {
   return (
     <div className="flex items-center gap-6">
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={onApprove}
-        className="text-[#3F3A33] transition hover:opacity-70 disabled:opacity-30"
-        aria-label="Approve submission"
-      >
-        <Check size={34} strokeWidth={2.2} />
-      </button>
+      {onApprove && (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onApprove}
+          className="text-[#3F3A33] transition hover:opacity-70 disabled:opacity-30"
+          aria-label="Approve submission"
+        >
+          <Check size={34} strokeWidth={2.2} />
+        </button>
+      )}
       <button
         type="button"
         disabled={disabled}
@@ -133,7 +143,37 @@ function DeleteItemButton({ onDelete, label = "Delete" }) {
   )
 }
 
+// Figma "checkbox": dark filled square with a light tick when selected.
+function SelectCheckbox({ checked, onChange, label, className = "" }) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={onChange}
+      className={`flex size-[30px] shrink-0 items-center justify-center rounded-[4px] border-2 border-[#3F3A33] transition hover:opacity-80 ${
+        checked ? "bg-[#3F3A33] text-[#F6EFE7]" : "bg-r-modal/80 text-transparent"
+      } ${className}`}
+    >
+      <Check size={20} strokeWidth={3} />
+    </button>
+  );
+}
+
+// Figma "select all": ticks or unticks every item in the active sub-tab.
+function SelectAll({ checked, onChange }) {
+  return (
+    <label className="flex cursor-pointer items-center gap-[10px] text-[20px] leading-none text-r-text">
+      <SelectCheckbox checked={checked} onChange={onChange} label="Select all" />
+      <span>Select All</span>
+    </label>
+  );
+}
+
 // Figma "archive_button" pill: outlined when idle, filled #9E9384 when active.
+// NS-5: the "notif" dot (10px, #C16341, 8px after the label) marks a sub-tab
+// that still holds items the organizer has not opened.
 function SubTabPills({ tabs, active, onChange }) {
   return (
     <div className="flex flex-wrap gap-5" role="tablist" aria-label="Submission content">
@@ -150,7 +190,17 @@ function SubTabPills({ tabs, active, onChange }) {
               isActive ? "bg-[#9E9384] text-r-modal" : "text-r-muted hover:text-r-text"
             }`}
           >
-            {tab.label}
+            <span className="flex items-start gap-2">
+              {tab.label}
+              {tab.unreviewed && (
+                <span
+                  data-testid={`unreviewed-dot-${tab.key}`}
+                  className="mt-[2px] block size-[10px] shrink-0 rounded-full bg-[#C16341]"
+                >
+                  <span className="sr-only">(has unreviewed items)</span>
+                </span>
+              )}
+            </span>
           </button>
         );
       })}
@@ -159,11 +209,17 @@ function SubTabPills({ tabs, active, onChange }) {
 }
 
 // Figma "Awaiting Approval/Photos": 3-up grid of 3:2 tiles.
-function PhotoSection({ photos, onDeletePhoto }) {
+function PhotoSection({ photos, selected, onToggle, onDeletePhoto }) {
   return (
     <div className="grid grid-cols-2 gap-5 sm:grid-cols-3">
       {photos.map((photo) => (
-        <figure key={photo.id} className="group overflow-hidden rounded-[8px] bg-[#D8C8AF]">
+        <figure key={photo.id} className="group relative overflow-hidden rounded-[8px] bg-[#D8C8AF]">
+          <SelectCheckbox
+            checked={selected.has(photo.id)}
+            onChange={() => onToggle(photo.id)}
+            label={`Select ${photo.caption || photo.file_name || "photo"}`}
+            className="absolute right-3 top-3"
+          />
           {photo.photo_url || photo.url ? (
             <img
               src={photo.photo_url || photo.url}
@@ -184,9 +240,10 @@ function PhotoSection({ photos, onDeletePhoto }) {
 }
 
 // Shared card shell for the Voice / Stories / Q&A sub-tabs (Figma bordered row).
-function SubmissionCard({ title, date, children, onDelete }) {
+function SubmissionCard({ title, date, children, selected, onToggle, onDelete }) {
   return (
-    <article className="grid gap-6 rounded-[10px] border border-r-muted p-6 md:grid-cols-[250px_1fr] md:p-10">
+    <article className="grid grid-cols-[auto_1fr] gap-6 rounded-[10px] border border-r-muted p-6 md:grid-cols-[auto_250px_1fr] md:p-10">
+      <SelectCheckbox checked={selected} onChange={onToggle} label={`Select ${title}`} className="mt-1" />
       <div className="flex flex-col gap-2">
         <h3 className="text-[24px] leading-[28px] text-r-secondary [font-family:var(--font-family-display)]">{title}</h3>
         <p className="text-[12px] leading-4 text-r-secondary">{date}</p>
@@ -194,12 +251,12 @@ function SubmissionCard({ title, date, children, onDelete }) {
           <DeleteItemButton label="Remove" onDelete={onDelete} />
         </div>
       </div>
-      <div className="min-w-0">{children}</div>
+      <div className="col-span-2 min-w-0 md:col-span-1">{children}</div>
     </article>
   );
 }
 
-function VoiceSection({ voices, submittedDate, onDeleteVoice }) {
+function VoiceSection({ voices, submittedDate, selected, onToggle, onDeleteVoice }) {
   return (
     <div className="flex flex-col gap-5">
       {voices.map((voice) => (
@@ -207,6 +264,8 @@ function VoiceSection({ voices, submittedDate, onDeleteVoice }) {
           key={voice.id}
           title={voice.contributor_title || voice.file_name || "Voice recording"}
           date={formatDate(voice.created_at, submittedDate)}
+          selected={selected.has(voice.id)}
+          onToggle={() => onToggle(voice.id)}
           onDelete={() => onDeleteVoice?.(voice.id)}
         >
           {voice.audio_url || voice.url ? (
@@ -230,7 +289,7 @@ function VoiceSection({ voices, submittedDate, onDeleteVoice }) {
   )
 }
 
-function StorySection({ stories, submittedDate, onDeleteStory }) {
+function StorySection({ stories, submittedDate, selected, onToggle, onDeleteStory }) {
   return (
     <div className="flex flex-col gap-5">
       {stories.map((story) => (
@@ -238,6 +297,8 @@ function StorySection({ stories, submittedDate, onDeleteStory }) {
           key={story.id || story.client_story_id}
           title={story.title || "Untitled story"}
           date={formatDate(story.created_at, submittedDate)}
+          selected={selected.has(story.id)}
+          onToggle={() => onToggle(story.id)}
           onDelete={() => onDeleteStory?.(story.id)}
         >
           {story.body && (
@@ -249,7 +310,7 @@ function StorySection({ stories, submittedDate, onDeleteStory }) {
   );
 }
 
-function ResponsesSection({ responses, submittedDate, onDeleteResponse }) {
+function ResponsesSection({ responses, submittedDate, selected, onToggle, onDeleteResponse }) {
   return (
     <div className="flex flex-col gap-5">
       {responses.map((response) => (
@@ -257,6 +318,8 @@ function ResponsesSection({ responses, submittedDate, onDeleteResponse }) {
           key={response.id}
           title={response.question_text || response.question_id || "Question"}
           date={formatDate(response.created_at, submittedDate)}
+          selected={selected.has(response.id)}
+          onToggle={() => onToggle(response.id)}
           onDelete={() => onDeleteResponse?.(response.id)}
         >
           <p className="text-[16px] leading-[24px] text-r-secondary">{response.answer_text}</p>
@@ -264,6 +327,86 @@ function ResponsesSection({ responses, submittedDate, onDeleteResponse }) {
       ))}
     </div>
   )
+}
+
+// NS-6, Figma "Approve Selection/{Photos,Audio,Story}" and, when nothing is
+// ticked, "Remove Selection/…": confirms one content type, warning that every
+// unselected item of it is permanently deleted. Same shape as the manage
+// page's GenerateConfirmModal: gated on a checkbox, cancel changes nothing.
+function ApproveSelectionModal({ noun, selectedCount, pending, onConfirm, onCancel }) {
+  const [finishedReviewing, setFinishedReviewing] = useState(false);
+  const removesAll = selectedCount === 0;
+  const title = removesAll ? `Remove submitted ${noun} submissions?` : `Approve ${noun} submissions for memorial?`;
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape" && !pending) onCancel();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onCancel, pending]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-6"
+      onClick={pending ? undefined : onCancel}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
+      <div
+        className="relative flex w-full max-w-xl flex-col gap-6 rounded-2xl bg-r-modal px-8 pb-8 pt-14 text-center"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={pending}
+          aria-label="Close"
+          className="absolute right-5 top-5 text-r-text transition hover:opacity-70 disabled:opacity-30"
+        >
+          <X size={30} strokeWidth={1.8} />
+        </button>
+        <h2 className="text-[28px] font-medium leading-[34px] text-r-text [font-family:var(--font-family-display)]">
+          {title}
+        </h2>
+        <p className="text-base font-medium leading-6 text-[#C16341]">
+          {removesAll
+            ? "You have not selected any submissions. Please note that all unselected submissions will be permanently deleted and this action can not be undone."
+            : `Please note that all unselected ${noun} submissions will be permanently deleted and this action can not be undone.`}
+        </p>
+
+        <label className="flex cursor-pointer items-center justify-center gap-3 text-base text-r-text">
+          <input
+            type="checkbox"
+            checked={finishedReviewing}
+            onChange={(event) => setFinishedReviewing(event.target.checked)}
+            className="h-5 w-5 rounded border-r-border accent-r-text"
+          />
+          I am finished reviewing the {noun} submissions
+        </label>
+
+        <div className="flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={!finishedReviewing || pending}
+            className="w-full rounded-full bg-r-btn py-4 text-base font-medium text-r-btn-text transition hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {pending ? "Approving..." : "Approve"}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={pending}
+            className="w-full rounded-full border border-r-border py-4 text-base font-medium text-r-text transition hover:opacity-70 disabled:opacity-45"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function ApprovalDetail({
@@ -279,9 +422,22 @@ function ApprovalDetail({
   onDeleteVoice,
   onDeleteResponse,
   onDeleteStory,
+  onApproveType,
   onRetry,
 }) {
   const [requestedSubTab, setRequestedSubTab] = useState(null);
+  const [approvingType, setApprovingType] = useState(null);
+  const [unselected, setUnselected] = useState({});
+
+  // NS-7: a content type only gets a sub-tab while it has something pending.
+  const sections = getPendingSubmissionSections(detail);
+  const subTabs = getSubmissionSubTabs(sections);
+  const activeSubTab = resolveSubTab(requestedSubTab, subTabs);
+  const activeItems = (activeSubTab && sections[activeSubTab]) || [];
+  const selectedIds = activeSubTab ? getSelectedIds(activeItems, unselected, activeSubTab) : [];
+  const selected = new Set(selectedIds);
+  const allSelected = activeItems.length > 0 && selectedIds.length === activeItems.length;
+  const toggleItem = (id) => setUnselected((current) => toggleSelected(current, activeSubTab, id));
 
   if (!contributor) {
     // The tab itself is hidden when nothing is pending (NS-7), so an empty
@@ -313,10 +469,6 @@ function ApprovalDetail({
 
   const currentContributor = detail?.contributor || contributor;
   const submittedDate = formatDate(currentContributor.submitted_at, "No date provided");
-  // NS-7: a content type only gets a sub-tab while it has something pending.
-  const sections = getPendingSubmissionSections(detail);
-  const subTabs = getSubmissionSubTabs(sections);
-  const activeSubTab = resolveSubTab(requestedSubTab, subTabs);
   const { photos, stories, voices, responses } = sections;
 
   return (
@@ -339,8 +491,37 @@ function ApprovalDetail({
         {subTabs.length > 0 ? (
           <SubTabPills tabs={subTabs} active={activeSubTab} onChange={setRequestedSubTab} />
         ) : <span />}
-        <ActionButtons disabled={actionPending} onApprove={onApprove} onDelete={onDelete} />
+        {/* NS-5/NS-6: approval is per content type, through the selection
+            and "Approve selected" below. A submission with nothing left to
+            approve still needs a way out of the queue, so a check falls back
+            to approving the contributor. */}
+        <div className="flex items-center gap-8">
+          {activeSubTab && (
+            <SelectAll
+              checked={allSelected}
+              onChange={() => setUnselected((current) => setAllSelected(current, activeSubTab, activeItems, !allSelected))}
+            />
+          )}
+          <ActionButtons
+            disabled={actionPending}
+            onApprove={activeSubTab ? undefined : onApprove}
+            onDelete={onDelete}
+          />
+        </div>
       </div>
+
+      {approvingType && (
+        <ApproveSelectionModal
+          noun={getSubTabNoun(approvingType)}
+          selectedCount={selectedIds.length}
+          pending={actionPending}
+          onCancel={() => setApprovingType(null)}
+          onConfirm={async () => {
+            await onApproveType?.(approvingType, selectedIds);
+            setApprovingType(null);
+          }}
+        />
+      )}
 
       {subTabs.length === 0 && (
         <TabEmpty
@@ -348,10 +529,22 @@ function ApprovalDetail({
           message="This contributor submitted, but no photos, stories, or voice recordings were found."
         />
       )}
-      {activeSubTab === "photos" && <PhotoSection photos={photos} onDeletePhoto={onDeletePhoto} />}
-      {activeSubTab === "voices" && <VoiceSection voices={voices} submittedDate={submittedDate} onDeleteVoice={onDeleteVoice} />}
-      {activeSubTab === "stories" && <StorySection stories={stories} submittedDate={submittedDate} onDeleteStory={onDeleteStory} />}
-      {activeSubTab === "responses" && <ResponsesSection responses={responses} submittedDate={submittedDate} onDeleteResponse={onDeleteResponse} />}
+      {activeSubTab === "photos" && <PhotoSection photos={photos} selected={selected} onToggle={toggleItem} onDeletePhoto={onDeletePhoto} />}
+      {activeSubTab === "voices" && <VoiceSection voices={voices} submittedDate={submittedDate} selected={selected} onToggle={toggleItem} onDeleteVoice={onDeleteVoice} />}
+      {activeSubTab === "stories" && <StorySection stories={stories} submittedDate={submittedDate} selected={selected} onToggle={toggleItem} onDeleteStory={onDeleteStory} />}
+      {activeSubTab === "responses" && <ResponsesSection responses={responses} submittedDate={submittedDate} selected={selected} onToggle={toggleItem} onDeleteResponse={onDeleteResponse} />}
+
+      {/* Figma "Approve selected (#)": sticks to the bottom of long galleries. */}
+      {activeSubTab && (
+        <button
+          type="button"
+          disabled={actionPending}
+          onClick={() => setApprovingType(activeSubTab)}
+          className="sticky bottom-8 self-end rounded-full bg-r-btn px-10 py-4 text-[18px] font-medium text-r-btn-text shadow-sm transition hover:opacity-85 disabled:opacity-45 sm:min-w-[434px]"
+        >
+          Approve selected ({selectedIds.length})
+        </button>
+      )}
     </div>
   );
 }
@@ -471,9 +664,9 @@ export default function ContributionsPanel({
     if (!confirmed) return
     setActionPending(true)
     try {
-      await deleteContributorPhoto(memorialId, currentContributorId, assetId)
+      const result = await deleteContributorPhoto(memorialId, currentContributorId, assetId)
       setSubmissionDetail((detail) => detail
-        ? { ...detail, photos: detail.photos.filter((p) => p.id !== assetId) }
+        ? markSectionReviewed({ ...detail, photos: detail.photos.filter((p) => p.id !== assetId) }, "photos", result?.reviewed_at || new Date().toISOString())
         : detail
       )
     } catch (err) {
@@ -489,9 +682,9 @@ export default function ContributionsPanel({
     if (!confirmed) return
     setActionPending(true)
     try {
-      await deleteContributorVoice(memorialId, currentContributorId, recordingId)
+      const result = await deleteContributorVoice(memorialId, currentContributorId, recordingId)
       setSubmissionDetail((detail) => detail
-        ? { ...detail, voices: detail.voices.filter((v) => v.id !== recordingId) }
+        ? markSectionReviewed({ ...detail, voices: detail.voices.filter((v) => v.id !== recordingId) }, "voices", result?.reviewed_at || new Date().toISOString())
         : detail
       )
     } catch (err) {
@@ -507,9 +700,9 @@ export default function ContributionsPanel({
     if (!confirmed) return
     setActionPending(true)
     try {
-      await deleteContributorResponse(memorialId, currentContributorId, responseId)
+      const result = await deleteContributorResponse(memorialId, currentContributorId, responseId)
       setSubmissionDetail((detail) => detail
-        ? { ...detail, responses: detail.responses.filter((r) => r.id !== responseId) }
+        ? markSectionReviewed({ ...detail, responses: detail.responses.filter((r) => r.id !== responseId) }, "responses", result?.reviewed_at || new Date().toISOString())
         : detail
       )
     } catch (err) {
@@ -525,9 +718,9 @@ export default function ContributionsPanel({
     if (!confirmed) return
     setActionPending(true)
     try {
-      await deleteContributorStory(memorialId, currentContributorId, storyId)
+      const result = await deleteContributorStory(memorialId, currentContributorId, storyId)
       setSubmissionDetail((detail) => detail
-        ? { ...detail, stories: detail.stories.filter((s) => s.id !== storyId) }
+        ? markSectionReviewed({ ...detail, stories: detail.stories.filter((s) => s.id !== storyId) }, "stories", result?.reviewed_at || new Date().toISOString())
         : detail
       )
     } catch (err) {
@@ -536,6 +729,37 @@ export default function ContributionsPanel({
       setActionPending(false)
     }
   }, [actionPending, currentContributorId, memorialId])
+
+  const handleApproveType = useCallback(async (type, ids) => {
+    if (!memorialId || !currentContributorId || actionPending) return;
+
+    setActionPending(true);
+    try {
+      const result = await approveMemorialContributorSubmissionType(memorialId, currentContributorId, type, ids);
+      const approvedAt = result?.approved_at || new Date().toISOString();
+
+      setSubmissionDetail((detail) => (
+        detail?.contributor?.id === currentContributorId
+          ? {
+            ...markSectionApproved(detail, type, approvedAt, {
+              approvedIds: result?.ids || ids,
+              deletedIds: result?.deleted_ids || [],
+            }),
+            contributor: { ...detail.contributor, ...(result?.contributor || {}) },
+          }
+          : detail
+      ));
+      // The server approves the contributor once nothing of theirs is left,
+      // which is what drops them out of the queue.
+      setContributors((items) => items.map((item) => (
+        item.id === currentContributorId ? { ...item, ...(result?.contributor || {}) } : item
+      )));
+    } catch (approveTypeError) {
+      setDetailError(approveTypeError instanceof Error ? approveTypeError.message : "Failed to approve submissions");
+    } finally {
+      setActionPending(false);
+    }
+  }, [actionPending, currentContributorId, memorialId, setContributors]);
 
   const handleApprove = useCallback(async () => {
     if (!memorialId || !currentContributorId || actionPending) return;
@@ -628,6 +852,7 @@ export default function ContributionsPanel({
           onDeleteVoice={handleDeleteVoice}
           onDeleteResponse={handleDeleteResponse}
           onDeleteStory={handleDeleteStory}
+          onApproveType={handleApproveType}
           onRetry={loadSubmissionDetail}
         />
       )}

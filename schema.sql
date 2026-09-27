@@ -22,6 +22,7 @@ CREATE TABLE invite_links (
   expires_at timestamptz,
   max_uses integer,
   use_count integer DEFAULT 0,
+  link_type text NOT NULL DEFAULT 'contribute' CHECK (link_type IN ('contribute', 'share')),
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -40,6 +41,7 @@ CREATE TABLE contributors (
   photos_done boolean DEFAULT false,
   voice_done boolean DEFAULT false,
   submitted_at timestamptz,
+  session_token text UNIQUE NOT NULL DEFAULT replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''),
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -52,6 +54,8 @@ CREATE TABLE questionnaire_responses (
   response_text text,
   response_audio_url text,
   order_index integer,
+  reviewed_at timestamptz,
+  approved_at timestamptz,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -63,6 +67,8 @@ CREATE TABLE contributor_stories (
   client_story_id text,
   title text,
   body text,
+  reviewed_at timestamptz,
+  approved_at timestamptz,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now(),
   UNIQUE (contributor_id, client_story_id)
@@ -89,6 +95,8 @@ CREATE TABLE media_assets (
   theme_ids jsonb,
   is_flagged boolean DEFAULT false,
   flagged_reason text,
+  reviewed_at timestamptz,
+  approved_at timestamptz,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -112,6 +120,8 @@ CREATE TABLE voice_recordings (
   ai_tags jsonb,
   is_flagged boolean DEFAULT false,
   flagged_reason text,
+  reviewed_at timestamptz,
+  approved_at timestamptz,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -176,3 +186,18 @@ CREATE TABLE documents (
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
+
+-- All access goes through the API's service role; deny direct anon access.
+ALTER TABLE memorials ENABLE ROW LEVEL SECURITY;
+ALTER TABLE invite_links ENABLE ROW LEVEL SECURITY;
+ALTER TABLE contributors ENABLE ROW LEVEL SECURITY;
+ALTER TABLE questionnaire_responses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE contributor_stories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE media_assets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE voice_recordings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE themes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE theme_quotes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE theme_media_links ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ai_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ai_outputs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;

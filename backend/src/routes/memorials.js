@@ -9,8 +9,22 @@ const upload = multer()
 
 // After the existing requires:
 const { enrichMemorialsForClient, enrichMemorialForClient } = require('../services/storageUrls')
+const { getContributorHighlights } = require('../services/contributorHighlights')
 
 const CONTRIBUTOR_REVIEW_STATUSES = new Set(['in_progress', 'submitted', 'approved', 'rejected'])
+
+// Submission sub-tab key -> table whose rows carry the organizer's reviewed_at stamp.
+const REVIEWABLE_SUBMISSION_TABLES = {
+  photos: 'media_assets',
+  voices: 'voice_recordings',
+  stories: 'contributor_stories',
+  responses: 'questionnaire_responses',
+}
+
+// Submission types whose rows point at a file in storage.
+const STORED_SUBMISSION_TYPES = new Set(['photos', 'voices'])
+
+const REVIEWED_ON_STATUSES = new Set(['approved', 'rejected'])
 
 async function getOwnedMemorial(memorialId, userId) {
   const { data, error } = await supabase
@@ -305,6 +319,7 @@ router.post('/:id/invite-link', authMiddleware, async (req, res) => {
       .from('invite_links')
       .select('*')
       .eq('memorial_id', req.params.id)
+      .eq('link_type', 'contribute')
       .eq('is_active', true)
       .single()
 
@@ -328,6 +343,7 @@ router.post('/:id/invite-link', authMiddleware, async (req, res) => {
         token,
         created_by: req.user.sub,
         is_active: true,
+        link_type: 'contribute',
         expires_at: expires_at || null,
         max_uses: max_uses || null,
         use_count: 0
@@ -351,12 +367,19 @@ router.post('/:id/invite-link', authMiddleware, async (req, res) => {
 // PATCH /memorials/:id/invite-link — deactivate or reactivate invite link
 router.patch('/:id/invite-link', authMiddleware, async (req, res) => {
   try {
+    const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
+    if (!memorial) return res.status(403).json({ error: 'Not authorized' })
+
     const { is_active } = req.body
+    if (typeof is_active !== 'boolean') {
+      return res.status(400).json({ error: 'is_active must be true or false' })
+    }
 
     const { data, error } = await supabase
       .from('invite_links')
       .update({ is_active })
       .eq('memorial_id', req.params.id)
+      .eq('link_type', 'contribute')
       .select()
       .single()
 
@@ -373,18 +396,21 @@ router.get('/:id/archive', authMiddleware, async (req, res) => {
     const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
     if (!memorial) return res.status(403).json({ error: 'Not authorized' })
 
+    // NS-5: content is approved per type, so a contributor can have approved
+    // photos while their stories are still awaiting review. The archive holds
+    // every approved item, whoever it came from.
     const { data: contributors, error: contributorsError } = await supabase
       .from('contributors')
       .select('id, name, relationship_type, relationship_label, status, submitted_at, created_at, updated_at')
       .eq('memorial_id', req.params.id)
-      .eq('status', 'approved')
+      .in('status', ['submitted', 'approved'])
       .order('submitted_at', { ascending: false })
 
     if (contributorsError) return res.status(400).json({ error: contributorsError.message })
 
-    const approvedIds = (contributors || []).map((contributor) => contributor.id)
+    const reviewedIds = (contributors || []).map((contributor) => contributor.id)
 
-    if (!approvedIds.length) {
+    if (!reviewedIds.length) {
       return res.json({ contributors: [], photos: [], voices: [], stories: [], responses: [] })
     }
 
@@ -398,30 +424,39 @@ router.get('/:id/archive', authMiddleware, async (req, res) => {
         .from('questionnaire_responses')
         .select('id, contributor_id, question_text, response_text, response_audio_url, order_index, created_at, updated_at')
         .eq('memorial_id', req.params.id)
-        .in('contributor_id', approvedIds)
+        .in('contributor_id', reviewedIds)
+        .not('approved_at', 'is', null)
         .order('order_index', { ascending: true }),
       supabase
         .from('contributor_stories')
         .select('id, contributor_id, client_story_id, title, body, created_at, updated_at')
         .eq('memorial_id', req.params.id)
-        .in('contributor_id', approvedIds)
+        .in('contributor_id', reviewedIds)
+        .not('approved_at', 'is', null)
         .order('created_at', { ascending: true }),
       supabase
         .from('media_assets')
         .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption, is_flagged, flagged_reason, created_at')
         .eq('memorial_id', req.params.id)
-        .in('contributor_id', approvedIds)
+        .in('contributor_id', reviewedIds)
+        .not('approved_at', 'is', null)
         .order('created_at', { ascending: false }),
       supabase
         .from('voice_recordings')
         .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, duration_seconds, contributor_title, transcript_text, key_quote, is_flagged, flagged_reason, created_at')
         .eq('memorial_id', req.params.id)
-        .in('contributor_id', approvedIds)
+        .in('contributor_id', reviewedIds)
+        .not('approved_at', 'is', null)
         .order('created_at', { ascending: false }),
     ])
 
     const archiveError = responsesError || storiesError || photosError || voicesError
     if (archiveError) return res.status(400).json({ error: archiveError.message })
+
+    // A contributor only belongs in the archive once something of theirs is approved.
+    const withApproved = new Set([...(photos || []), ...(voices || []), ...(stories || []), ...(responses || [])]
+      .map((item) => item.contributor_id))
+    const archivedContributors = (contributors || []).filter((contributor) => withApproved.has(contributor.id))
 
     const contributorNames = new Map((contributors || []).map((contributor) => [contributor.id, contributor.name || null]))
     const withContributorName = (items = []) => (items || []).map((item) => ({
@@ -433,7 +468,7 @@ router.get('/:id/archive', authMiddleware, async (req, res) => {
     const voicesWithUrls = await createSignedAssetUrls(voices, 'audio_url')
 
     res.json({
-      contributors: enrichContributors(contributors, stories, photos, voices),
+      contributors: enrichContributors(archivedContributors, stories, photos, voices),
       photos: withContributorName(photosWithUrls),
       voices: withContributorName(voicesWithUrls),
       stories: withContributorName(stories),
@@ -486,6 +521,21 @@ router.get('/:id/contributors', authMiddleware, async (req, res) => {
   }
 })
 
+// GET /memorials/:id/contributors/:contributorId/highlights — one contributor's
+// photos and quote for the organizer's constellation view
+router.get('/:id/contributors/:contributorId/highlights', authMiddleware, async (req, res) => {
+  try {
+    const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
+    if (!memorial) return res.status(403).json({ error: 'Not authorized' })
+
+    const highlights = await getContributorHighlights(supabase, memorial.id, req.params.contributorId)
+    if (!highlights) return res.status(404).json({ error: 'Contributor not found' })
+    res.json(highlights)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // GET /memorials/:id/contributors/:contributorId/submission — get review details for one contributor
 router.get('/:id/contributors/:contributorId/submission', authMiddleware, async (req, res) => {
   try {
@@ -509,25 +559,25 @@ router.get('/:id/contributors/:contributorId/submission', authMiddleware, async 
     ] = await Promise.all([
       supabase
         .from('questionnaire_responses')
-        .select('id, question_text, response_text, response_audio_url, order_index, created_at, updated_at')
+        .select('id, question_text, response_text, response_audio_url, order_index, reviewed_at, approved_at, created_at, updated_at')
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', req.params.id)
         .order('order_index', { ascending: true }),
       supabase
         .from('contributor_stories')
-        .select('id, contributor_id, client_story_id, title, body, created_at, updated_at')
+        .select('id, contributor_id, client_story_id, title, body, reviewed_at, approved_at, created_at, updated_at')
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', req.params.id)
         .order('created_at', { ascending: true }),
       supabase
         .from('media_assets')
-        .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption, is_flagged, flagged_reason, created_at')
+        .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption, is_flagged, flagged_reason, reviewed_at, approved_at, created_at')
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', req.params.id)
         .order('created_at', { ascending: true }),
       supabase
         .from('voice_recordings')
-        .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, duration_seconds, contributor_title, transcript_text, key_quote, is_flagged, flagged_reason, created_at')
+        .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, duration_seconds, contributor_title, transcript_text, key_quote, is_flagged, flagged_reason, reviewed_at, approved_at, created_at')
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', req.params.id)
         .order('created_at', { ascending: true }),
@@ -543,9 +593,173 @@ router.get('/:id/contributors/:contributorId/submission', authMiddleware, async 
     res.json({
       contributor: enrichedContributor,
       photos: photosWithUrls,
-      responses: responses || [],
+      responses: (responses || []).map((response) => ({
+        ...response,
+        answer_text: response.response_text || '',
+      })),
       stories: stories || [],
       voices: voicesWithUrls,
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// NS-5: each sub-tab of a pending submission shows a red dot until the
+// organizer has acted on that content type. Approving (or rejecting) the
+// submission settles every type; deleting an item settles the type it came
+// from, because curating a type is the organizer's first pass over it.
+// Merely opening a sub-tab is not review, so nothing here runs on a read.
+// Items already stamped keep their original timestamp.
+async function markSubmissionReviewed(memorialId, contributorId, types) {
+  const reviewedAt = new Date().toISOString()
+
+  const results = await Promise.all(types.map((type) => supabase
+    .from(REVIEWABLE_SUBMISSION_TABLES[type])
+    .update({ reviewed_at: reviewedAt })
+    .eq('contributor_id', contributorId)
+    .eq('memorial_id', memorialId)
+    .is('reviewed_at', null)
+    .select('id')))
+
+  const failed = results.find((result) => result.error)
+  return { reviewed_at: reviewedAt, error: failed?.error || null }
+}
+
+// How many of a contributor's items are still awaiting approval, across every
+// content type. Zero means the whole submission has been through approval.
+async function countPendingApproval(memorialId, contributorId) {
+  const results = await Promise.all(Object.values(REVIEWABLE_SUBMISSION_TABLES).map((table) => supabase
+    .from(table)
+    .select('id', { count: 'exact', head: true })
+    .eq('contributor_id', contributorId)
+    .eq('memorial_id', memorialId)
+    .is('approved_at', null)))
+
+  const failed = results.find((result) => result.error)
+  return {
+    count: results.reduce((total, result) => total + (result.count || 0), 0),
+    error: failed?.error || null,
+  }
+}
+
+// PATCH /memorials/:id/contributors/:contributorId/submission/approve — approve one content type
+//
+// NS-5: the organizer approves a submission one content type at a time, so
+// photos can be settled while the stories are still under review. Approving a
+// type also settles its red dot. Once nothing of the contributor's is left
+// awaiting approval, the contributor itself counts as approved, which is what
+// the archive listing and the generation gate read.
+//
+// NS-6: with `ids`, only those items are approved and every other item of the
+// type still awaiting approval is permanently deleted, files included. An
+// empty `ids` deletes them all. Without `ids`, the whole type is approved.
+router.patch('/:id/contributors/:contributorId/submission/approve', authMiddleware, async (req, res) => {
+  try {
+    const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
+    if (!memorial) return res.status(403).json({ error: 'Not authorized' })
+
+    const type = String(req.body?.type || '').trim().toLowerCase()
+    const table = REVIEWABLE_SUBMISSION_TABLES[type]
+    if (!table) return res.status(400).json({ error: 'Invalid submission content type' })
+
+    const { data: contributor, error: contributorError } = await supabase
+      .from('contributors')
+      .select('id, status')
+      .eq('id', req.params.contributorId)
+      .eq('memorial_id', req.params.id)
+      .single()
+
+    if (contributorError || !contributor) return res.status(404).json({ error: 'Contributor not found' })
+
+    const selectedIds = req.body?.ids
+    if (selectedIds !== undefined && (!Array.isArray(selectedIds) || selectedIds.some((id) => typeof id !== 'string'))) {
+      return res.status(400).json({ error: 'ids must be an array of item ids' })
+    }
+
+    const hasFiles = STORED_SUBMISSION_TYPES.has(type)
+    const { data: awaiting, error: awaitingError } = await supabase
+      .from(table)
+      .select(hasFiles ? 'id, storage_path, storage_bucket' : 'id')
+      .eq('contributor_id', contributor.id)
+      .eq('memorial_id', req.params.id)
+      .is('approved_at', null)
+
+    if (awaitingError) return res.status(400).json({ error: awaitingError.message })
+
+    // Only items still awaiting approval are in play, so a stale selection
+    // can neither re-stamp nor delete anything already approved.
+    const selected = selectedIds === undefined ? null : new Set(selectedIds)
+    const toApprove = (awaiting || []).filter((item) => !selected || selected.has(item.id))
+    const toDelete = (awaiting || []).filter((item) => selected && !selected.has(item.id))
+
+    // Approve first: if the delete then fails, the unselected items are still
+    // awaiting approval and the organizer can simply try again.
+    const approvedAt = new Date().toISOString()
+    if (toApprove.length) {
+      const { error: approveError } = await supabase
+        .from(table)
+        .update({ approved_at: approvedAt, reviewed_at: approvedAt })
+        .eq('contributor_id', contributor.id)
+        .eq('memorial_id', req.params.id)
+        .in('id', toApprove.map((item) => item.id))
+        .is('approved_at', null)
+
+      if (approveError) return res.status(400).json({ error: approveError.message })
+    }
+
+    if (toDelete.length) {
+      if (hasFiles) {
+        const pathsByBucket = toDelete.reduce((groups, item) => {
+          if (!item.storage_path) return groups
+          const bucket = item.storage_bucket || 'memorial-assets'
+          groups[bucket] = groups[bucket] || []
+          groups[bucket].push(item.storage_path)
+          return groups
+        }, {})
+
+        const removed = await Promise.all(Object.entries(pathsByBucket).map(([bucket, paths]) => (
+          supabase.storage.from(bucket).remove(paths)
+        )))
+        const storageError = removed.find((result) => result.error)?.error
+        if (storageError) return res.status(400).json({ error: storageError.message })
+      }
+
+      const { error: deleteError } = await supabase
+        .from(table)
+        .delete()
+        .eq('contributor_id', contributor.id)
+        .eq('memorial_id', req.params.id)
+        .in('id', toDelete.map((item) => item.id))
+        .is('approved_at', null)
+
+      if (deleteError) return res.status(400).json({ error: deleteError.message })
+    }
+
+    const pending = await countPendingApproval(req.params.id, contributor.id)
+    if (pending.error) return res.status(400).json({ error: pending.error.message })
+
+    let updatedContributor = contributor
+    if (!pending.count && contributor.status !== 'approved') {
+      const { data, error } = await supabase
+        .from('contributors')
+        .update({ status: 'approved', updated_at: new Date().toISOString() })
+        .eq('id', contributor.id)
+        .eq('memorial_id', req.params.id)
+        .select('id, name, is_anonymous, relationship_type, relationship_label, status, questionnaire_done, photos_done, voice_done, submitted_at, created_at, updated_at')
+        .single()
+
+      if (error || !data) return res.status(400).json({ error: error?.message || 'Failed to approve contributor' })
+      updatedContributor = data
+    }
+
+    res.json({
+      type,
+      approved_at: approvedAt,
+      ids: toApprove.map((item) => item.id),
+      deleted_ids: toDelete.map((item) => item.id),
+      awaiting_approval: pending.count,
+      contributor: updatedContributor,
     })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -572,7 +786,30 @@ router.patch('/:id/contributors/:contributorId/status', authMiddleware, async (r
       .single()
 
     if (error || !data) return res.status(404).json({ error: 'Contributor not found' })
-    res.json({ contributor: data })
+
+    // A first approve/reject pass settles every content type at once.
+    let reviewedAt = null
+    if (REVIEWED_ON_STATUSES.has(status)) {
+      const reviewed = await markSubmissionReviewed(req.params.id, data.id, Object.keys(REVIEWABLE_SUBMISSION_TABLES))
+      if (reviewed.error) return res.status(400).json({ error: reviewed.error.message })
+      reviewedAt = reviewed.reviewed_at
+
+      // Approving the contributor outright approves whatever is left of theirs.
+      if (status === 'approved') {
+        const approved = await Promise.all(Object.values(REVIEWABLE_SUBMISSION_TABLES).map((table) => supabase
+          .from(table)
+          .update({ approved_at: reviewedAt })
+          .eq('contributor_id', data.id)
+          .eq('memorial_id', req.params.id)
+          .is('approved_at', null)
+          .select('id')))
+
+        const approveError = approved.find((result) => result.error)
+        if (approveError) return res.status(400).json({ error: approveError.error.message })
+      }
+    }
+
+    res.json({ contributor: data, reviewed_at: reviewedAt })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -677,7 +914,11 @@ router.delete('/:id/contributors/:contributorId/photos/:assetId', authMiddleware
 
     if (deleteError) return res.status(400).json({ error: deleteError.message })
 
-    res.json({ deleted: true })
+    // Curating this type counts as the organizer's first pass over it.
+    const reviewed = await markSubmissionReviewed(req.params.id, req.params.contributorId, ['photos'])
+    if (reviewed.error) return res.status(400).json({ error: reviewed.error.message })
+
+    res.json({ deleted: true, reviewed_at: reviewed.reviewed_at })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -712,7 +953,11 @@ router.delete('/:id/contributors/:contributorId/voices/:recordingId', authMiddle
 
     if (deleteError) return res.status(400).json({ error: deleteError.message })
 
-    res.json({ deleted: true })
+    // Curating this type counts as the organizer's first pass over it.
+    const reviewed = await markSubmissionReviewed(req.params.id, req.params.contributorId, ['voices'])
+    if (reviewed.error) return res.status(400).json({ error: reviewed.error.message })
+
+    res.json({ deleted: true, reviewed_at: reviewed.reviewed_at })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -741,7 +986,11 @@ router.delete('/:id/contributors/:contributorId/responses/:responseId', authMidd
 
     if (deleteError) return res.status(400).json({ error: deleteError.message })
 
-    res.json({ deleted: true })
+    // Curating this type counts as the organizer's first pass over it.
+    const reviewed = await markSubmissionReviewed(req.params.id, req.params.contributorId, ['responses'])
+    if (reviewed.error) return res.status(400).json({ error: reviewed.error.message })
+
+    res.json({ deleted: true, reviewed_at: reviewed.reviewed_at })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -770,7 +1019,11 @@ router.delete('/:id/contributors/:contributorId/stories/:storyId', authMiddlewar
 
     if (deleteError) return res.status(400).json({ error: deleteError.message })
 
-    res.json({ deleted: true })
+    // Curating this type counts as the organizer's first pass over it.
+    const reviewed = await markSubmissionReviewed(req.params.id, req.params.contributorId, ['stories'])
+    if (reviewed.error) return res.status(400).json({ error: reviewed.error.message })
+
+    res.json({ deleted: true, reviewed_at: reviewed.reviewed_at })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -779,6 +1032,9 @@ router.delete('/:id/contributors/:contributorId/stories/:storyId', authMiddlewar
 // GET /memorials/:id/output
 router.get('/:id/output', authMiddleware, async (req, res) => {
   try {
+    const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
+    if (!memorial) return res.status(403).json({ error: 'Not authorized' })
+
     const { data: output, error } = await supabase
       .from('ai_outputs')
       .select('*')
@@ -805,7 +1061,7 @@ router.post('/:id/share', authMiddleware, async (req, res) => {
     const token = crypto.randomBytes(12).toString('hex')
     const { data, error } = await supabase
       .from('invite_links')
-      .insert({ memorial_id: req.params.id, token, created_by: req.user.sub, is_active: true })
+      .insert({ memorial_id: req.params.id, token, created_by: req.user.sub, is_active: true, link_type: 'share' })
       .select().single()
     if (error) return res.status(400).json({ error: error.message })
     res.status(201).json({ share_link: { token: data.token, url: `${process.env.NEXT_PUBLIC_APP_URL}/share/${data.token}` } })

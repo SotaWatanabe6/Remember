@@ -718,6 +718,7 @@ function PhotoArchiveSection({ output, contributors }) {
               <option value="all">Filter</option>
               <option value="family">Family</option>
               <option value="friend">Friend</option>
+              <option value="partner">Partner</option>
               <option value="colleague">Colleague</option>
               <option value="other">Other</option>
             </FilterSelect>

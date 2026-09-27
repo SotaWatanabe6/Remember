@@ -43,7 +43,13 @@ function getStoredContributorSession(inviteToken) {
   }
 
   try {
-    return JSON.parse(storedSession);
+    const session = JSON.parse(storedSession);
+    // Sessions from before the API issued secret session tokens stored the
+    // contributor id as the token, which the API no longer accepts.
+    if (session?.contributorToken && session.contributorToken === session.contributorId) {
+      throw new Error("Contributor session predates session tokens.");
+    }
+    return session;
   } catch (error) {
     console.warn("Discarding invalid contributor session.", error);
     try {
@@ -670,6 +676,26 @@ export async function updateMemorialContributorStatus(memorialId, contributorId,
     {
       method: "PATCH",
       body: JSON.stringify({ status }),
+    },
+  );
+}
+
+// NS-5: approve one content type of a submission (photos | voices | stories |
+// responses). The contributor itself is approved server-side once nothing of
+// theirs is left awaiting approval.
+// NS-6: with `ids`, only those are approved and the rest of the type still
+// awaiting approval is permanently deleted.
+export async function approveMemorialContributorSubmissionType(memorialId, contributorId, type, ids, token) {
+  if (!memorialId) throw new Error("memorialId is required");
+  if (!contributorId) throw new Error("contributorId is required");
+  if (!type) throw new Error("type is required");
+
+  return organizerContributorRequest(
+    `/memorials/${encodeURIComponent(memorialId)}/contributors/${encodeURIComponent(contributorId)}/submission/approve`,
+    token,
+    {
+      method: "PATCH",
+      body: JSON.stringify(ids ? { type, ids } : { type }),
     },
   );
 }

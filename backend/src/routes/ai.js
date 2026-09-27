@@ -10,15 +10,15 @@ const {
   extractPhotoAlbumThemes,
   analyzePhotoWithVision,
   assignPhotosToThemes,
-  buildConstellationFromPhotos,
   attachPhotosToMemoryNodes,
   attachContributorSummariesToMemoryNodes,
+  buildConstellationFromMemories,
   composeStorySlideshow,
 } = require('../services/memorialGeneration')
 const { processVoiceRecording } = require('../services/voiceProcessing')
 const { withContributorDisplayNames } = require('../services/contributorPrivacy')
 
-const MAX_GENERATION_PHOTOS = Number(process.env.AI_PIPELINE_MAX_PHOTOS) || 60
+const { loadGenerationPhotos } = require('../services/generationPhotos')
 const CAN_USE_OPENAI = Boolean(process.env.OPENAI_API_KEY)
 
 function serializeJob(job) {
@@ -95,15 +95,7 @@ async function runPipelines(memorialId, jobId) {
         .eq('memorial_id', memorialId)
         .in('contributor_id', contributorIds)
       : { data: [] }
-    const { data: photos } = contributorIds.length
-      ? await supabase
-        .from('media_assets')
-        .select('*')
-        .eq('memorial_id', memorialId)
-        .in('contributor_id', contributorIds)
-        .order('created_at', { ascending: true })
-        .limit(MAX_GENERATION_PHOTOS)
-      : { data: [] }
+    const photos = await loadGenerationPhotos(supabase, memorialId, contributorIds)
     const { data: recordings } = contributorIds.length
       ? await supabase
         .from('voice_recordings')
@@ -241,26 +233,6 @@ async function runPipelines(memorialId, jobId) {
       enrichedRecordings.push(row)
     }
 
-    const voiceMoments = enrichedRecordings
-      .map((r) => {
-        const tags = typeof r.ai_tags === 'object' && r.ai_tags ? r.ai_tags : {}
-        const contributor = contributors?.find((c) => c.id === r.contributor_id)
-        return {
-          id: r.id,
-          intro_line: tags.intro_line || null,
-          key_quote: r.key_quote,
-          storage_path: r.storage_path,
-          storage_bucket: r.storage_bucket,
-          clip_start_seconds: tags.clip_start_seconds ?? 0,
-          clip_end_seconds: tags.clip_end_seconds,
-          contributor_name: contributor?.name,
-          contributor_title: r.contributor_title,
-          relationship_type: contributor?.relationship_type,
-          ai_category: r.ai_category,
-        }
-      })
-      .filter((v) => v.intro_line && v.storage_path)
-
     await updateJob(jobId, 75, 'Composing the memorial story...')
     const storySlides = await composeStorySlideshow({
       subjectName: memorial.subject_name,
@@ -269,7 +241,7 @@ async function runPipelines(memorialId, jobId) {
       analyzedPhotos,
       responses: responses || [],
       contributors: contributors || [],
-      voiceMoments,
+      voiceRecordings: enrichedRecordings,
     })
 
     const voices = enrichedRecordings.map((r) => {
@@ -289,16 +261,12 @@ async function runPipelines(memorialId, jobId) {
     })
 
     await updateJob(jobId, 85, 'Building the constellation map...')
-    const constellation = await buildConstellationFromPhotos(
+    const constellation = await buildConstellationFromMemories({
       analyzedPhotos,
-      memorial.subject_name,
-      contributors || [],
-    )
-    const constellationNodes = (constellation.themes || []).map((theme) =>
-      typeof constellation.buildNodePayload === 'function'
-        ? constellation.buildNodePayload(theme)
-        : theme,
-    )
+      subjectName: memorial.subject_name,
+      contributors: contributors || [],
+      responses: responses || [],
+    })
 
     const albums = albumThemes.map((theme) => {
       const themePhotos = analyzedPhotos.filter((p) =>
@@ -329,7 +297,7 @@ async function runPipelines(memorialId, jobId) {
     await updateJob(jobId, 95, 'Saving your memorial...')
     const outputPayload = await resolveOutputMediaUrls(supabase, {
       story: storySlides,
-      constellation: { nodes: constellationNodes, edges: constellation.edges || [] },
+      constellation,
       voices,
       photos: { albums },
       discovery_themes: discoveryThemes,
@@ -439,7 +407,7 @@ router.get('/jobs/:id/status', authMiddleware, async (req, res) => {
   try {
     const { data: job, error } = await supabase
       .from('ai_jobs')
-      .select('id, status, progress, current_step, error_message')
+      .select('id, memorial_id, status, progress, current_step, error_message')
       .eq('id', req.params.id)
       .single()
 
@@ -447,7 +415,18 @@ router.get('/jobs/:id/status', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Job not found' })
     }
 
-    res.json({ job })
+    const { data: memorial } = await supabase
+      .from('memorials')
+      .select('id')
+      .eq('id', job.memorial_id)
+      .eq('user_id', req.user.sub)
+      .maybeSingle()
+
+    // Same response as a missing job so job ids of other memorials are not confirmed.
+    if (!memorial) return res.status(404).json({ error: 'Job not found' })
+
+    const { memorial_id: _memorialId, ...jobStatus } = job
+    res.json({ job: jobStatus })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
