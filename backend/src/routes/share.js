@@ -18,7 +18,7 @@ router.get('/:token', async (req, res) => {
       return res.status(404).json({ error: 'Memorial not found.' })
     }
 
-    if (!invite.is_active) {
+    if (!invite.is_active || (invite.expires_at && new Date(invite.expires_at) < new Date())) {
       return res.status(410).json({ error: 'This link is no longer active.' })
     }
 
@@ -36,7 +36,8 @@ router.get('/:token', async (req, res) => {
     }
     const { data: memorial, error: memorialError } = await supabase
       .from('memorials')
-      .select('*')
+      // Only what the viewer page renders; never the organizer's user_id.
+      .select('id, subject_name, nickname, biography, related_people, cover_photo_url, date_of_birth, date_of_passing, status')
       .eq('id', output.memorial_id)
       .single()
     if (memorialError || !memorial) {
