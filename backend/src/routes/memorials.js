@@ -1032,6 +1032,9 @@ router.delete('/:id/contributors/:contributorId/stories/:storyId', authMiddlewar
 // GET /memorials/:id/output
 router.get('/:id/output', authMiddleware, async (req, res) => {
   try {
+    const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
+    if (!memorial) return res.status(403).json({ error: 'Not authorized' })
+
     const { data: output, error } = await supabase
       .from('ai_outputs')
       .select('*')
