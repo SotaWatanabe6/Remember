@@ -10,7 +10,7 @@ const { createClient } = require('@supabase/supabase-js')
 // in-memory HTTP fixture. No credentials, live records, or storage are used.
 function fixture({ status = 'in_progress', submittedAt = null, active = true, storageFails = false } = {}) {
   const db = {
-    invite_links: [{ id: 'invite', token: 'invite-token', memorial_id: 'memorial', is_active: active }],
+    invite_links: [{ id: 'invite', token: 'invite-token', link_type: 'contribute', memorial_id: 'memorial', is_active: active }],
     contributors: [
       { id: 'owner', memorial_id: 'memorial', status, submitted_at: submittedAt, photos_done: true },
       { id: 'outsider', memorial_id: 'other-memorial', status: 'in_progress', submitted_at: null },

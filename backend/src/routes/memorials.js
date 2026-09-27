@@ -318,6 +318,7 @@ router.post('/:id/invite-link', authMiddleware, async (req, res) => {
       .from('invite_links')
       .select('*')
       .eq('memorial_id', req.params.id)
+      .eq('link_type', 'contribute')
       .eq('is_active', true)
       .single()
 
@@ -341,6 +342,7 @@ router.post('/:id/invite-link', authMiddleware, async (req, res) => {
         token,
         created_by: req.user.sub,
         is_active: true,
+        link_type: 'contribute',
         expires_at: expires_at || null,
         max_uses: max_uses || null,
         use_count: 0
@@ -370,6 +372,7 @@ router.patch('/:id/invite-link', authMiddleware, async (req, res) => {
       .from('invite_links')
       .update({ is_active })
       .eq('memorial_id', req.params.id)
+      .eq('link_type', 'contribute')
       .select()
       .single()
 
@@ -1033,7 +1036,7 @@ router.post('/:id/share', authMiddleware, async (req, res) => {
     const token = crypto.randomBytes(12).toString('hex')
     const { data, error } = await supabase
       .from('invite_links')
-      .insert({ memorial_id: req.params.id, token, created_by: req.user.sub, is_active: true })
+      .insert({ memorial_id: req.params.id, token, created_by: req.user.sub, is_active: true, link_type: 'share' })
       .select().single()
     if (error) return res.status(400).json({ error: error.message })
     res.status(201).json({ share_link: { token: data.token, url: `${process.env.NEXT_PUBLIC_APP_URL}/share/${data.token}` } })

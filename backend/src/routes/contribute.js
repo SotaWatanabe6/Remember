@@ -130,6 +130,7 @@ router.get('/:token', async (req, res) => {
       .from('invite_links')
       .select('*')
       .eq('token', req.params.token)
+      .eq('link_type', 'contribute')
       .single()
 
     if (error || !invite) {
@@ -198,6 +199,7 @@ router.post('/:token/start', async (req, res) => {
       .from('invite_links')
       .select('*')
       .eq('token', req.params.token)
+      .eq('link_type', 'contribute')
       .single()
 
     if (error || !invite || !invite.is_active) {
@@ -381,6 +383,7 @@ router.post('/:token/submit', async (req, res) => {
       .from('invite_links')
       .select('memorial_id, is_active')
       .eq('token', req.params.token)
+      .eq('link_type', 'contribute')
       .single()
 
     if (inviteError || !invite || !invite.is_active) {
@@ -506,6 +509,7 @@ router.get('/:token/photos', async (req, res) => {
       .from('invite_links')
       .select('id, memorial_id, is_active')
       .eq('token', req.params.token)
+      .eq('link_type', 'contribute')
       .single()
 
     if (inviteError || !invite || !invite.is_active) {
@@ -581,6 +585,7 @@ router.post('/:token/photos', async (req, res) => {
       .from('invite_links')
       .select('id, memorial_id, is_active')
       .eq('token', req.params.token)
+      .eq('link_type', 'contribute')
       .single()
 
     if (inviteError || !invite || !invite.is_active) {
@@ -750,6 +755,7 @@ router.delete('/:token/photos/:assetId', async (req, res) => {
       .from('invite_links')
       .select('id, memorial_id, is_active')
       .eq('token', req.params.token)
+      .eq('link_type', 'contribute')
       .single()
 
     if (inviteError || !invite || !invite.is_active) {
@@ -835,6 +841,7 @@ router.post('/:token/voice', async (req, res) => {
       .from('invite_links')
       .select('id, memorial_id, is_active')
       .eq('token', req.params.token)
+      .eq('link_type', 'contribute')
       .single()
 
     if (inviteError || !invite || !invite.is_active) {

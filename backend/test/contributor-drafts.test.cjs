@@ -7,7 +7,10 @@ const { createContributorDraftRouter } = require('../src/routes/contributorDraft
 // isolated transport. These tests never touch a real memorial or storage bucket.
 function fixture({ status = 'in_progress', submittedAt = null, active = true, expired = false, storageFails = false, updateFails = false } = {}) {
   const db = {
-    invite_links: [{ id: 'invite', token: 'invite-token', memorial_id: 'memorial', is_active: active, expires_at: expired ? '2020-01-01' : null }],
+    invite_links: [
+      { id: 'invite', token: 'invite-token', link_type: 'contribute', memorial_id: 'memorial', is_active: active, expires_at: expired ? '2020-01-01' : null },
+      { id: 'share', token: 'share-token', link_type: 'share', memorial_id: 'memorial', is_active: true, expires_at: null },
+    ],
     contributors: [
       { id: 'owner', memorial_id: 'memorial', status, submitted_at: submittedAt, voice_done: true },
       { id: 'outsider', memorial_id: 'other-memorial', status: 'in_progress' },
@@ -142,6 +145,12 @@ for (const options of [{ active: false }, { expired: true }]) {
     for (const method of ['get', 'patch', 'delete']) assert.equal((await f.call(method)).statusCode, 410)
   })
 }
+
+test('a viewer share link cannot be used to access contributor drafts', async () => {
+  const f = fixture()
+  for (const method of ['get', 'patch', 'delete']) assert.equal((await f.call(method, { token: 'share-token' })).statusCode, 410)
+  assert.equal(f.db.voice_recordings.find((row) => row.id === 'own-voice').contributor_title, 'Original title')
+})
 
 test('storage failure retains the recording and flag for retry', async () => {
   const f = fixture({ storageFails: true })

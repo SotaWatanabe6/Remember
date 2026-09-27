@@ -13,6 +13,7 @@ async function getContributorForInvite(supabase, req, res, requireDraft = true) 
     .from('invite_links')
     .select('id, memorial_id, is_active, expires_at')
     .eq('token', req.params.token)
+    .eq('link_type', 'contribute')
     .single()
   if (inviteError || !invite || !invite.is_active ||
       (invite.expires_at && new Date(invite.expires_at) < new Date())) {

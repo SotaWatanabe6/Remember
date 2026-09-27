@@ -12,6 +12,7 @@ router.get('/:token', async (req, res) => {
       .from('invite_links')
       .select('*')
       .eq('token', req.params.token)
+      .eq('link_type', 'share')
       .single()
     if (inviteError || !invite) {
       return res.status(404).json({ error: 'Memorial not found.' })
