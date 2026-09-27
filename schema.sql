@@ -41,6 +41,7 @@ CREATE TABLE contributors (
   photos_done boolean DEFAULT false,
   voice_done boolean DEFAULT false,
   submitted_at timestamptz,
+  session_token text UNIQUE NOT NULL DEFAULT replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''),
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
