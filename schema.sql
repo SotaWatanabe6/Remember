@@ -22,6 +22,7 @@ CREATE TABLE invite_links (
   expires_at timestamptz,
   max_uses integer,
   use_count integer DEFAULT 0,
+  link_type text NOT NULL DEFAULT 'contribute' CHECK (link_type IN ('contribute', 'share')),
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
