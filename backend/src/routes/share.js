@@ -3,23 +3,27 @@ const express = require('express')
 const router = express.Router()
 const supabase = require('../supabase')
 const { withContributorDisplayNames } = require('../services/contributorPrivacy')
+const { getContributorHighlights } = require('../services/contributorHighlights')
+
+// Viewer share links only; contributor invite links are rejected.
+async function findActiveShareLink(token) {
+  const { data: invite, error } = await supabase
+    .from('invite_links')
+    .select('id, memorial_id, is_active, expires_at')
+    .eq('token', token)
+    .eq('link_type', 'share')
+    .maybeSingle()
+  if (error || !invite) return { status: 404 }
+  if (!invite.is_active || (invite.expires_at && new Date(invite.expires_at) < new Date())) return { status: 410 }
+  return { invite }
+}
 
 // GET /share/:token — get memorial output via viewer share link
 router.get('/:token', async (req, res) => {
   try {
-    // validate share token
-    const { data: invite, error: inviteError } = await supabase
-      .from('invite_links')
-      .select('*')
-      .eq('token', req.params.token)
-      .eq('link_type', 'share')
-      .single()
-    if (inviteError || !invite) {
-      return res.status(404).json({ error: 'Memorial not found.' })
-    }
-
-    if (!invite.is_active || (invite.expires_at && new Date(invite.expires_at) < new Date())) {
-      return res.status(410).json({ error: 'This link is no longer active.' })
+    const { invite, status } = await findActiveShareLink(req.params.token)
+    if (!invite) {
+      return res.status(status).json({ error: status === 410 ? 'This link is no longer active.' : 'Memorial not found.' })
     }
 
     // get the output
@@ -49,6 +53,23 @@ router.get('/:token', async (req, res) => {
     }
     // Viewers of a shared memorial never see the real name behind an anonymous contribution.
     res.json({ ...output.output_json, memorial: memorial || null, contributor: withContributorDisplayNames(contributor) })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// GET /share/:token/contributors/:contributorId/highlights — one contributor's
+// photos and quote for the constellation, scoped to the shared memorial
+router.get('/:token/contributors/:contributorId/highlights', async (req, res) => {
+  try {
+    const { invite, status } = await findActiveShareLink(req.params.token)
+    if (!invite) {
+      return res.status(status).json({ error: status === 410 ? 'This link is no longer active.' : 'Memorial not found.' })
+    }
+
+    const highlights = await getContributorHighlights(supabase, invite.memorial_id, req.params.contributorId)
+    if (!highlights) return res.status(404).json({ error: 'Contributor not found' })
+    res.json(highlights)
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

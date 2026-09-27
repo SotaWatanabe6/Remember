@@ -9,6 +9,7 @@ const upload = multer()
 
 // After the existing requires:
 const { enrichMemorialsForClient, enrichMemorialForClient } = require('../services/storageUrls')
+const { getContributorHighlights } = require('../services/contributorHighlights')
 
 const CONTRIBUTOR_REVIEW_STATUSES = new Set(['in_progress', 'submitted', 'approved', 'rejected'])
 
@@ -509,6 +510,21 @@ router.get('/:id/contributors', authMiddleware, async (req, res) => {
     if (countError) return res.status(400).json({ error: countError.message })
 
     res.json({ contributors: enrichContributors(contributors, stories, photos, voices) })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// GET /memorials/:id/contributors/:contributorId/highlights — one contributor's
+// photos and quote for the organizer's constellation view
+router.get('/:id/contributors/:contributorId/highlights', authMiddleware, async (req, res) => {
+  try {
+    const memorial = await getOwnedMemorial(req.params.id, req.user.sub)
+    if (!memorial) return res.status(403).json({ error: 'Not authorized' })
+
+    const highlights = await getContributorHighlights(supabase, memorial.id, req.params.contributorId)
+    if (!highlights) return res.status(404).json({ error: 'Contributor not found' })
+    res.json(highlights)
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
