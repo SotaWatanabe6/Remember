@@ -394,7 +394,7 @@ router.get('/jobs/:id/status', authMiddleware, async (req, res) => {
   try {
     const { data: job, error } = await supabase
       .from('ai_jobs')
-      .select('id, status, progress, current_step, error_message')
+      .select('id, memorial_id, status, progress, current_step, error_message')
       .eq('id', req.params.id)
       .single()
 
@@ -402,7 +402,18 @@ router.get('/jobs/:id/status', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Job not found' })
     }
 
-    res.json({ job })
+    const { data: memorial } = await supabase
+      .from('memorials')
+      .select('id')
+      .eq('id', job.memorial_id)
+      .eq('user_id', req.user.sub)
+      .maybeSingle()
+
+    // Same response as a missing job so job ids of other memorials are not confirmed.
+    if (!memorial) return res.status(404).json({ error: 'Job not found' })
+
+    const { memorial_id: _memorialId, ...jobStatus } = job
+    res.json({ job: jobStatus })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
