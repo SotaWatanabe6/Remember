@@ -203,25 +203,65 @@ export default function ConstellationGraph({
     //   [nodeId]: !prev[nodeId],
     // }));
   };  
-  
+    
   const toggleEye = (id) => {
     setHiddenContributors((prev) => ({
       ...prev,
       [id]: !prev[id],
     }));
-  };  
-  const nodes = useMemo(() => [
-    ...buildConstellationNodes(ai_output?.constellation),
-    {
+  };
+  const nodes = useMemo(() => {
+    const centerNode = {
       id: memorial?.id || 'memorial-center',
       name: memorial?.subject_name || memorial?.deceased_name || 'Memorial',
-      relationship_type: 'Memorial', prominence: 1, summary: '', photos: [], photo_urls: [], quotes: [], contributions: 0,
-    },
-  ], [ai_output?.constellation, memorial?.id, memorial?.subject_name, memorial?.deceased_name]);
-  const links = useMemo(() => nodes.filter((node) => node.relationship_type !== 'Memorial').map((node) => ({
-    source: memorial?.id || 'memorial-center', target: node.id, type: node.relationship_type, weight: 1,
-  })), [nodes, memorial?.id]);
+      relationship_type: 'Memorial',
+      prominence: 1,
+      summary: '',
+      photos: [],
+      photo_urls: [],
+      quotes: [],
+      contributions: 0,
+    };
 
+    if (hasMemoryNodes) {
+      return [...buildConstellationNodes(ai_output?.constellation), centerNode];
+    }
+
+    const themeNodes = ai_output?.discovery_themes?.map(t => ({
+      id: t.id,
+      name: t.label,
+      group: capitalizeFirstLetter(t.category),
+      prominence: t.prominence_score,
+      summary: t.summary,
+      photo_urls: t.photo_urls || [],
+      photos: t.photos || t.photo_ids || [],
+      quotes: t.quotes || [],
+      contributions: (t.photo_urls || []).length,
+    })) || [];
+
+    return [...themeNodes, centerNode];
+  }, [hasMemoryNodes, ai_output?.constellation, ai_output?.discovery_themes, memorial?.id, memorial?.subject_name, memorial?.deceased_name]);
+
+  const links = useMemo(() => {
+    if (hasMemoryNodes) {
+      return nodes
+        .filter((node) => node.relationship_type !== 'Memorial')
+        .map((node) => ({
+          source: memorial?.id || 'memorial-center',
+          target: node.id,
+          type: node.relationship_type,
+          weight: 1,
+        }));
+    }
+
+    return ai_output?.discovery_themes?.map(d => ({
+      source: memorial?.id || 'memorial-center',
+      target: d.id,
+      type: capitalizeFirstLetter(d.category),
+      weight: 1,
+    })) || [];
+  }, [hasMemoryNodes, nodes, ai_output?.discovery_themes, memorial?.id]);
+  
   const [indexPhoto, setIndexPhoto] = useState(0);
   useEffect(() => {
     if(photoCarroussel.length!=0){

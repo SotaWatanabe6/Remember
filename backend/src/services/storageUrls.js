@@ -97,6 +97,15 @@ async function resolveOutputMediaUrls(supabase, output) {
     }
   }
 
+  if (Array.isArray(resolved.discovery_themes)) {
+    resolved.discovery_themes = await Promise.all(
+      resolved.discovery_themes.map(async (node) => {
+        const photoUrls = await resolveUrlList(supabase, node.photo_urls || [])
+        return { ...node, photo_urls: photoUrls.filter(Boolean) }
+      }),
+    )
+  }
+
   if (resolved.voices) {
     resolved.voices = await Promise.all(
       resolved.voices.map(async (voice) => {

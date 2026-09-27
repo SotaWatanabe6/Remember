@@ -273,119 +273,204 @@ function buildLifeChapterContext(themes, responses, contributors) {
   })
 }
 
-function ensureBiographicalBookends(slides, { subjectName, memorial }) {
-  const result = [...slides]
-  const hasIntro = result.some((s) => s.slide_type === 'intro')
-  const hasClosing = result.some((s) => s.slide_type === 'closing')
+const SAME_MEMORY_OVERLAP_THRESHOLD = 0.34 // 2-of-3 factor match threshold (US-23/US-20)
 
-  if (!hasIntro) {
-    const facts = buildMemorialFacts(memorial, subjectName)
-    result.unshift({
-      slide_type: 'intro',
-      photo_id: null,
-      photo_url: null,
-      photo_description: facts || `${subjectName}'s life, remembered.`,
-      narration: null,
-      order_index: 0,
-    })
-  }
-
-  if (!hasClosing) {
-    result.push({
-      slide_type: 'closing',
-      photo_id: null,
-      photo_url: null,
-      photo_description: `${subjectName} left a mark on everyone who knew them.`,
-      narration: 'A life worth remembering.',
-      order_index: result.length,
-    })
-  }
-
-  return result
+function normalizeMatchText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((word) => word.length > 2)
 }
 
-function applyStorySlidePolicies(slides, memorial) {
-  return slides.map((slide) => {
-    if (slide.slide_type === 'intro') {
-      return {
-        ...slide,
-        photo_id: null,
-        photo_url: memorial?.cover_photo_url || slide.photo_url || null,
-      }
-    }
-    if (slide.slide_type === 'closing') {
-      return {
-        ...slide,
-        photo_id: null,
-        photo_url: null,
-      }
-    }
-    return slide
-  })
+function tokenOverlapScore(a, b) {
+  const tokensA = new Set(normalizeMatchText(a))
+  const tokensB = new Set(normalizeMatchText(b))
+  if (!tokensA.size || !tokensB.size) return 0
+  let shared = 0
+  for (const token of tokensA) if (tokensB.has(token)) shared += 1
+  return shared / Math.min(tokensA.size, tokensB.size)
 }
 
-function finalizeBiographicalSlideshow(slides, { memorial, voiceSlides }) {
-  let storySlides = applyStorySlidePolicies(slides, memorial)
-  storySlides = storySlides.map((slide, index) => ({ ...slide, order_index: index + 1 }))
-  return interleaveVoiceSlides(storySlides, voiceSlides)
+/** US-23: two memory candidates are the "same memory" if at least 2 of 3 factors overlap. */
+function isSameMemory(a, b) {
+  const factors = [
+    tokenOverlapScore(a.who, b.who) >= SAME_MEMORY_OVERLAP_THRESHOLD,
+    tokenOverlapScore(a.action, b.action) >= SAME_MEMORY_OVERLAP_THRESHOLD,
+    tokenOverlapScore(a.setting, b.setting) >= SAME_MEMORY_OVERLAP_THRESHOLD,
+  ]
+  return factors.filter(Boolean).length >= 2
+}
+
+/** Merge candidate memory instances (one per contributor response) that pass the same-memory test. */
+function mergeMemoryNodeCandidates(candidates) {
+  const nodes = []
+
+  for (const candidate of candidates) {
+    const existing = nodes.find((node) => isSameMemory(node, candidate))
+    if (existing) {
+      existing.attributions.push(candidate.attribution)
+      if (candidate.summary && candidate.summary.length > (existing.summary || '').length) {
+        existing.summary = candidate.summary
+      }
+      existing.era_hint = existing.era_hint || candidate.era_hint
+    } else {
+      nodes.push({
+        id: `memory_${String(nodes.length + 1).padStart(3, '0')}`,
+        label: candidate.title,
+        who: candidate.who,
+        action: candidate.action,
+        setting: candidate.setting,
+        era_hint: candidate.era_hint,
+        summary: candidate.summary,
+        attributions: [candidate.attribution],
+      })
+    }
+  }
+
+  return nodes
 }
 
 /** Constellation discovery themes — from questionnaire only, no inference. */
+/** Constellation memory nodes — one specific, picturable memory per node (US-17/US-23), questionnaire only. */
 async function extractThemes(responses, contributors, subjectName, memorial) {
-  const memories = buildMemoryCorpus(responses, contributors, subjectName, memorial)
+  const contributorById = new Map((contributors || []).map((c) => [c.id, c]))
+
+  const sortedResponses = [...(responses || [])]
+    .filter((r) => r.response_text?.trim())
+    .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
 
   if (!openai) {
-    return [
-      {
-        id: 'theme_001',
-        label: 'How she spent her mornings',
-        category: 'daily_life',
-        summary: `Contributors described parts of ${subjectName}'s daily routine.`,
-        prominence_score: 0.9,
-        matching_keywords: ['morning', 'coffee', 'routine'],
-        memory_anchors: ['daily routine'],
-      },
-    ]
+    return [{
+      id: 'memory_001',
+      label: 'A morning routine',
+      category: 'memory',
+      summary: `Contributors described part of ${subjectName}'s daily routine.`,
+      prominence_score: 0.9,
+      matching_keywords: ['morning', 'coffee', 'routine'],
+      memory_anchors: ['daily routine'],
+      who: '', action: '', setting: '', era_hint: '',
+      attributions: [],
+      quotes: [],
+    }]
   }
+
+  if (!sortedResponses.length) return []
+
+  const indexedCorpus = sortedResponses
+    .map((response, index) => {
+      const contributor = contributorById.get(response.contributor_id)
+      const who = contributor?.name || 'A contributor'
+      const rel = contributor?.relationship_type || 'someone who knew them'
+      const question = resolveQuestionPrompt(response)
+      return `[${index}] [${who} (${rel}) — Q: ${question}]\n${response.response_text.trim()}`
+    })
+    .join('\n\n')
 
   try {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
-      max_tokens: 1400,
+      max_tokens: 1800,
       messages: [{
         role: 'user',
-        content: `You are helping family discover ${subjectName} through their own words.
+        content: `Read each questionnaire answer below about ${subjectName} and pull out SPECIFIC, PICTURABLE MEMORIES — not personality traits or summary judgments.
 
-Read the questionnaire responses below. Extract 4–6 DISCOVERY themes — each should feel like opening a door to something specific you can learn about ${subjectName}. Aim for at least 4 themes when enough source material exists (there are 6 contributor questions).
+THE PICTURABLE SCENE TEST (critical):
+A memory qualifies only if you could picture it as one concrete scene with a specific who and a specific action, and a setting/circumstance when one is stated.
+- PASSES: "She drove three hours in a snowstorm to bring me soup when I was sick" — a who, an action, a circumstance.
+- FAILS: "She was always generous" or "She loved her family" — a trait or summary judgment with no single scene behind it. Skip these entirely; do not create a memory for them.
 
-STRICT RULES:
-- Only use details explicitly stated in the text. Do NOT infer personality traits, values, or feelings that are not directly said.
-- Labels: plain, specific, 3–5 words — like a chapter title in a biography, not poetry
-- Summary: 2–3 sentences in clear, neutral prose. State what contributors actually mentioned. Use "contributors said" / "one person recalled" when helpful.
-- matching_keywords: exact words or short phrases from the source text (5–10)
-- memory_anchors: 1–3 short factual anchors from the text (habits, places, objects, routines mentioned)
+TRAIT + EXAMPLE RULE (critical):
+If a contributor's answer pairs a trait label with a concrete example (e.g. "she was always generous, like the time she paid for my textbooks without anyone asking"), extract only the concrete example as the memory. 
+The trait label itself ("generous") is not a who/action/setting and must not appear in those fields, the title, or the summary — treat it as framing to discard, not content to preserve. Do not create a separate candidate for the trait alone.
 
-Memories:
-${memories}
+Each response below is prefixed with its number in brackets, like [0], [1], etc. You MUST use that exact number as response_index — do not recount or guess.
+
+For each response containing one or more picturable memories, extract one candidate per memory:
+- who: the people involved in the scene, as described in the text (short phrase)
+- action: what specifically happened (short phrase)
+- setting: where/when it happened if stated, else empty string
+- era_hint: a short time reference if mentioned (e.g. "when I was 10", "last winter"), else empty string
+- title: a plain 3–6 word label for this memory
+- summary: 1–2 neutral sentences recounting the memory using only what the contributor said
+- quote: the most memorable phrase from the source text, lightly polished only (fix spelling/filler words, never change wording), max 30 words
+
+Do not infer feelings, motivations, or traits beyond what's stated. Extract each picturable memory as its own separate candidate even if it looks similar to another response — duplicates across contributors are merged in a separate step, not by you.
+
+Responses:
+${indexedCorpus}
 
 Return JSON only:
 {
-  "themes": [
+  "candidates": [
     {
-      "id": "theme_001",
-      "label": "...",
-      "category": "daily_life|relationships|humor|work|home|traditions",
-      "summary": "neutral factual summary from source text only",
-      "prominence_score": 0.0 to 1.0,
-      "matching_keywords": ["phrase from text"],
-      "memory_anchors": ["factual anchor"]
+      "response_index": 0,
+      "who": "...",
+      "action": "...",
+      "setting": "...",
+      "era_hint": "...",
+      "title": "...",
+      "summary": "...",
+      "quote": "..."
     }
   ]
-}`,
+}
+
+response_index must exactly match the [N] number shown before the source response above.`,
       }],
     })
+
     const parsed = parseJson(completion.choices[0].message.content)
-    return (parsed.themes || []).slice(0, 6)
+    const rawCandidates = parsed.candidates || []
+
+    const candidates = rawCandidates
+      .map((c) => {
+        const response = sortedResponses[c.response_index]
+        if (!response) return null
+        if (!c.who || !c.action) return null
+        const contributor = contributorById.get(response.contributor_id)
+        return {
+          who: c.who,
+          action: c.action,
+          setting: c.setting || '',
+          era_hint: c.era_hint || '',
+          title: c.title || 'A shared memory',
+          summary: c.summary || '',
+          attribution: {
+            contributor_id: response.contributor_id,
+            contributor_name: contributor?.name || 'A contributor',
+            relationship_type: contributor?.relationship_type || 'unknown',
+            quote: c.quote || '',
+            response_id: response.id,
+          },
+        }
+      })
+      .filter(Boolean)
+
+    const nodes = mergeMemoryNodeCandidates(candidates)
+
+    return nodes.slice(0, 8).map((node, index) => ({
+      id: node.id || `memory_${String(index + 1).padStart(3, '0')}`,
+      label: node.label,
+      category: 'memory',
+      summary: node.summary,
+      prominence_score: Math.min(1, 0.5 + node.attributions.length * 0.15),
+      matching_keywords: [node.who, node.action, node.setting].filter(Boolean),
+      memory_anchors: [node.era_hint].filter(Boolean),
+      who: node.who,
+      action: node.action,
+      setting: node.setting,
+      era_hint: node.era_hint,
+      attributions: node.attributions,
+      quotes: node.attributions
+        .filter((a) => a.quote)
+        .map((a) => ({
+          text: a.quote,
+          contributor_id: a.contributor_id,
+          contributor_name: a.contributor_name,
+          relationship_type: a.relationship_type,
+        })),
+    }))
   } catch (err) {
     console.error('[Themes] error:', err.message)
     throw err
@@ -1074,6 +1159,12 @@ Return JSON only:
 }
 
 async function composeThemeQuotes(theme, responses, contributors) {
+  // Memory nodes already carry attributed quotes from extractThemes (US-17/US-23) — use those directly.
+  if (Array.isArray(theme.quotes) && theme.quotes.length) {
+    return theme.quotes.slice(0, 3)
+  }
+
+  // Fallback for any theme shape without pre-attributed quotes (e.g. no-OpenAI mode).
   const relevant = (responses || []).filter((r) => {
     const text = (r.response_text || '').toLowerCase()
     const keywords = [
@@ -1084,67 +1175,144 @@ async function composeThemeQuotes(theme, responses, contributors) {
     return keywords.some((kw) => text.includes(String(kw).toLowerCase()))
   })
 
-  if (!relevant.length) {
-    return []
-  }
+  if (!relevant.length) return []
 
-  if (!openai) {
-    return relevant.slice(0, 3).map((r) => {
-      const contributor = contributors?.find((c) => c.id === r.contributor_id)
-      return {
-        text: r.response_text?.slice(0, 200),
-        contributor_id: r.contributor_id,
-        contributor_name: contributor?.name || 'A contributor',
-        relationship_type: contributor?.relationship_type || 'unknown',
-      }
-    })
+  return relevant.slice(0, 3).map((r) => {
+    const contributor = contributors?.find((c) => c.id === r.contributor_id)
+    return {
+      text: r.response_text?.slice(0, 200),
+      contributor_id: r.contributor_id,
+      contributor_name: contributor?.name || 'A contributor',
+      relationship_type: contributor?.relationship_type || 'unknown',
+    }
+  })
+}
+
+/** US-20: link photos to memory nodes — must clear all three checks (era, setting, who's-visible). */
+function isPhotoLinkedToMemoryNode(photo, node) {
+  const photoEra = resolvePhotoEraLabel(photo) || resolvePhotoYear(photo) || ''
+  const eraMatch = Boolean(photoEra) && Boolean(node.era_hint) && tokenOverlapScore(photoEra, node.era_hint) > 0
+
+  const settingMatch =
+    tokenOverlapScore(photo.analysis?.setting, node.setting) >= SAME_MEMORY_OVERLAP_THRESHOLD ||
+    tokenOverlapScore(photo.analysis?.scene, node.setting) >= SAME_MEMORY_OVERLAP_THRESHOLD
+
+  // "Who's visible" approximated by contributor overlap: the photo's uploader is one of the
+  // people who told this memory. Vision analysis can't match named individuals in a photo,
+  // so this is the closest reliable signal without adding facial-recognition scope.
+  const nodeContributorIds = new Set((node.attributions || []).map((a) => a.contributor_id))
+  const whoMatch = nodeContributorIds.has(photo.contributor_id)
+
+  // US-20 requires a genuinely strong match on all three signals — a node should show no
+  // photo rather than one that only partially fits (right era, wrong scene, etc.).
+  // Intentionally stricter than the 2-of-3 threshold used for US-23's memory merging.
+  return eraMatch && settingMatch && whoMatch
+}
+
+function attachPhotosToMemoryNodes(analyzedPhotos, memoryNodes) {
+  if (!analyzedPhotos?.length || !memoryNodes?.length) return memoryNodes
+
+  return memoryNodes.map((node) => {
+    const matchedPhotos = analyzedPhotos.filter((photo) => isPhotoLinkedToMemoryNode(photo, node))
+    if (!matchedPhotos.length) return node
+    return {
+      ...node,
+      photo_ids: matchedPhotos.slice(0, 3).map((p) => p.id),
+      photo_urls: matchedPhotos.slice(0, 3).map((p) => p.storage_path), // raw paths, resolved to signed URLs downstream
+    }
+  })
+}
+
+/** Every response_id already used as a node's anchor, across all nodes — excluded as "supporting material" per US-36. */
+function collectUsedResponseIds(memoryNodes) {
+  const used = new Set()
+  for (const node of memoryNodes || []) {
+    for (const attribution of node.attributions || []) {
+      if (attribution.response_id) used.add(attribution.response_id)
+    }
   }
+  return used
+}
+
+/** US-36: first-person summary from one contributor's own words, anchored on their specific node. */
+async function composeContributorNodeSummary({ node, attribution, responses, subjectName, usedResponseIds }) {
+  if (!openai) return attribution.quote || null
+
+  const contributorResponses = (responses || [])
+    .filter((r) => r.contributor_id === attribution.contributor_id && r.response_text?.trim())
+    .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+
+  const anchorResponse = contributorResponses.find((r) => r.id === attribution.response_id)
+  // Supporting material: this contributor's OTHER answers only — never another contributor's,
+  // and never an answer that already anchors a different node.
+  const supportingResponses = contributorResponses.filter(
+    (r) => r.id !== attribution.response_id && !usedResponseIds.has(r.id),
+  )
+
+  if (!anchorResponse && !supportingResponses.length) return attribution.quote || null
 
   try {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
-      max_tokens: 800,
+      max_tokens: 300,
       messages: [{
         role: 'user',
-        content: `Theme: "${theme.label}" — ${theme.summary}
+        content: `Write a short first-person summary as if ${attribution.contributor_name} is speaking about ${subjectName}, anchored on this specific memory: "${node.label}" — ${node.summary}
 
-Source responses:
-${relevant.map((r) => {
-  const c = contributors?.find((x) => x.id === r.contributor_id)
-  return `[${c?.name || 'Contributor'}]: ${r.response_text}`
-}).join('\n\n')}
+Their original answer describing this memory:
+"${anchorResponse?.response_text?.trim() || attribution.quote || ''}"
 
-Write 2–3 short excerpts for a memorial constellation discovery panel.
+Their other answers (use only for supporting tone/detail — never invent beyond them):
+${supportingResponses.map((r) => `- ${r.response_text.trim()}`).join('\n') || '(none)'}
 
-RULES:
-- Stay close to what was actually written — light editing only for clarity
-- Neutral tone — no flowery language, no inference beyond the text
-- Each quote should help someone discover something specific about this person
-- Max 40 words each
-- Light polish only: fix spelling, stray punctuation, and filler words. Never change vocabulary, tone, or wording.
-- Only select quotes that make sense standalone, without surrounding context — a quote that depends on preceding narration to land should not be selected for a node.
+RULES (critical):
+- First person, as ${attribution.contributor_name} speaking.
+- Anchor on the specific memory above — do not drift into a general character sketch.
+- Every detail must trace back to something ${attribution.contributor_name} actually said above. Never invent, infer, or add anything unstated.
+- Keep their actual phrasing and tone — light polish only (grammar/filler), never smoothed into a generic narrator voice.
+- No sympathy-card filler, no invented sentimentality.
+- 1-3 sentences.
 
-Return JSON: { "quotes": [{ "text": "...", "contributor_name": "...", "relationship_type": "..." }] }`,
+Return JSON only: { "summary": "..." }`,
       }],
     })
+
     const parsed = parseJson(completion.choices[0].message.content)
-    return (parsed.quotes || []).slice(0, 3).map((q, i) => ({
-      text: q.text,
-      contributor_id: relevant[i]?.contributor_id,
-      contributor_name: q.contributor_name || 'A contributor',
-      relationship_type: q.relationship_type || 'unknown',
-    }))
-  } catch {
-    return relevant.slice(0, 3).map((r) => {
-      const contributor = contributors?.find((c) => c.id === r.contributor_id)
-      return {
-        text: r.response_text?.slice(0, 200),
-        contributor_id: r.contributor_id,
-        contributor_name: contributor?.name || 'A contributor',
-        relationship_type: contributor?.relationship_type || 'unknown',
-      }
-    })
+    return parsed.summary || anchorResponse?.response_text?.trim() || attribution.quote || null
+  } catch (err) {
+    console.error('[ContributorNodeSummary] error:', err.message)
+    return anchorResponse?.response_text?.trim() || attribution.quote || null
   }
+}
+
+/** Attach a per-contributor summary to every attribution on every memory node (US-36). */
+async function attachContributorSummariesToMemoryNodes(memoryNodes, responses, subjectName) {
+  const usedResponseIds = collectUsedResponseIds(memoryNodes)
+
+  // Flatten to (node, attribution) pairs so concurrency can be bounded instead of
+  // awaiting one OpenAI call at a time. Unlike the photo vision loop (which reads
+  // from storage per photo), these calls have no shared dependency, so batching
+  // is safe and meaningfully faster for memorials with several contributors/nodes.
+  const pairs = []
+  for (const node of memoryNodes || []) {
+    for (const attribution of node.attributions || []) {
+      pairs.push({ node, attribution })
+    }
+  }
+
+  const CONCURRENCY = 5
+  for (let i = 0; i < pairs.length; i += CONCURRENCY) {
+    const batch = pairs.slice(i, i + CONCURRENCY)
+    await Promise.all(
+      batch.map(async ({ node, attribution }) => {
+        attribution.contributor_summary = await composeContributorNodeSummary({
+          node, attribution, responses, subjectName, usedResponseIds,
+        })
+      }),
+    )
+  }
+
+  return memoryNodes
 }
 
 async function buildConstellationFromMemories(input) {
@@ -1157,6 +1325,8 @@ module.exports = {
   extractPhotoAlbumThemes,
   analyzePhotoWithVision,
   assignPhotosToThemes,
+  attachPhotosToMemoryNodes,
+  attachContributorSummariesToMemoryNodes,
   buildConstellationFromMemories,
   composeStorySlideshow,
   composeThemeQuotes,
