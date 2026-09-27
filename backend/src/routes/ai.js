@@ -11,6 +11,8 @@ const {
   analyzePhotoWithVision,
   assignPhotosToThemes,
   buildConstellationFromPhotos,
+  attachPhotosToMemoryNodes,
+  attachContributorSummariesToMemoryNodes,
   composeStorySlideshow,
 } = require('../services/memorialGeneration')
 const { processVoiceRecording } = require('../services/voiceProcessing')
@@ -126,7 +128,7 @@ async function runPipelines(memorialId, jobId) {
     console.log('[Pipeline] data — responses:', responses?.length || 0, 'photos:', photos?.length || 0)
 
     await updateJob(jobId, 20, 'Finding themes from questionnaire memories...')
-    const discoveryThemes = await extractThemes(
+    let discoveryThemes = await extractThemes(
       responses || [],
       contributors || [],
       memorial.subject_name,
@@ -164,6 +166,17 @@ async function runPipelines(memorialId, jobId) {
       analyzedPhotos,
       albumThemes,
       memoryCorpus,
+      memorial.subject_name,
+    )
+
+    // US-20: link photos to the questionnaire-derived memory nodes, now that photo
+    // vision analysis (analyzedPhotos) is available.
+    discoveryThemes = attachPhotosToMemoryNodes(analyzedPhotos, discoveryThemes)
+
+    // US-36: attach a per-contributor first-person summary to each memory node attribution.
+    discoveryThemes = await attachContributorSummariesToMemoryNodes(
+      discoveryThemes,
+      responses || [],
       memorial.subject_name,
     )
 

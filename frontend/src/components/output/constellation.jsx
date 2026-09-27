@@ -206,7 +206,7 @@ export default function ConstellationGraph({
       [id]: !prev[id],
     }));
   };  
-  const finalnodes = ai_output?.constellation?.nodes?.map(t => ({
+  const finalnodes = ai_output?.discovery_themes?.map(t => ({
         id: t.id,
         name: t.label,
         group: capitalizeFirstLetter(t.category),
@@ -232,11 +232,11 @@ export default function ConstellationGraph({
       ]
   );
   const [links, setLinks] = useState(
-    ai_output?.constellation?.nodes?.map(d => ({
+    ai_output?.discovery_themes?.map(d => ({
       source: memorial?.id || 'memorial-center',
       target: d.id,
-      type: capitalizeFirstLetter(d.relationship_type),
-      weight: d.weight
+      type: capitalizeFirstLetter(d.category),
+      weight: 1,
     })) || []
   );
   

@@ -165,7 +165,8 @@ Return JSON only:
   "key_quote": "The most memorable phrase from the memo, lightly polished only — fix spelling/filler words, never change vocabulary or wording (max 25 words)",
   "clip_start_seconds": number (start of the best 3-12 second excerpt),
   "clip_end_seconds": number (end of excerpt, must be after start and within memo length),
-  "ai_category": "Everyday Love|Joy|Wisdom|Humor|memory"
+  "ai_category": "A short (2-5 word) label describing what THIS SPECIFIC clip is actually about, derived from its transcript content — never a generic mood word. 
+  Examples: 'Sunday Pancake Ritual', 'Advice Before My Wedding', 'The Time She Got Lost Driving'. Do not use single generic words like 'Joy', 'Wisdom', or 'Memory'."
 }
 
 Pick a natural spoken excerpt. If the memo is very short, use clip_start_seconds 0 and clip_end_seconds for the full length.`,
