@@ -9,8 +9,8 @@ import {
 import Image from "next/image";
 import { buildConstellationNodes } from "@/lib/constellationNodes.mjs";
 
-import { usePathname } from "next/navigation";
-import { getContributorsPhotos,getContributorsResponse } from "@/lib/api"
+import { useParams, usePathname } from "next/navigation";
+import { getContributorHighlights } from "@/lib/api"
 function capitalizeFirstLetter(str) {
   if (!str || str === 'null') return str;
   return str.charAt(0).toUpperCase() + str.slice(1);
@@ -141,6 +141,7 @@ export default function ConstellationGraph({
   const ref = useRef(null);
   const hasMemoryNodes = ai_output?.constellation?.version === 2;
   const pathname = usePathname();  
+  const params = useParams();
   const [selectedImage, setSelectedImage] = useState(null);
   const [themes,setThemes] = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
@@ -164,20 +165,19 @@ export default function ConstellationGraph({
         return;
       }
 
-      const photos = await getContributorsPhotos(selectedNode.id);
-      const finalphotos = (photos.photos || []).map(user => user.photo_url);
-      if(finalphotos){
-        setPhotoCarroussel(finalphotos);
-      }
-      const { data } = await getContributorsResponse(selectedNode.id);
-      const quotes = data.find(item => item.order_index === 3 && item.response_text!="" );
-      if (quotes){
-        setQuoteNode(quotes.response_text);
+      const highlights = await getContributorHighlights({
+        contributorId: selectedNode.id,
+        memorialId: memorial?.id,
+        shareToken: pathname.includes("share") ? params?.shareToken : null,
+      });
+      setPhotoCarroussel((highlights.photos || []).map((photo) => photo.photo_url));
+      if (highlights.quote) {
+        setQuoteNode(highlights.quote);
       }
     }
 
     loadPhotoContributor();
-  },[currentPage, selectedNode,tab]);
+  },[currentPage, selectedNode, tab, memorial?.id, pathname, params?.shareToken]);
 
   const handleThemesChange = (nodeId) => {
     setHiddenThemes((prev) => ({
