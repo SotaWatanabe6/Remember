@@ -674,6 +674,26 @@ export async function updateMemorialContributorStatus(memorialId, contributorId,
   );
 }
 
+// NS-5: approve one content type of a submission (photos | voices | stories |
+// responses). The contributor itself is approved server-side once nothing of
+// theirs is left awaiting approval.
+// NS-6: with `ids`, only those are approved and the rest of the type still
+// awaiting approval is permanently deleted.
+export async function approveMemorialContributorSubmissionType(memorialId, contributorId, type, ids, token) {
+  if (!memorialId) throw new Error("memorialId is required");
+  if (!contributorId) throw new Error("contributorId is required");
+  if (!type) throw new Error("type is required");
+
+  return organizerContributorRequest(
+    `/memorials/${encodeURIComponent(memorialId)}/contributors/${encodeURIComponent(contributorId)}/submission/approve`,
+    token,
+    {
+      method: "PATCH",
+      body: JSON.stringify(ids ? { type, ids } : { type }),
+    },
+  );
+}
+
 export async function deleteMemorialContributor(memorialId, contributorId, token) {
   if (!memorialId) throw new Error("memorialId is required");
   if (!contributorId) throw new Error("contributorId is required");
