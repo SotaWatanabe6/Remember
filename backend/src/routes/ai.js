@@ -9,6 +9,9 @@ const {
   extractThemes,
   extractPhotoAlbumThemes,
   analyzePhotoWithVision,
+  moderatePhotoContent,
+  moderateQuestionnaireResponse,
+  moderateContribution,
   assignPhotosToThemes,
   attachPhotosToMemoryNodes,
   attachContributorSummariesToMemoryNodes,
@@ -111,6 +114,35 @@ async function runPipelines(memorialId, jobId) {
 
     if (memorialError || !memorial) throw new Error('Memorial not found')
 
+    await updateJob(jobId, 12, 'Reviewing questionnaire answers...')
+    for (const response of responses || []) {
+      const responseModeration = await moderateQuestionnaireResponse(response, memorial.subject_name)
+      if (responseModeration.is_flagged) {
+        await supabase
+          .from('questionnaire_responses')
+          .update({
+            is_flagged: true,
+            flagged_reason: responseModeration.flagged_reason,
+          })
+          .eq('id', response.id)
+      }
+    }
+
+    await updateJob(jobId, 16, 'Reviewing full contributions...')
+    for (const contributor of contributors || []) {
+      const contributionModeration = await moderateContribution(
+        responses || [], contributor, contributors || [], memorial.subject_name,
+      )
+      if (contributionModeration.is_flagged) {
+        contributor.is_flagged = true
+        contributor.flagged_reason = contributionModeration.flagged_reason
+        await supabase
+          .from('contributors')
+          .update({ is_flagged: true, flagged_reason: contributionModeration.flagged_reason })
+          .eq('id', contributor.id)
+      }
+    }
+
     const memoryCorpus = buildMemoryCorpus(
       responses || [],
       contributors || [],
@@ -139,31 +171,28 @@ async function runPipelines(memorialId, jobId) {
           signedUrl = urlData?.signedUrl || null
         }
 
+        const moderation = await moderatePhotoContent(signedUrl, memorial.subject_name)
+
         const analysis = await analyzePhotoWithVision(signedUrl, memorial.subject_name, {
           dateOfBirth: memorial.date_of_birth,
           dateOfPassing: memorial.date_of_passing,
           deceasedPresent: null,
         })
 
-        analyzedPhotos.push({ ...photo, analysis, matched_theme_ids: [] })
+        analyzedPhotos.push({ ...photo, analysis, matched_theme_ids: [], moderation })
       } catch (err) {
         console.error('[Vision] failed for photo:', photo.id, err.message)
-        analyzedPhotos.push({ ...photo, analysis: null, matched_theme_ids: [] })
+        analyzedPhotos.push({ ...photo, analysis: null, matched_theme_ids: [], moderation: null })
       }
     }
 
     await updateJob(jobId, 50, 'Matching photos to albums...')
-    const albumThemes = await extractPhotoAlbumThemes(analyzedPhotos, memorial.subject_name)
-    analyzedPhotos = await assignPhotosToThemes(
-      analyzedPhotos,
-      albumThemes,
-      memoryCorpus,
-      memorial.subject_name,
-    )
+    const albumThemes = await extractPhotoAlbumThemes(analyzedPhotos, memorial.subject_name, contributors || [])
+    analyzedPhotos = await assignPhotosToThemes(analyzedPhotos, albumThemes, memoryCorpus, memorial.subject_name, contributors || [])
 
     // US-20: link photos to the questionnaire-derived memory nodes, now that photo
     // vision analysis (analyzedPhotos) is available.
-    discoveryThemes = attachPhotosToMemoryNodes(analyzedPhotos, discoveryThemes)
+    discoveryThemes = attachPhotosToMemoryNodes(analyzedPhotos, discoveryThemes, contributors || [])
 
     // US-36: attach a per-contributor first-person summary to each memory node attribution.
     discoveryThemes = await attachContributorSummariesToMemoryNodes(
@@ -183,8 +212,11 @@ async function runPipelines(memorialId, jobId) {
           ai_labels: {
             ...(typeof photo.ai_labels === 'object' && photo.ai_labels ? photo.ai_labels : {}),
             vision: photo.analysis,
+            moderation: photo.moderation || null,
           },
           theme_ids: photo.matched_theme_ids,
+          is_flagged: photo.moderation?.is_flagged || photo.moderation?.is_blurry || false,
+          flagged_reason: photo.moderation?.flagged_reason || photo.moderation?.blur_reason || null,
         })
         .eq('id', photo.id)
     }
