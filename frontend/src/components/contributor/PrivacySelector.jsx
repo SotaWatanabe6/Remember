@@ -181,7 +181,7 @@ export default function PrivacySelector({ inviteToken }) {
             aria-label="Contribution privacy"
           >
             <PrivacyOptionCard
-              label="Show my name"
+              label="Display my name in the memorial."
               value="named"
               isSelected={selection === false}
               isBusy={isSaving && selection === false}
@@ -189,7 +189,7 @@ export default function PrivacySelector({ inviteToken }) {
               onSelect={() => handleSelect(false)}
             />
             <PrivacyOptionCard
-              label="Stay anonymous"
+              label="I want to remain anonymous in the memorial."
               value="anonymous"
               isSelected={selection === true}
               isBusy={isSaving && selection === true}
