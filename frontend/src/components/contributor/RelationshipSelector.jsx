@@ -3,7 +3,7 @@
 // frontend/src/components/contributor/RelationshipSelector.jsx
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   getContributorRelationshipDraft,
@@ -121,18 +121,6 @@ function getInitialSelection(relationshipType) {
   if (relationshipType === CONTRIBUTOR_RELATIONSHIP_PARTNER) return CONTRIBUTOR_RELATIONSHIP_PARTNER;
   if (relationshipType === CONTRIBUTOR_RELATIONSHIP_COLLEAGUE) return CONTRIBUTOR_RELATIONSHIP_COLLEAGUE;
   return "";
-}
-
-function getMemorialBiography(memorial) {
-  return (
-    memorial?.biography ??
-    memorial?.bio ??
-    memorial?.description ??
-    memorial?.profile ??
-    memorial?.brief_biography ??
-    memorial?.short_description ??
-    ""
-  ).trim();
 }
 
 export default function RelationshipSelector({ inviteToken }) {
@@ -258,7 +246,6 @@ export default function RelationshipSelector({ inviteToken }) {
   }
 
   const subjectName = draft.invite?.deceased?.name || "them";
-  const biography = getMemorialBiography(draft.invite?.memorial);
 
   return (
     <main className="min-h-screen bg-r-bg text-r-text flex flex-col">
@@ -274,11 +261,6 @@ export default function RelationshipSelector({ inviteToken }) {
             <p className="text-xl leading-[26px] text-r-secondary">
               Select your connection to {subjectName} below.
             </p>
-            {biography ? (
-              <p className="rounded-2xl border border-r-border bg-r-card/40 px-5 py-4 text-base leading-7 text-r-secondary">
-                {biography}
-              </p>
-            ) : null}
           </div>
 
           {!isSubPanelOpen ? (
