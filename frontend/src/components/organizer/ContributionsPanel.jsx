@@ -176,7 +176,7 @@ function SubTabPills({ tabs, active, onChange }) {
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(tab.key)}
-            className={`flex h-[50px] min-w-[160px] items-center justify-center rounded-full border border-r-muted px-7 text-[24px] italic leading-none transition [font-family:var(--font-family-display)] ${
+            className={`flex h-[50px] min-w-[160px] items-center justify-center rounded-full border border-r-muted px-7 text-[24px] italic leading-none transition [font-family:var(--font-family-display)] sm:min-w-[207px] ${
               isActive ? "bg-[#9E9384] text-r-modal" : "text-r-muted hover:text-r-text"
             }`}
           >
@@ -798,7 +798,7 @@ export default function ContributionsPanel({
   }, [actionPending, currentContributorId, memorialId, setContributors]);
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-[30px]">
+    <div className="flex w-full min-w-0 flex-col gap-[30px]">
       {/* Figma "contributor nav": search bar + 1/3 pager */}
       <ContributorNavigation
         query={searchQuery}

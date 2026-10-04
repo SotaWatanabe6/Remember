@@ -88,11 +88,11 @@ function MemorialHeader({ memorial, generated, inviteToken, onShare, contributor
   const biography = memorial?.bio || memorial?.biography || ""
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[240px_1fr_220px] lg:items-start">
+    <div className="grid gap-8 md:grid-cols-[220px_minmax(0,1fr)] md:items-center xl:min-h-[314px] xl:grid-cols-3 xl:gap-5">
 
       {/* Avatar */}
-      <div className="flex justify-center lg:justify-start">
-        <div className="relative size-[220px] overflow-hidden rounded-full bg-r-card border border-r-border">
+      <div className="flex justify-center md:justify-start">
+        <div className="relative size-[220px] shrink-0 overflow-hidden rounded-full bg-r-card border border-r-border xl:size-[314px]">
           <MemorialCoverImage
             src={memorial?.cover_photo_url}
             name={memorial?.subject_name}
@@ -103,23 +103,23 @@ function MemorialHeader({ memorial, generated, inviteToken, onShare, contributor
       </div>
 
       {/* Info */}
-      <div className="min-w-0 pt-2">
+      <div className="flex min-w-0 flex-col items-start gap-[14px]">
         <h1
-          className="text-[36px] font-medium italic leading-[36px] text-r-text"
+          className="break-words text-[36px] font-medium italic leading-[44px] text-r-text"
           style={{ fontFamily: 'var(--font-family-display)' }}
         >
           {memorial?.subject_name || ''}
         </h1>
-        <p className="mt-4 text-[16px] leading-[16px] text-r-secondary">
+        <p className="text-[16px] leading-[24px] text-r-secondary">
           {birthDate}{birthDate && passingDate ? " - " : ""}{passingDate}
         </p>
         {biography ? (
-          <p className="mt-6 max-w-[520px] text-[20px] leading-[26px] text-r-secondary">
+          <p className="w-full break-words text-[20px] leading-[26px] text-r-secondary">
             {biography}
           </p>
         ) : null}
         {typeof contributorCount === 'number' && (
-          <p className="mt-4 text-[15px] leading-[20px] text-r-secondary">
+          <p className="text-[15px] leading-[20px] text-r-secondary">
             {contributorCount} contributor{contributorCount === 1 ? '' : 's'} invited
             {typeof submittedCount === 'number' && (
               <> · {submittedCount} submitted</>
@@ -127,12 +127,12 @@ function MemorialHeader({ memorial, generated, inviteToken, onShare, contributor
           </p>
         )}
         {memorial?.status && (
-          <span className={`mt-6 inline-block rounded-full px-5 py-2 text-sm font-medium ${status.className}`}>
+          <span className={`inline-flex min-h-[50px] min-w-[207px] items-center justify-center rounded-full px-5 py-2 text-sm font-medium ${status.className}`}>
             {status.label}
           </span>
         )}
         {memorial?.status === 'complete' && memorial?.generated_at && (
-          <p className="mt-2 text-sm leading-5 text-r-secondary">
+          <p className="text-sm leading-5 text-r-secondary">
             Generated on{' '}
             {new Date(memorial.generated_at).toLocaleDateString('en-US', {
               month: 'long',
@@ -144,18 +144,18 @@ function MemorialHeader({ memorial, generated, inviteToken, onShare, contributor
       </div>
 
       {/* Actions */}
-      <div className="flex flex-col gap-6">
-        <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6 md:col-start-2 md:w-[208px] md:justify-self-end xl:col-start-auto xl:min-h-[314px] xl:justify-between xl:py-[30px]">
+        <div className="flex flex-col gap-5">
           <Link
             href={inviteToken ? `/contribute/${inviteToken}` : '#'}
-            className="rounded-full bg-r-btn px-6 py-5 text-center text-[18px] leading-[20px] text-r-btn-text transition hover:opacity-85"
+            className="rounded-full bg-r-btn px-4 py-[18px] text-center text-[20px] leading-[26px] text-r-btn-text transition hover:opacity-85"
           >
             Upload Memories
           </Link>
           {generated ? (
           <Link
             href={memorial?.id ? `/memorial/${memorial.id}/output` : '#'}
-            className="rounded-full bg-r-btn px-6 py-5 text-center text-[18px] leading-[20px] text-r-btn-text transition hover:opacity-85"
+            className="rounded-full bg-r-btn px-4 py-[18px] text-center text-[20px] leading-[26px] text-r-btn-text transition hover:opacity-85"
           >
             View Memorial
           </Link>
@@ -165,19 +165,19 @@ function MemorialHeader({ memorial, generated, inviteToken, onShare, contributor
             onClick={onGenerateClick}
             disabled={!canGenerate || generating}
             title={!canGenerate && !generating ? disabledMessage || undefined : undefined}
-            className="rounded-full bg-r-btn px-6 py-5 text-center text-[18px] leading-[20px] text-r-btn-text transition hover:opacity-85 disabled:opacity-45 disabled:cursor-not-allowed border-none"
+            className="rounded-full bg-r-btn px-4 py-[18px] text-center text-[20px] leading-[26px] text-r-btn-text transition hover:opacity-85 disabled:opacity-45 disabled:cursor-not-allowed border-none"
           >
             {generating ? 'Generating…' : 'Create Memorial'}
           </button>
         )}
         </div>
-        <div className="flex items-center justify-end gap-10 text-r-text">
-          <button type="button" onClick={onShare} className="transition hover:opacity-70" aria-label="Share memorial">
+        <div className="flex items-center justify-end gap-[30px] text-r-text">
+          <button type="button" onClick={onShare} className="flex size-[50px] items-center justify-center transition hover:opacity-70" aria-label="Share memorial">
             <svg width="42" height="42" viewBox="0 0 24 24" fill="currentColor">
               <path d="M18 16.08c-.76 0-1.44.3-1.96.77l-7.13-4.16a3.27 3.27 0 000-1.38l7.12-4.15A2.99 2.99 0 0018 7.91a3 3 0 10-2.83-4 3 3 0 00.12 1.49L8.17 9.56a3 3 0 100 4.88l7.12 4.16c-.08.23-.12.47-.12.72a3 3 0 103-3.24z"/>
             </svg>
           </button>
-          <button type="button" className="transition hover:opacity-70" aria-label="Memorial settings">
+          <button type="button" className="flex size-[50px] items-center justify-center transition hover:opacity-70" aria-label="Memorial settings">
             <svg width="46" height="46" viewBox="0 0 24 24" fill="currentColor">
               <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.6-.22l-2.39.96a7.03 7.03 0 00-1.63-.94l-.36-2.54a.49.49 0 00-.49-.42h-3.84a.49.49 0 00-.49.42l-.36 2.54c-.58.22-1.13.53-1.63.94l-2.39-.96a.5.5 0 00-.6.22L2.54 8.84a.5.5 0 00.12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32c.14.24.43.34.69.22l2.39-.96c.5.4 1.05.72 1.63.94l.36 2.54c.05.24.25.42.49.42h3.84c.24 0 .44-.18.49-.42l.36-2.54c.58-.22 1.13-.53 1.63-.94l2.39.96c.26.12.55.02.69-.22l1.92-3.32a.5.5 0 00-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1112 8a3.5 3.5 0 010 7.5z"/>
             </svg>
@@ -199,7 +199,7 @@ function TabBar({ tabs, active, onChange }) {
           <button
             key={tab}
             onClick={() => onChange(tab)}
-            className={`flex h-10 flex-1 items-center justify-center text-center text-[24px] leading-none text-r-text transition-colors ${
+            className={`flex min-h-10 min-w-0 flex-1 items-center justify-center text-center text-[20px] leading-tight text-r-text transition-colors sm:text-[24px] ${
               isActive ? 'border-b-2 border-r-text font-bold' : 'border-b border-r-text/60 font-medium hover:border-r-text'
             }`}
             style={{ fontFamily: 'var(--font-family-display)' }}
@@ -263,7 +263,7 @@ function formatArchiveDate(value) {
 
 function ArchiveSection({ title, count, children }) {
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex flex-col gap-[30px] lg:gap-[50px]">
       <div className="flex items-baseline justify-between">
         <h3 className="text-[28px] font-medium text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
           {title}
@@ -332,12 +332,7 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
   }
 
   return (
-    <div className="flex flex-col gap-[30px] pt-8">
-      <p className="text-sm text-r-secondary">
-        {totalItems} approved memor{totalItems === 1 ? 'y' : 'ies'} from {approvedContributorCount} contributor
-        {approvedContributorCount === 1 ? '' : 's'}
-      </p>
-
+    <div className="flex flex-col gap-[30px] lg:gap-[50px]">
       <div className="flex flex-wrap gap-5" aria-label="Archive content">
         {[['photos', 'Photos'], ['voices', 'Voice'], ['stories', 'Stories'], ['responses', 'Q&A']].map(([key, label]) => (
           <button
@@ -352,13 +347,18 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
         ))}
       </div>
 
+      <p className="text-sm text-r-secondary">
+        {totalItems} approved memor{totalItems === 1 ? 'y' : 'ies'} from {approvedContributorCount} contributor
+        {approvedContributorCount === 1 ? '' : 's'}
+      </p>
+
       {activeSubTab !== 'responses' && archive[activeSubTab].length === 0 && (
         <p className="py-14 text-center text-r-secondary">No approved {activeSubTab === 'voices' ? 'voice recordings' : activeSubTab} yet.</p>
       )}
 
       {activeSubTab === 'photos' && photos.length > 0 && (
         <ArchiveSection title="Photos" count={`${photos.length} photo${photos.length === 1 ? '' : 's'}`}>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {photos.map((photo) => (
               <div key={photo.id} className="group rounded-xl overflow-hidden border border-r-border bg-r-card">
                 {photo.url || photo.photo_url ? (
@@ -393,7 +393,7 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
 
       {activeSubTab === 'voices' && voices.length > 0 && (
         <ArchiveSection title="Voices" count={`${voices.length} recording${voices.length === 1 ? '' : 's'}`}>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             {voices.map((voice) => (
               <article key={voice.id} className="flex flex-col gap-3 rounded-xl border border-r-border bg-r-card p-6">
                 <h4 className="text-[22px] leading-[26px] text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
@@ -420,7 +420,7 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
 
       {activeSubTab === 'stories' && stories.length > 0 && (
         <ArchiveSection title="Stories" count={`${stories.length} stor${stories.length === 1 ? 'y' : 'ies'}`}>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             {stories.map((story) => (
               <article key={story.id} className="flex flex-col gap-2 rounded-xl border border-r-border bg-r-card p-6">
                 {story.title && (
@@ -621,7 +621,7 @@ function GenerateConfirmModal({ onConfirm, onCancel, subjectName }) {
   )
 }
 
-// ─── Page (my structure — full-width nav, 960px content, inviteToken) ─────────
+// ─── Page (Figma organizer shell: 50px margins, 100px section spacing) ─────────
 
 export default function MemorialManagePage() {
   const { id } = useParams();
@@ -807,11 +807,11 @@ export default function MemorialManagePage() {
   useEffect(() => { queueMicrotask(loadOutput); }, [loadOutput]);
 
   return (
-    <main className="min-h-screen bg-r-bg text-r-text flex flex-col">
+    <main className="min-h-screen bg-r-bg p-6 text-r-text flex flex-col sm:p-[50px]">
 
       {/* Full-width nav */}
-      <nav className="w-full flex items-center justify-between px-6 sm:px-[50px] py-6">
-        <div className="flex items-center gap-2">
+      <nav className="min-h-10 w-full flex items-center justify-between">
+        <div className="flex items-center gap-5">
           <img src="/Logo.svg" alt="" width={36} height={36} aria-hidden="true" />
           <span className="text-r-text text-2xl leading-8 [font-family:var(--font-family-display)]">Remember</span>
         </div>
@@ -823,9 +823,9 @@ export default function MemorialManagePage() {
         </Link>
       </nav>
 
-      {/* Content constrained to 960px */}
-      <div className="flex-1 px-6 sm:px-[50px] pb-16">
-        <div className="mx-auto flex w-full max-w-[960px] flex-col gap-8">
+      {/* The profile and both tabs share the navigation's outer margins. */}
+      <div className="mt-12 flex-1 lg:mt-[100px]">
+        <div className="flex w-full flex-col gap-12 lg:gap-[100px]">
           <MemorialHeader
             memorial={memorial}
             generated={memorialGenerated}
@@ -851,19 +851,21 @@ export default function MemorialManagePage() {
             </div>
           )}
           {generationError && <p className="text-sm text-r-danger" role="alert">{generationError}</p>}
-          <TabBar tabs={manageTabs} active={currentTab} onChange={setActiveTab} />
-          <div>
-            {currentTab === ARCHIVE_TAB && <ArchiveTab memorialId={memorialId} contributors={contributors} contributorsLoading={contributorsLoading} />}
-            {currentTab === APPROVE_TAB && (
-              <ApproveContributionsTab
-                memorialId={memorialId}
-                contributorslist={contributors}
-                loading={contributorsLoading}
-                error={contributorsError}
-                onRetry={loadContributors}
-                onContributorsChange={setContributors}
-              />
-            )}
+          <div className={`flex min-w-0 flex-col ${currentTab === ARCHIVE_TAB ? 'gap-[30px] lg:gap-[50px]' : 'gap-[30px]'}`}>
+            <TabBar tabs={manageTabs} active={currentTab} onChange={setActiveTab} />
+            <div>
+              {currentTab === ARCHIVE_TAB && <ArchiveTab memorialId={memorialId} contributors={contributors} contributorsLoading={contributorsLoading} />}
+              {currentTab === APPROVE_TAB && (
+                <ApproveContributionsTab
+                  memorialId={memorialId}
+                  contributorslist={contributors}
+                  loading={contributorsLoading}
+                  error={contributorsError}
+                  onRetry={loadContributors}
+                  onContributorsChange={setContributors}
+                />
+              )}
+            </div>
           </div>
         </div>
       </div>
