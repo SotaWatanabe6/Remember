@@ -85,7 +85,7 @@ async function runPipelines(memorialId, jobId) {
       .eq('memorial_id', memorialId)
       .in('status', ['submitted', 'approved'])
     // Contributors who chose to stay anonymous on the privacy step are credited
-    // as "Anonymous" everywhere the generated memorial names them.
+    // by their relationship everywhere the generated memorial names them.
     const contributors = withContributorDisplayNames(contributorRows)
     const contributorIds = contributors.map((contributor) => contributor.id)
     const { data: responses } = contributorIds.length
@@ -246,8 +246,11 @@ async function runPipelines(memorialId, jobId) {
 
     const voices = enrichedRecordings.map((r) => {
       const tags = typeof r.ai_tags === 'object' && r.ai_tags ? r.ai_tags : {}
+      const contributor = contributors.find((person) => person.id === r.contributor_id)
       return {
         id: r.id,
+        contributor_id: r.contributor_id,
+        contributor_name: contributor?.display_name || 'A contributor',
         contributor_title: r.contributor_title,
         key_quote: r.key_quote || r.transcript_text?.slice(0, 150) || 'No transcript yet',
         transcript_text: r.transcript_text || 'Transcription pending',
@@ -283,6 +286,7 @@ async function runPipelines(memorialId, jobId) {
           const contributor = contributors?.find((c) => c.id === p.contributor_id)
           return {
             id: p.id,
+            contributor_id: p.contributor_id,
             url: p.storage_path,
             storage_path: p.storage_path,
             storage_bucket: p.storage_bucket,

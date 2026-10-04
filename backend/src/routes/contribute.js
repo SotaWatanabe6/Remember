@@ -8,6 +8,7 @@ const { extractAudioDuration } = require('../services/duration')
 const { extractImageMetadata } = require('../services/exif')
 const { getQuestionSetForContributorRelationship } = require('../lib/questionnaireQuestions')
 const { formatPersonName } = require('../lib/formatName')
+const { getContributorDisplayName } = require('../services/contributorPrivacy')
 const { createContributorDraftRouter, getContributorForInvite } = require('./contributorDrafts')
 
 router.use(createContributorDraftRouter(supabase))
@@ -244,6 +245,17 @@ router.post('/:token/start', async (req, res) => {
   }
 })
 
+// GET /contribute/:token/privacy — restore the saved choice for this session.
+router.get('/:token/privacy', async (req, res) => {
+  try {
+    const contributor = await getContributorForInvite(supabase, req, res, false)
+    if (!contributor) return
+    res.json({ contributor: { ...contributor, display_name: getContributorDisplayName(contributor) } })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // POST /contribute/:token/privacy — save whether the contributor stays anonymous
 router.post('/:token/privacy', async (req, res) => {
   try {
@@ -259,11 +271,11 @@ router.post('/:token/privacy', async (req, res) => {
       .from('contributors')
       .update({ is_anonymous, updated_at: new Date().toISOString() })
       .eq('id', contributor.id)
-      .select('id, is_anonymous')
+      .select('id, name, is_anonymous, relationship_type, relationship_label')
       .single()
 
     if (error) return res.status(400).json({ error: error.message })
-    res.json({ contributor: { id: data.id, is_anonymous: data.is_anonymous } })
+    res.json({ contributor: { ...data, display_name: getContributorDisplayName(data) } })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -293,11 +305,11 @@ router.post('/:token/relationship', async (req, res) => {
         relationship_label: relationship_label || null,
       })
       .eq('id', contributor.id)
-      .select('id, relationship_type')
+      .select('id, name, is_anonymous, relationship_type, relationship_label')
       .single()
 
     if (error) return res.status(400).json({ error: error.message })
-    res.json({ contributor: { id: data.id, relationship_type: data.relationship_type } })
+    res.json({ contributor: { ...data, display_name: getContributorDisplayName(data) } })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
