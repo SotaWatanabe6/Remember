@@ -15,7 +15,7 @@ const {
   buildConstellationFromMemories,
   composeStorySlideshow,
 } = require('../services/memorialGeneration')
-const { processVoiceRecording } = require('../services/voiceProcessing')
+const { processVoiceRecording, transcribeVoiceRecording } = require('../services/voiceProcessing')
 const { withContributorDisplayNames } = require('../services/contributorPrivacy')
 
 const { loadGenerationPhotos } = require('../services/generationPhotos')
@@ -193,7 +193,9 @@ async function runPipelines(memorialId, jobId) {
     const enrichedRecordings = []
     for (const recording of recordings || []) {
       let row = recording
-      if (CAN_USE_OPENAI && !recording.transcript_text && recording.storage_path) {
+      const needsTranscript = !recording.transcript_text
+      const needsTimings = !Array.isArray(recording.transcript_segments) || !recording.transcript_segments.length
+      if (process.env.ASSEMBLYAI_API_KEY && (needsTranscript || needsTimings) && recording.storage_path) {
         try {
           const { data: blob } = await supabase.storage
             .from(recording.storage_bucket || 'memorial-assets')
@@ -201,30 +203,41 @@ async function runPipelines(memorialId, jobId) {
           if (blob) {
             const buffer = Buffer.from(await blob.arrayBuffer())
             const contributor = contributors?.find((c) => c.id === recording.contributor_id)
-            const voiceMeta = await processVoiceRecording({
+            const voiceMeta = needsTranscript ? await processVoiceRecording({
               fileBuffer: buffer,
               mimeType: recording.file_type || 'audio/webm',
               fileName: recording.file_name,
               subjectName: memorial.subject_name,
               contributorName: contributor?.name,
-            })
-            const { data: updated } = await supabase
-              .from('voice_recordings')
-              .update({
-                transcript_text: voiceMeta.transcript_text,
+            }) : await transcribeVoiceRecording(buffer)
+            // A failed timing backfill must not erase an existing transcript or highlight.
+            if (!voiceMeta.transcript_text) {
+              if (needsTranscript) await supabase.from('voice_recordings').update({ transcription_status: 'failed' }).eq('id', recording.id)
+              enrichedRecordings.push(recording)
+              continue
+            }
+            const updates = {
+              transcript_text: voiceMeta.transcript_text,
+              transcript_segments: voiceMeta.transcript_segments,
+              transcription_status: 'complete',
+              ...(needsTranscript ? {
                 key_quote: voiceMeta.key_quote,
                 ai_category: voiceMeta.ai_category,
-                transcription_status: voiceMeta.transcript_text ? 'complete' : 'failed',
                 ai_tags: {
                   intro_line: voiceMeta.intro_line,
                   clip_start_seconds: voiceMeta.clip_start_seconds ?? 0,
                   clip_end_seconds: voiceMeta.clip_end_seconds ?? null,
                 },
-              })
+              } : {}),
+            }
+            const { data: updated, error: updateError } = await supabase
+              .from('voice_recordings')
+              .update(updates)
               .eq('id', recording.id)
               .select('*')
               .single()
-            row = updated || { ...recording, ...voiceMeta, ai_tags: voiceMeta }
+            if (updateError) throw updateError
+            row = updated || { ...recording, ...updates }
           }
         } catch (voiceErr) {
           console.error('[Pipeline] voice transcription failed:', recording.id, voiceErr.message)
@@ -254,6 +267,8 @@ async function runPipelines(memorialId, jobId) {
         contributor_title: r.contributor_title,
         key_quote: r.key_quote || r.transcript_text?.slice(0, 150) || 'No transcript yet',
         transcript_text: r.transcript_text || 'Transcription pending',
+        transcript_segments: Array.isArray(r.transcript_segments) ? r.transcript_segments : [],
+        duration_seconds: r.duration_seconds,
         ai_category: r.ai_category || 'memory',
         audio_url: r.storage_path,
         storage_bucket: r.storage_bucket,
