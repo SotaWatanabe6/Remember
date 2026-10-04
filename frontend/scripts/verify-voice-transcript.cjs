@@ -119,16 +119,14 @@ function silence(seconds = 25) {
     await page.waitForFunction(() => document.querySelector('[aria-current="true"]')?.textContent.includes('line 11:'), undefined, { polling: 100 });
 
     await page.goto(`${base}/memorial/us25/manage`);
-    await page.getByRole('button', { name: 'Outputs', exact: true }).click();
-    for (let i = 0; i < 3; i++) await page.getByRole('button', { name: 'Next page', exact: true }).click();
-    const card = page.locator('article').first();
-    await card.locator('audio').evaluate(async audio => { await new Promise(resolve => { audio.addEventListener('seeked', resolve, { once: true }); audio.currentTime = 10.2; }); });
+    assert.equal(await page.getByRole('button', { name: 'Outputs', exact: true }).count(), 0, 'management has no Outputs tab');
+    await page.getByRole('link', { name: 'View Memorial', exact: true }).click();
+    await page.getByRole('button', { name: 'Start', exact: true }).click();
+    await page.getByRole('button', { name: 'Voices', exact: true }).click();
+    await page.locator('audio').evaluate(async audio => { await new Promise(resolve => { audio.addEventListener('seeked', resolve, { once: true }); audio.currentTime = 10.2; }); });
     await page.waitForFunction(() => document.querySelector('[aria-current="true"]')?.textContent.includes('line 11:'), undefined, { polling: 100 });
-    await card.getByRole('button', { name: 'Play recording' }).click();
-    await page.locator('article').nth(1).getByRole('button', { name: 'Play recording' }).click();
-    assert.equal(await card.locator('audio').evaluate(audio => audio.paused), true, 'organizer playback stops the previous recording');
     assert.deepEqual(errors, [], 'no browser runtime errors');
-    console.log('US-25 browser checks passed: playback, pause/resume, seek, silence, scrolling, fallback, recording switching, shared viewer, organizer and mobile.');
+    console.log('US-25 browser checks passed: playback, pause/resume, seek, silence, scrolling, fallback, recording switching, shared viewer, organizer View Memorial link and mobile.');
   } finally {
     await browser.close();
   }

@@ -9,15 +9,12 @@ import { generateMemorialOutput, getGenerationJobStatus, getMemorialOutput } fro
 import { getMemorialApprovedArchive, getMemorialContributors } from '@/services/contributorService';
 import { getMemorial, createInviteLink, createShareLink } from '@/lib/api';
 import { copyTextToClipboard, normalizeShareUrl } from '@/lib/copyToClipboard';
-import ConstellationGraph from "@/components/output/constellation";
-import StorySlideshow from "@/components/output/StorySlideshow";
-import VoicesTab from "@/components/output/VoicesTab";
 import ProcessingTextSequence from "@/components/dashboard/ProcessingTextSequence";
 import { getAuthToken } from "@/lib/api.js";
 import MemorialCoverImage from "@/components/memorial/MemorialCoverImage.jsx";
 import ContributionsPanel from "@/components/organizer/ContributionsPanel.jsx";
 import ArchiveQaPanel from "@/components/organizer/ArchiveQaPanel.jsx";
-import { APPROVE_TAB, ARCHIVE_TAB, OUTPUTS_TAB, getManageTabs, resolveManageTab } from "@/lib/organizer/contributionReview";
+import { APPROVE_TAB, ARCHIVE_TAB, getManageTabs, resolveManageTab } from "@/lib/organizer/contributionReview";
 
 // ─── Generation constants ─────────────────────────────────────────────────────
 
@@ -70,60 +67,6 @@ function getManageStatus(status) {
 }
 
 // ─── Pagination arrows (shared) ───────────────────────────────────────────────
-
-function PrevArrow({ onClick, disabled }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="transition-opacity hover:opacity-70 disabled:opacity-30"
-      aria-label="Previous page"
-    >
-      <svg width="25" height="50" viewBox="0 0 25 50" fill="none">
-        <path fillRule="evenodd" clipRule="evenodd"
-          d="M3.83906 26.4813L15.6245 38.2667L18.5703 35.3208L8.25781 25.0083L18.5703 14.6958L15.6245 11.75L3.83906 23.5354C3.4485 23.9261 3.22909 24.4559 3.22909 25.0083C3.22909 25.5608 3.4485 26.0906 3.83906 26.4813Z"
-          fill="#423F39"/>
-      </svg>
-    </button>
-  );
-}
-
-function NextArrow({ onClick, disabled }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="transition-opacity hover:opacity-70 disabled:opacity-30"
-      aria-label="Next page"
-    >
-      <svg width="25" height="50" viewBox="0 0 25 50" fill="none">
-        <path fillRule="evenodd" clipRule="evenodd"
-          d="M21.1609 26.4813L9.37552 38.2667L6.42969 35.3208L16.7422 25.0083L6.42969 14.6958L9.37552 11.75L21.1609 23.5354C21.5515 23.9261 21.7709 24.4559 21.7709 25.0083C21.7709 25.5608 21.5515 26.0906 21.1609 26.4813Z"
-          fill="#423F39"/>
-      </svg>
-    </button>
-  );
-}
-
-function FilterSelect({ value, onChange, children, className = "" }) {
-  return (
-    <div className={`relative ${className}`}>
-      <select
-        value={value}
-        onChange={onChange}
-        className="w-full appearance-none rounded-[12.7px] border border-r-border bg-transparent px-5 py-4 pr-12 text-xl font-medium text-r-text focus:outline-none cursor-pointer"
-        style={{ fontFamily: "var(--font-family-display)" }}
-      >
-        {children}
-      </select>
-      <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2">
-        <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
-          <path d="M15 30L2.00962 7.5L27.9904 7.5L15 30Z" fill="#423F39" />
-        </svg>
-      </span>
-    </div>
-  );
-}
 
 function formatMemorialDate(value) {
   if (!value) return '';
@@ -515,386 +458,6 @@ function ApproveContributionsTab({ memorialId, contributorslist, loading, error,
   );
 }
 
-// ─── Lightbox (my version — object-contain, no face cropping) ────────────────
-
-function Lightbox({ photo, onClose, onPrev, onNext }) {
-  useEffect(() => {
-    function handleKey(e) {
-      if (e.key === 'Escape') onClose();
-      if (e.key === 'ArrowLeft') onPrev();
-      if (e.key === 'ArrowRight') onNext();
-    }
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [onClose, onPrev, onNext]);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4" onClick={onClose}>
-      <div className="relative max-w-3xl w-full" onClick={(e) => e.stopPropagation()}>
-        <div className="relative w-full max-h-[80vh] overflow-hidden rounded-2xl bg-neutral-900 flex items-center justify-center">
-          {photo.url
-            ? <img src={photo.url} alt={photo.caption || ''} className="max-h-[80vh] w-auto max-w-full object-contain" />
-            : <div className="h-64 w-full bg-neutral-700 flex items-center justify-center"><span className="text-neutral-500 text-sm">No image</span></div>}
-        </div>
-        <div className="mt-3 px-1">
-          {photo.caption && <p className="text-white text-sm font-medium">{photo.caption}</p>}
-          <p className="text-neutral-400 text-xs mt-0.5">
-            {photo.contributor_name}{photo.taken_at && ` · ${new Date(photo.taken_at).getFullYear()}`}
-          </p>
-        </div>
-        <button onClick={onPrev} className="absolute left-[-48px] top-1/2 -translate-y-1/2 p-2 text-white hover:text-neutral-300">
-          <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-        </button>
-        <button onClick={onNext} className="absolute right-[-48px] top-1/2 -translate-y-1/2 p-2 text-white hover:text-neutral-300">
-          <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-        </button>
-        <button onClick={onClose} className="absolute -top-10 right-0 p-2 text-white hover:text-neutral-300">
-          <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── All Photos Section ───────────────────────────────────────────────────────
-
-function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
-  
-  const [filterView, setFilterView] = useState('all');
-  const [contributorFilter, setContributorFilter] = useState('all');
-  const [sortOrder, setSortOrder] = useState('recently_added');
-  
-  const [openAlbum, setOpenAlbum] = useState(null);
-  const [lightboxPhoto, setLightboxPhoto] = useState(null);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
-
-  const albumList = (() => {
-    if (!albums) return [];
-    if (albums.albums && Array.isArray(albums.albums)) {
-      return albums.albums.map((a) => ({
-        album_name: a.name || a.album_name || 'Album',
-        cover_photo_url: a.cover_photo_url || a.photos?.[0]?.url || null,
-        photo_count: a.photo_count ?? a.photos?.length ?? 0,
-        photos: (a.photos || []).map((p) => ({
-          id: p.id, url: p.url || null, caption: p.caption || null,
-          taken_at: p.taken_at || null, contributor_name: p.contributor_name || null,
-        })),
-      }));
-    }
-    if (Array.isArray(albums)) {
-      return albums.map((a) => ({
-        album_name: a.album_name || a.name || 'Album',
-        cover_photo_url: a.cover_photo_url || a.photos?.[0]?.url || null,
-        photo_count: a.photo_count ?? a.photos?.length ?? 0,
-        photos: a.photos || [],
-      }));
-    }
-    return [];
-  })();
-
-  const allPhotos = albumList.flatMap((album) =>
-    (album.photos || []).map((p) => ({ ...p, album_name: album.album_name }))
-  );
-  const contributorNames = [...new Set(allPhotos.map((photo) => photo.contributor_name).filter(Boolean))].sort((a, b) =>
-    a.localeCompare(b, undefined, { sensitivity: 'base' })
-  );
-  const filteredAllPhotos = contributorFilter === 'all'
-    ? allPhotos
-    : allPhotos.filter((photo) => photo.contributor_name === contributorFilter);
-  const isAlbumView = filterView === 'albums';
-
-  function handleFilterChange(val) {
-    setFilterView(val);
-    setOpenAlbum(null);
-    setContributorFilter('all');
-    setSortOrder('recently_added');
-  }
-  function handleAlbumClick(album) { setOpenAlbum(album); }
-  function handleBackToAlbums() { setOpenAlbum(null); }
-
-  function sortPhotos(photos) {
-    return [...photos].sort((a, b) => {
-      if (sortOrder === 'oldest') return new Date(a.taken_at || a.created_at || 0) - new Date(b.taken_at || b.created_at || 0);
-      if (sortOrder === 'name') return (a.caption || '').localeCompare(b.caption || '');
-      return new Date(b.taken_at || b.created_at || 0) - new Date(a.taken_at || a.created_at || 0);
-    });
-  }
-
-  function sortAlbums(list) {
-    return [...list].sort((a, b) => sortOrder === 'name' ? (a.album_name || '').localeCompare(b.album_name || '') : 0);
-  }
-
-  let itemsForPagination = [];
-  if (openAlbum) itemsForPagination = sortPhotos(openAlbum.photos || []);
-  else if (isAlbumView) itemsForPagination = sortAlbums(albumList);
-  else itemsForPagination = sortPhotos(filteredAllPhotos);
-
-  const paginatedItems = itemsForPagination;
-
-  function openLightbox(photo, index) { setLightboxPhoto(photo); setLightboxIndex(index); }
-  function prevPhoto() { const i = (lightboxIndex - 1 + paginatedItems.length) % paginatedItems.length; setLightboxIndex(i); setLightboxPhoto(paginatedItems[i]); }
-  function nextPhoto() { const i = (lightboxIndex + 1) % paginatedItems.length; setLightboxIndex(i); setLightboxPhoto(paginatedItems[i]); }
-
-  const sortOptions = (isAlbumView && !openAlbum)
-    ? [{ value: 'recently_added', label: 'Recently added' }, { value: 'name', label: 'Name' }]
-    : [{ value: 'recently_added', label: 'Recently added' }, { value: 'oldest', label: 'Oldest' }, { value: 'name', label: 'Name' }];
-
-  return (
-    <div className="flex flex-col gap-5">
-
-      {/* Back to albums header */}
-      {openAlbum && (
-        <div className="flex items-center gap-3">
-          <button onClick={handleBackToAlbums} className="flex items-center gap-1.5 text-r-secondary text-sm hover:text-r-text transition-colors">
-            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-            Albums
-          </button>
-          <span className="text-[24px] font-medium italic text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
-            {openAlbum.album_name}
-          </span>
-        </div>
-      )}
-
-      {/* Filter + Sort */}
-      {!openAlbum && (
-        <div className="flex items-center justify-between gap-4">
-          <FilterSelect value={filterView} onChange={(e) => handleFilterChange(e.target.value)} className="flex-1 max-w-[434px]">
-            <option value="all">All photos</option>
-            <option value="albums">Albums</option>
-          </FilterSelect>
-          <div className="flex items-center gap-3">
-            {!isAlbumView && contributorNames.length > 0 ? (
-              <FilterSelect value={contributorFilter} onChange={(e) => setContributorFilter(e.target.value)} className="w-[220px]">
-                <option value="all">All contributors</option>
-                {contributorNames.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </FilterSelect>
-            ) : null}
-            <FilterSelect value={sortOrder} onChange={(e) => { setSortOrder(e.target.value); }} className="w-[207px]">
-              {sortOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-            </FilterSelect>
-          </div>
-        </div>
-      )}
-      {openAlbum && (
-        <div className="flex justify-end">
-          <FilterSelect value={sortOrder} onChange={(e) => { setSortOrder(e.target.value); }} className="w-[207px]">
-            {sortOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-          </FilterSelect>
-        </div>
-      )}
-
-      {/* Albums grid */}
-      {isAlbumView && !openAlbum && (
-        albumList.length === 0
-          ? <div className="flex flex-col items-center justify-center py-16 text-center"><p className="text-base font-medium text-r-text">No albums yet</p><p className="text-sm text-r-secondary mt-1 max-w-xs">AI-named albums are created after Generate runs.</p></div>
-          : <div className="max-h-[600px] overflow-y-auto pr-1">
-              <div className="grid grid-cols-3 gap-5">
-              {paginatedItems.map((album, index) => (
-                <button key={album.album_name || index} onClick={() => handleAlbumClick(album)}
-                  className="group relative rounded-2xl overflow-hidden border border-r-border bg-r-card text-left cursor-pointer hover:opacity-90 transition-opacity" style={{ aspectRatio: '4/3' }}>
-                  {album.cover_photo_url
-                    ? <img src={album.cover_photo_url} alt={album.album_name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                    : <div className="h-full w-full bg-r-card" />}
-                  <div className="absolute inset-0 bg-black/20 flex flex-col justify-end p-4">
-                    <p className="text-white text-sm font-medium truncate" style={{ fontFamily: 'var(--font-family-display)' }}>{album.album_name}</p>
-                    <p className="text-white/70 text-xs mt-0.5">{album.photo_count || album.photos?.length || 0} photos</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-            </div>
-      )}
-
-      {/* Photos grid */}
-      {(!isAlbumView || openAlbum) && (
-        paginatedItems.length === 0
-          ? <div className="flex flex-col items-center justify-center py-16 text-center">
-              <p className="text-base font-medium text-r-text">{openAlbum ? 'No photos in this album' : 'No photos yet'}</p>
-              <p className="text-sm text-r-secondary mt-1 max-w-xs">
-                {openAlbum
-                  ? 'This album has no photos assigned yet.'
-                  : contributorFilter === 'all'
-                    ? 'Photos will appear here once contributors have submitted and the memorial has been generated.'
-                    : 'No photos match this contributor filter.'}
-              </p>
-            </div>
-          : <div className="max-h-[600px] overflow-y-auto pr-1">
-              <div className="grid grid-cols-3 gap-5">
-              {paginatedItems.map((photo, index) => (
-                <button key={photo.id || index} onClick={() => openLightbox(photo, index)}
-                  className="group relative w-full overflow-hidden rounded-2xl bg-r-card" style={{ aspectRatio: '4/3' }}>
-                  {photo.url
-                    ? <img src={photo.url} alt={photo.caption || ''} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                    : <div className="h-full w-full bg-r-card" />}
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors duration-200 flex items-end p-3 opacity-0 group-hover:opacity-100">
-                    <div className="w-full">
-                      {photo.caption && <p className="text-white text-xs font-semibold truncate">{photo.caption}</p>}
-                      {photo.contributor_name && <p className="text-white text-xs truncate">{photo.contributor_name}</p>}
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-            </div>
-      )}
-
-      {lightboxPhoto && (
-        <Lightbox photo={lightboxPhoto} onClose={() => setLightboxPhoto(null)} onPrev={prevPhoto} onNext={nextPhoto} />
-      )}
-    </div>
-  );
-}
-
-// ─── Pre-generation empty state ───────────────────────────────────────────────
-
-function PreGenerationEmpty({ canGenerate, disabledMessage, generationError, generationJob, generating, onGenerate }) {
-  const isPending = generating && !generationError;
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="h-16 w-16 rounded-full bg-r-card flex items-center justify-center mb-4">
-        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" className="text-r-muted">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-        </svg>
-      </div>
-      <p className="text-r-text text-base font-medium">
-        {isPending ? "Generation is in progress" : "Generation hasn't run yet"}
-      </p>
-      <p className="text-r-secondary text-sm mt-1 max-w-xs leading-relaxed">
-        {isPending
-          ? "Outputs will appear here automatically once the memorial is ready."
-          : "Once you have contributions, click Generate to create the Story, Constellation, Voices, and Photos."}
-      </p>
-      <button type="button" onClick={onGenerate} disabled={!canGenerate || generating}
-        className="mt-6 flex h-[50px] w-[207px] items-center justify-center rounded-full px-6 text-sm font-medium text-r-btn-text transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-45 border-none"
-        style={{ backgroundColor: 'var(--color-r-btn)' }}>
-        {generating ? "Generating..." : "Generate"}
-      </button>
-      {isPending && (
-        <div className="mt-4 w-full max-w-xs" aria-live="polite">
-          <div className="h-1.5 overflow-hidden rounded-full bg-r-card">
-            <div className="h-full rounded-full bg-r-text transition-all duration-300"
-              style={{ width: `${Math.max(10, generationJob?.progress ?? 10)}%` }} />
-          </div>
-          <p className="mt-2 text-xs font-medium text-r-secondary">{generationJob?.current_step || "Preparing generation..."}</p>
-          <ProcessingTextSequence />
-        </div>
-      )}
-      {!generating && disabledMessage && <p className="mt-3 max-w-xs text-xs text-r-secondary">{disabledMessage}</p>}
-      {generationError && <p className="mt-3 max-w-xs text-sm text-r-danger" role="alert">{generationError}</p>}
-    </div>
-  );
-}
-
-// ─── Outputs Tab (my version — 5-section arrow navigation, no dropdowns) ─────
-
-const OUTPUT_SECTIONS = [
-  { key: 'story',                       label: 'Story' },
-  { key: 'constellation-themes',        label: 'Constellation | Themes' },
-  { key: 'constellation-relationships', label: 'Constellation | Relationships' },
-  { key: 'voices',                      label: 'Voices' },
-  { key: 'photos',                      label: 'All photos' },
-];
-
-function OutputsTab({ memorial, contributors, canGenerate, disabledMessage, generationError, generationJob, generating, onGenerate, output, loading, error, onRetry }) {
-  const [sectionIndex, setSectionIndex] = useState(0);
-
-  if (loading) return <TabLoading />;
-  if (error) {
-    return <TabError title="Unable to load outputs" message="The generated memorial output could not be loaded. Archive and Contributions are still available." onRetry={onRetry} />;
-  }
-  if (!output) {
-    return (
-      <div className="pt-6">
-        <PreGenerationEmpty canGenerate={canGenerate} disabledMessage={disabledMessage} generationError={generationError} generationJob={generationJob} generating={generating} onGenerate={onGenerate} />
-      </div>
-    );
-  }
-
-  const currentSection = OUTPUT_SECTIONS[sectionIndex];
-  const total = OUTPUT_SECTIONS.length;
-
-  // Constellation page: 1 = Themes, 2 = Relationships
-  const constellationPage = currentSection.key === 'constellation-relationships' ? 2 : 1;
-
-  return (
-    <div className="flex flex-col pt-4 gap-6">
-
-      {/* Top row: section title + Generate + arrows */}
-      <div className="flex items-center justify-between gap-4">
-        <h2
-          className="text-[36px] font-medium italic text-r-text"
-          style={{ fontFamily: 'var(--font-family-display)' }}
-        >
-          {currentSection.label}
-        </h2>
-        <div className="flex items-center gap-4">
-          {memorial?.status !== 'complete' && (
-          <button
-            onClick={onGenerate}
-            disabled={!canGenerate || generating}
-            className="rounded-full px-6 py-[14px] text-base text-r-btn-text transition-opacity hover:opacity-80 disabled:opacity-45 disabled:cursor-not-allowed border-none"
-            style={{ backgroundColor: 'var(--color-r-btn)' }}
-          >
-            {generating ? 'Generating…' : 'Generate'}
-          </button>
-        )}
-          <div className="flex items-center gap-3">
-            <PrevArrow
-              onClick={() => setSectionIndex((i) => Math.max(0, i - 1))}
-              disabled={sectionIndex === 0}
-            />
-            <span
-              className="text-2xl font-medium text-r-text min-w-[64px] text-center"
-              style={{ fontFamily: 'var(--font-family-display)' }}
-            >
-              {sectionIndex + 1} / {total}
-            </span>
-            <NextArrow
-              onClick={() => setSectionIndex((i) => Math.min(total - 1, i + 1))}
-              disabled={sectionIndex === total - 1}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Section content */}
-      {currentSection.key === 'story' && (
-        <StorySlideshow output={output} story={output?.story} />
-      )}
-      {(currentSection.key === 'constellation-themes' || currentSection.key === 'constellation-relationships') && (
-        <ConstellationGraph
-          key={constellationPage}
-          ai_output={output}
-          memorial={memorial}
-          contributor={contributors}
-          page={constellationPage}
-          width={800}
-          height={800}
-        />
-      )}
-
-      {currentSection.key === 'voices' && (
-        <VoicesTab output={output} voices={output?.voices} />
-      )}
-
-      {currentSection.key === 'photos' && (
-        <AllPhotosSection
-          albums={output?.photos}
-          onGenerate={onGenerate}
-          generating={generating}
-          canGenerate={canGenerate}
-        />
-      )}
-
-    </div>
-  );
-}
-
-
 // ─── Share Modal ──────────────────────────────────────────────────────────────
 
 function ShareModal({ onClose, memorialId }) {
@@ -1060,12 +623,10 @@ function GenerateConfirmModal({ onConfirm, onCancel, subjectName }) {
 
 // ─── Page (my structure — full-width nav, 960px content, inviteToken) ─────────
 
-export default function MemorialOutputPage() {
+export default function MemorialManagePage() {
   const { id } = useParams();
-  const [activeTab, setActiveTab] = useState(OUTPUTS_TAB);
+  const [activeTab, setActiveTab] = useState(ARCHIVE_TAB);
   const [output, setOutput] = useState(null);
-  const [outputLoading, setOutputLoading] = useState(true);
-  const [outputError, setOutputError] = useState(null);
   const [contributorsLoading, setContributorsLoading] = useState(true);
   const [contributorsError, setContributorsError] = useState(null);
   const [showShare, setShowShare] = useState(false);
@@ -1117,17 +678,16 @@ export default function MemorialOutputPage() {
 
   const loadOutput = useCallback(async (options = {}) => {
     if (!id) return;
-    setOutputLoading(true); setOutputError(null);
     try {
       const token = await getAuthToken();
       const data = await getMemorialOutput(id, token, options);
       setOutput(data);
       return data;
     } catch (err) {
-      setOutputError(err instanceof Error ? err.message : "Failed to fetch memorial output");
+      console.error("Failed to fetch memorial output", err);
       setOutput(null);
       return null;
-    } finally { setOutputLoading(false); }
+    }
   }, [id]);
 
   const refreshMemorial = useCallback(async () => {
@@ -1193,7 +753,7 @@ export default function MemorialOutputPage() {
       const data = await getMemorialOutput(id, token);
       if (cancelled) return;
       if (data) {
-        setOutput(data); setOutputError(null); setGenerating(false);
+        setOutput(data); setGenerating(false);
         setGenerationJob((job) => job ? { ...job, status: 'complete', progress: 100, current_step: 'Complete' } : job);
         try {
           const memorialApi = await getMemorial(id);
@@ -1240,9 +800,7 @@ export default function MemorialOutputPage() {
           ? "Generation is available after you approve at least one contribution."
           : "";
 
-  // NS-7: Approve Contributions only exists while a submission is pending.
-  // Approving or deleting the last one drops the organizer back to Archive.
-  const manageTabs = getManageTabs(contributors);
+  const manageTabs = getManageTabs();
   const currentTab = resolveManageTab(activeTab, manageTabs);
 
   useEffect(() => { queueMicrotask(loadContributors); }, [loadContributors]);
@@ -1279,6 +837,20 @@ export default function MemorialOutputPage() {
             disabledMessage={generationDisabledMessage}
             generating={generating}
             onGenerateClick={handleGenerateClick} />
+          {generating && !generationError && (
+            <div className="rounded-2xl border border-r-border p-6 text-center" role="status">
+              <p className="text-base font-medium text-r-text">Generation is in progress</p>
+              <div className="mx-auto mt-4 w-full max-w-xs">
+                <div className="h-1.5 overflow-hidden rounded-full bg-r-card">
+                  <div className="h-full rounded-full bg-r-text transition-all duration-300"
+                    style={{ width: `${Math.max(10, generationJob?.progress ?? 10)}%` }} />
+                </div>
+                <p className="mt-2 text-xs font-medium text-r-secondary">{generationJob?.current_step || "Preparing generation..."}</p>
+                <ProcessingTextSequence />
+              </div>
+            </div>
+          )}
+          {generationError && <p className="text-sm text-r-danger" role="alert">{generationError}</p>}
           <TabBar tabs={manageTabs} active={currentTab} onChange={setActiveTab} />
           <div>
             {currentTab === ARCHIVE_TAB && <ArchiveTab memorialId={memorialId} contributors={contributors} contributorsLoading={contributorsLoading} />}
@@ -1290,22 +862,6 @@ export default function MemorialOutputPage() {
                 error={contributorsError}
                 onRetry={loadContributors}
                 onContributorsChange={setContributors}
-              />
-            )}
-            {currentTab === OUTPUTS_TAB && (
-              <OutputsTab
-                memorial={memorial}
-                contributors={contributors}
-                canGenerate={canGenerate}
-                disabledMessage={generationDisabledMessage}
-                generationError={generationError}
-                generationJob={generationJob}
-                generating={generating}
-                onGenerate={handleGenerateClick}
-                output={output}
-                loading={outputLoading}
-                error={outputError}
-                onRetry={loadOutput}
               />
             )}
           </div>
