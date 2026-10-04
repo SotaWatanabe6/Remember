@@ -16,6 +16,7 @@ import ProcessingTextSequence from "@/components/dashboard/ProcessingTextSequenc
 import { getAuthToken } from "@/lib/api.js";
 import MemorialCoverImage from "@/components/memorial/MemorialCoverImage.jsx";
 import ContributionsPanel from "@/components/organizer/ContributionsPanel.jsx";
+import ArchiveQaPanel from "@/components/organizer/ArchiveQaPanel.jsx";
 import { APPROVE_TAB, ARCHIVE_TAB, OUTPUTS_TAB, getManageTabs, resolveManageTab } from "@/lib/organizer/contributionReview";
 
 // ─── Generation constants ─────────────────────────────────────────────────────
@@ -310,10 +311,6 @@ function TabError({ title, message, onRetry }) {
 
 const EMPTY_ARCHIVE = { contributors: [], photos: [], voices: [], stories: [], responses: [] };
 
-function isApprovedContributor(contributor) {
-  return String(contributor?.status || '').toLowerCase() === 'approved';
-}
-
 function formatArchiveDate(value) {
   if (!value) return '';
   const date = new Date(value);
@@ -339,18 +336,17 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
   const [archive, setArchive] = useState(EMPTY_ARCHIVE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [activeSubTab, setActiveSubTab] = useState('photos');
 
-  // Re-fetch whenever the set of approved contributors changes (e.g. after an
-  // organizer approves a submission in the Contributions tab).
-  const approvedKey = (contributors || [])
-    .filter(isApprovedContributor)
-    .map((contributor) => contributor.id)
+  // Per-type approvals can enter the archive while the contributor is still
+  // submitted. Let the archive API decide which items have been approved.
+  const reviewKey = (contributors || [])
+    .map((contributor) => `${contributor.id}:${contributor.status}:${contributor.updated_at || ''}`)
     .sort()
     .join(',');
 
   const loadArchive = useCallback(async () => {
     if (!memorialId) return;
-    if (!approvedKey) { setArchive(EMPTY_ARCHIVE); setError(null); setLoading(false); return; }
 
     setLoading(true); setError(null);
     try {
@@ -361,7 +357,7 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
       setError(err instanceof Error ? err.message : 'Failed to load the archive');
       setArchive(EMPTY_ARCHIVE);
     } finally { setLoading(false); }
-  }, [approvedKey, memorialId]);
+  }, [reviewKey, memorialId]);
 
   useEffect(() => { queueMicrotask(loadArchive); }, [loadArchive]);
 
@@ -373,7 +369,7 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
   const photos = archive.photos || [];
   const voices = archive.voices || [];
   const stories = archive.stories || [];
-  const responses = (archive.responses || []).filter((response) => String(response.answer_text || '').trim());
+  const responses = (archive.responses || []).filter((response) => String(response.answer_text || '').trim() || response.response_audio_url);
   const approvedContributorCount = (archive.contributors || []).length;
   const totalItems = photos.length + voices.length + stories.length + responses.length;
 
@@ -393,13 +389,31 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
   }
 
   return (
-    <div className="flex flex-col gap-12 pt-8">
+    <div className="flex flex-col gap-[30px] pt-8">
       <p className="text-sm text-r-secondary">
-        {totalItems} memor{totalItems === 1 ? 'y' : 'ies'} from {approvedContributorCount} approved contributor
+        {totalItems} approved memor{totalItems === 1 ? 'y' : 'ies'} from {approvedContributorCount} contributor
         {approvedContributorCount === 1 ? '' : 's'}
       </p>
 
-      {photos.length > 0 && (
+      <div className="flex flex-wrap gap-5" aria-label="Archive content">
+        {[['photos', 'Photos'], ['voices', 'Voice'], ['stories', 'Stories'], ['responses', 'Q&A']].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={activeSubTab === key}
+            onClick={() => setActiveSubTab(key)}
+            className={`flex h-[50px] min-w-[140px] items-center justify-center rounded-full border border-r-muted px-7 text-[24px] font-medium leading-none transition [font-family:var(--font-family-display)] sm:min-w-[206px] focus-visible:outline-2 focus-visible:outline-r-muted ${activeSubTab === key ? 'bg-[#9E9384] text-r-modal' : 'text-r-muted hover:text-r-text'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {activeSubTab !== 'responses' && archive[activeSubTab].length === 0 && (
+        <p className="py-14 text-center text-r-secondary">No approved {activeSubTab === 'voices' ? 'voice recordings' : activeSubTab} yet.</p>
+      )}
+
+      {activeSubTab === 'photos' && photos.length > 0 && (
         <ArchiveSection title="Photos" count={`${photos.length} photo${photos.length === 1 ? '' : 's'}`}>
           <div className="grid grid-cols-3 gap-4">
             {photos.map((photo) => (
@@ -434,7 +448,7 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
         </ArchiveSection>
       )}
 
-      {voices.length > 0 && (
+      {activeSubTab === 'voices' && voices.length > 0 && (
         <ArchiveSection title="Voices" count={`${voices.length} recording${voices.length === 1 ? '' : 's'}`}>
           <div className="grid grid-cols-2 gap-4">
             {voices.map((voice) => (
@@ -461,7 +475,7 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
         </ArchiveSection>
       )}
 
-      {stories.length > 0 && (
+      {activeSubTab === 'stories' && stories.length > 0 && (
         <ArchiveSection title="Stories" count={`${stories.length} stor${stories.length === 1 ? 'y' : 'ies'}`}>
           <div className="grid grid-cols-2 gap-4">
             {stories.map((story) => (
@@ -481,21 +495,7 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
         </ArchiveSection>
       )}
 
-      {responses.length > 0 && (
-        <ArchiveSection title="Written memories" count={`${responses.length} answer${responses.length === 1 ? '' : 's'}`}>
-          <div className="flex flex-col gap-4">
-            {responses.map((response) => (
-              <article key={response.id} className="flex flex-col gap-2 rounded-xl border border-r-border bg-r-card p-6">
-                <p className="text-sm font-medium text-r-secondary">{response.question_text || 'Question'}</p>
-                <p className="text-[18px] leading-7 text-r-text">{response.answer_text}</p>
-                {response.contributor_name && (
-                  <p className="text-xs text-r-secondary">Submitted by {response.contributor_name}</p>
-                )}
-              </article>
-            ))}
-          </div>
-        </ArchiveSection>
-      )}
+      {activeSubTab === 'responses' && <ArchiveQaPanel contributors={archive.contributors || []} responses={responses} />}
     </div>
   );
 }
