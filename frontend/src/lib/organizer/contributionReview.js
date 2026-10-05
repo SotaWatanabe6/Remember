@@ -1,10 +1,15 @@
-// Organizer management always shows Archive and Approve Contributions.
-// Submission sub-tabs still depend on the content awaiting review.
+// Visibility rules for the organizer's contribution review (NS-7).
+//
+// The Approve Contributions tab — and each content-type sub-tab inside a
+// submission — only exists while there is something pending review. Same idea
+// as US-24 (hide the Voices output tab when there are no recordings), applied
+// to the whole tab plus each of its sub-tabs.
 
 export const ARCHIVE_TAB = "Archive";
 export const APPROVE_TAB = "Approve Contributions";
+export const OUTPUTS_TAB = "Outputs";
 
-const ALL_MANAGE_TABS = [ARCHIVE_TAB, APPROVE_TAB];
+const ALL_MANAGE_TABS = [ARCHIVE_TAB, APPROVE_TAB, OUTPUTS_TAB];
 
 // Sub-tabs of a submission, in the order Figma shows them. Q&A is not in the
 // approval wireframes but the organizer still needs to review answers before
@@ -30,8 +35,12 @@ export function hasPendingContributions(contributors) {
   return Array.isArray(contributors) && contributors.some(isAwaitingReview);
 }
 
-export function getManageTabs() {
-  return [...ALL_MANAGE_TABS];
+// Top-level tabs on the manage page. Approve Contributions disappears as soon
+// as no contributor is awaiting review.
+export function getManageTabs(contributors) {
+  return hasPendingContributions(contributors)
+    ? ALL_MANAGE_TABS
+    : ALL_MANAGE_TABS.filter((tab) => tab !== APPROVE_TAB);
 }
 
 export function resolveManageTab(requestedTab, tabs) {

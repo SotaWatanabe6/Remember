@@ -10,7 +10,6 @@ import {
   validateContributorInvite,
 } from "@/services/contributorService.js";
 import { formatPersonName } from "@/lib/formatName.js";
-import ContributorEntryNav from "@/components/contributor/ContributorEntryNav.jsx";
 
 const inviteErrorCopy = {
   invalid: {
@@ -117,10 +116,10 @@ function ContributorBrand() {
   );
 }
 
-function ContributorPageShell({ children, backHref, entry = false }) {
+function ContributorPageShell({ children, backHref }) {
   return (
     <main className="min-h-screen bg-r-bg px-6 py-8 text-r-text sm:px-[50px] sm:py-[50px]">
-      {entry ? <ContributorEntryNav backHref={backHref} /> : <header className="flex h-10 items-center justify-between">
+      <header className="flex h-10 items-center justify-between">
         <ContributorBrand />
         {backHref ? (
           <Link
@@ -131,7 +130,7 @@ function ContributorPageShell({ children, backHref, entry = false }) {
             Back
           </Link>
         ) : null}
-      </header>}
+      </header>
       {children}
     </main>
   );
@@ -213,7 +212,7 @@ function getStoredContributorName(inviteToken) {
   try {
     const sessionKey = `remember_contributor_session:${inviteToken}`;
     const session = JSON.parse(localStorage.getItem(sessionKey) || "{}");
-    return session?.contributorName || session?.contributor_name || "";
+    return session?.display_name || session?.contributorName || session?.contributor_name || "";
   } catch {
     return "";
   }
@@ -381,6 +380,7 @@ export function PublicContributorPage({ inviteToken }) {
             contributorId: result?.contributorId ?? existing.contributorId ?? "",
             contributorToken: result?.contributorToken ?? existing.contributorToken ?? "",
             contributorName: savedContributorName,
+            display_name: savedContributorName,
             memorialSubjectName: invite.deceased.name || "",
           }),
         );
@@ -398,27 +398,27 @@ export function PublicContributorPage({ inviteToken }) {
   };
 
   return (
-    <ContributorPageShell backHref={`/contribute/${inviteToken}/onboarding`} entry>
-      <section className="mx-auto flex w-full max-w-[578px] flex-col items-center pt-[100px] max-sm:pt-16">
+    <ContributorPageShell backHref={`/contribute/${inviteToken}/onboarding`}>
+      <section className="mx-auto flex w-full max-w-[578px] flex-col items-center pt-[101px] max-sm:pt-16">
         <div className="flex flex-col items-center gap-5 text-center">
-          <h1 className="[font-family:var(--font-family-display)] text-[32px] font-bold leading-10 text-r-text sm:text-[40px] sm:leading-[45.725px]">
-            Enter your name
+          <h1 className="[font-family:var(--font-family-display)] text-[40px] font-bold leading-[52px] text-r-text">
+            Contribution privacy
           </h1>
           <p className="text-xl leading-[26px] text-r-secondary">
-            The organizer will always see your real name. Next, choose whether viewers see your name or your relationship.
+            Write the name that will be displayed with your contributions.
           </p>
         </div>
 
         <form
           onSubmit={handleSubmit}
           noValidate
-          className="mt-[100px] flex w-full max-w-[434px] flex-col items-stretch"
+          className="mt-[99px] flex w-full max-w-[434px] flex-col items-stretch"
         >
           <label
             htmlFor="contributor-name"
             className="[font-family:var(--font-family-display)] text-2xl font-medium leading-[31px] text-r-text"
           >
-            Your name <span aria-hidden="true">*</span>
+            Your name
           </label>
           <input
             id="contributor-name"
@@ -427,11 +427,10 @@ export function PublicContributorPage({ inviteToken }) {
             value={contributorName}
             onChange={handleNameChange}
             autoComplete="name"
-            required
             placeholder="Full name"
             aria-invalid={Boolean(nameError)}
             aria-describedby={nameError ? "contributor-name-error" : undefined}
-            className={`mt-[10px] h-[63px] w-full rounded-[13px] border bg-transparent px-5 text-xl leading-[26px] text-r-text outline-none transition placeholder:text-r-secondary focus:border-r-border-focus ${
+            className={`mt-[10px] h-16 w-full rounded-[13px] border bg-transparent px-5 text-xl leading-[26px] text-r-text outline-none transition placeholder:text-r-secondary focus:border-r-border-focus ${
               nameError ? "border-r-danger" : "border-[#97877B]"
             }`}
           />

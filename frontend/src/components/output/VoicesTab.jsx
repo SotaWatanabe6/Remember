@@ -170,8 +170,8 @@ function ViewerVoicesTab({
   return (
     <section aria-label="Voice recordings" className="flex w-full flex-col gap-6">
       <h2 className="w-full text-left font-display text-[40px] font-bold leading-none text-r-text">Voices</h2>
-      <div className="grid grid-cols-1 gap-12 lg:grid-cols-[minmax(260px,433px)_minmax(320px,658px)] lg:items-start lg:justify-start lg:gap-[clamp(48px,17vw,248px)]">
-        <div className="flex min-w-0 flex-col gap-10 lg:gap-[50px]">
+      <div className="grid gap-12 lg:grid-cols-[minmax(260px,433px)_minmax(320px,658px)] lg:items-start lg:justify-start lg:gap-[clamp(48px,17vw,248px)]">
+        <div className="flex flex-col gap-10 lg:gap-[50px]">
           <label className="relative block">
             <span className="sr-only">Sort voice recordings</span>
             <select
