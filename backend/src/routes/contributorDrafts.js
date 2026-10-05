@@ -30,7 +30,7 @@ async function getContributorForInvite(
 
   const { data: contributor, error } = await supabase
     .from('contributors')
-    .select('id, memorial_id, name, is_anonymous, status, submitted_at, relationship_type, relationship_label')
+    .select('id, memorial_id, status, submitted_at, relationship_type, relationship_label')
     .eq('session_token', contributorToken)
     .eq('memorial_id', invite.memorial_id)
     .single()

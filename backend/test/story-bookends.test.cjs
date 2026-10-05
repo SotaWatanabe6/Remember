@@ -93,7 +93,7 @@ test('only known, unflagged contributors supply candidates; anonymous attributio
     { ...responses[0], response_text: 'I do not know. ' + 'word '.repeat(60) },
   ], [{ ...contributors[0], is_anonymous: true }])
   assert.equal(candidates.length, 1)
-  assert.equal(candidates[0].contributor_name, 'Child')
+  assert.equal(candidates[0].contributor_name, 'Anonymous')
   assert.ok(candidates.every((candidate) => candidate.text.length <= 320))
 })
 
@@ -153,7 +153,7 @@ test('anonymous contributors remain distinct and ambiguous Story quotes are not 
   })
   const credits = slides.at(-1).contributors
   assert.equal(credits.length, 2)
-  assert.ok(credits.every((credit) => credit.contributor_name === 'Cousin' && credit.relationship_type === 'Cousin'))
+  assert.ok(credits.every((credit) => credit.contributor_name === 'Anonymous' && credit.relationship_type === 'Cousin'))
   assert.equal(credits[0].quote, 'A selected voice quote.')
   assert.equal(credits[1].quote, null)
   assert.equal(JSON.stringify(slides).includes('Private name'), false)

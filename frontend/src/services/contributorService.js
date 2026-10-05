@@ -3,7 +3,6 @@ import {
   getAuthToken,
   getInviteToken,
   getContributorSummary,
-  getPrivacyChoice,
   getResponses,
   savePrivacyChoice,
   saveRelationship,
@@ -383,22 +382,10 @@ export async function getContributorRelationshipDraft(inviteToken) {
 
 export async function getContributorPrivacyDraft(inviteToken) {
   const draft = await getContributorRelationshipDraft(inviteToken);
-  if (draft.status !== "ready") return draft;
-  const { contributor } = await getPrivacyChoice(inviteToken, draft.session.contributorToken);
-  const session = {
-    ...draft.session,
-    contributorName: contributor.name,
-    display_name: contributor.display_name,
-    is_anonymous: contributor.is_anonymous,
-    status: contributor.status,
-    relationship_type: contributor.relationship_type ?? "",
-    relationship_custom_label: contributor.relationship_label ?? "",
-  };
-  storeContributorSession(inviteToken, session);
+
   return {
     ...draft,
-    session,
-    is_anonymous: contributor.is_anonymous,
+    is_anonymous: draft.session?.is_anonymous ?? null,
   };
 }
 
@@ -409,9 +396,8 @@ export async function saveContributorPrivacy(inviteToken, isAnonymous) {
     throw new Error("Your contribution could not be found.");
   }
 
-  let savedPrivacy;
   try {
-    savedPrivacy = await savePrivacyChoice(inviteToken, {
+    await savePrivacyChoice(inviteToken, {
       contributor_token: draft.session.contributorToken,
       is_anonymous: isAnonymous,
     });
@@ -434,9 +420,10 @@ export async function saveContributorPrivacy(inviteToken, isAnonymous) {
 
   const updatedSession = {
     ...draft.session,
-    // Real identity and public attribution are separate fields.
+    // Only the flag is stored: the contributor's real name stays on the session
+    // (and on the contributors row) so the organizer-facing record keeps it, and
+    // the "Anonymous" credit is applied server-side when the memorial is built.
     is_anonymous: isAnonymous,
-    display_name: savedPrivacy?.contributor?.display_name ?? null,
     updatedAt: new Date().toISOString(),
   };
 
@@ -489,7 +476,6 @@ export async function saveContributorRelationship(
     relationship_type: savedRelationship?.contributor?.relationship_type ?? trimmedRelationshipType,
     relationship_custom_label: relationship_label,
     relationship_label,
-    display_name: savedRelationship?.contributor?.display_name ?? null,
     updatedAt: new Date().toISOString(),
   };
 

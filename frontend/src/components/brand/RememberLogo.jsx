@@ -6,11 +6,10 @@ const logoSrc = "/Logo.svg";
 export function RememberLogoMark({
   className = "h-9 w-[34px]",
   priority = false,
-  src = logoSrc,
 }) {
   return (
     <Image
-      src={src}
+      src={logoSrc}
       alt=""
       width={300}
       height={316}
@@ -25,11 +24,10 @@ export default function RememberLogo({
   href,
   className = "",
   markClassName = "h-9 w-[34px]",
-  markSrc = logoSrc,
 }) {
   const content = (
     <>
-      <RememberLogoMark className={markClassName} src={markSrc} priority />
+      <RememberLogoMark className={markClassName} priority />
       <span className="font-display text-2xl font-medium leading-none text-r-text">
         Remember
       </span>

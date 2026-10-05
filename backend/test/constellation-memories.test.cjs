@@ -46,7 +46,7 @@ test('flagged and unknown sources are excluded; anonymous names stay private', a
       return { memories: [{ source_index: 0, excerpt }] }
     }),
   })
-  assert.equal(nodes[0].contributor_name, 'Grandchild')
+  assert.equal(nodes[0].contributor_name, 'Anonymous')
   assert.equal(JSON.stringify(nodes).includes('Jonah'), false)
 })
 
@@ -197,12 +197,7 @@ test('generation route passes the full photo pool and answers through to saved m
   const services = {
     buildMemoryCorpus: () => '', extractThemes: async () => [], extractPhotoAlbumThemes: async () => [],
     analyzePhotoWithVision: async () => photo('fixture').analysis,
-    moderatePhotoContent: async () => ({ is_flagged: false, is_blurry: false }),
-    moderateQuestionnaireResponse: async () => ({ is_flagged: false }),
-    moderateContribution: async () => ({ is_flagged: false }),
     assignPhotosToThemes: async (input) => input, composeStorySlideshow: async () => [],
-    attachPhotosToMemoryNodes: (_photos, nodes) => nodes,
-    attachContributorSummariesToMemoryNodes: async (nodes) => nodes,
     buildConstellationFromMemories: async (input) => {
       assert.equal(input.analyzedPhotos.length, 61)
       assert.equal(input.responses[0].response_text, responses[0].response_text)

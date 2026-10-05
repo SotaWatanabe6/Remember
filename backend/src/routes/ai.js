@@ -9,16 +9,13 @@ const {
   extractThemes,
   extractPhotoAlbumThemes,
   analyzePhotoWithVision,
-  moderatePhotoContent,
-  moderateQuestionnaireResponse,
-  moderateContribution,
   assignPhotosToThemes,
   attachPhotosToMemoryNodes,
   attachContributorSummariesToMemoryNodes,
   buildConstellationFromMemories,
   composeStorySlideshow,
 } = require('../services/memorialGeneration')
-const { processVoiceRecording, transcribeVoiceRecording } = require('../services/voiceProcessing')
+const { processVoiceRecording } = require('../services/voiceProcessing')
 const { withContributorDisplayNames } = require('../services/contributorPrivacy')
 
 const { loadGenerationPhotos } = require('../services/generationPhotos')
@@ -88,7 +85,7 @@ async function runPipelines(memorialId, jobId) {
       .eq('memorial_id', memorialId)
       .in('status', ['submitted', 'approved'])
     // Contributors who chose to stay anonymous on the privacy step are credited
-    // by their relationship everywhere the generated memorial names them.
+    // as "Anonymous" everywhere the generated memorial names them.
     const contributors = withContributorDisplayNames(contributorRows)
     const contributorIds = contributors.map((contributor) => contributor.id)
     const { data: responses } = contributorIds.length
@@ -113,35 +110,6 @@ async function runPipelines(memorialId, jobId) {
       .single()
 
     if (memorialError || !memorial) throw new Error('Memorial not found')
-
-    await updateJob(jobId, 12, 'Reviewing questionnaire answers...')
-    for (const response of responses || []) {
-      const responseModeration = await moderateQuestionnaireResponse(response, memorial.subject_name)
-      if (responseModeration.is_flagged) {
-        await supabase
-          .from('questionnaire_responses')
-          .update({
-            is_flagged: true,
-            flagged_reason: responseModeration.flagged_reason,
-          })
-          .eq('id', response.id)
-      }
-    }
-
-    await updateJob(jobId, 16, 'Reviewing full contributions...')
-    for (const contributor of contributors || []) {
-      const contributionModeration = await moderateContribution(
-        responses || [], contributor, contributors || [], memorial.subject_name,
-      )
-      if (contributionModeration.is_flagged) {
-        contributor.is_flagged = true
-        contributor.flagged_reason = contributionModeration.flagged_reason
-        await supabase
-          .from('contributors')
-          .update({ is_flagged: true, flagged_reason: contributionModeration.flagged_reason })
-          .eq('id', contributor.id)
-      }
-    }
 
     const memoryCorpus = buildMemoryCorpus(
       responses || [],
@@ -171,28 +139,31 @@ async function runPipelines(memorialId, jobId) {
           signedUrl = urlData?.signedUrl || null
         }
 
-        const moderation = await moderatePhotoContent(signedUrl, memorial.subject_name)
-
         const analysis = await analyzePhotoWithVision(signedUrl, memorial.subject_name, {
           dateOfBirth: memorial.date_of_birth,
           dateOfPassing: memorial.date_of_passing,
           deceasedPresent: null,
         })
 
-        analyzedPhotos.push({ ...photo, analysis, matched_theme_ids: [], moderation })
+        analyzedPhotos.push({ ...photo, analysis, matched_theme_ids: [] })
       } catch (err) {
         console.error('[Vision] failed for photo:', photo.id, err.message)
-        analyzedPhotos.push({ ...photo, analysis: null, matched_theme_ids: [], moderation: null })
+        analyzedPhotos.push({ ...photo, analysis: null, matched_theme_ids: [] })
       }
     }
 
     await updateJob(jobId, 50, 'Matching photos to albums...')
-    const albumThemes = await extractPhotoAlbumThemes(analyzedPhotos, memorial.subject_name, contributors || [])
-    analyzedPhotos = await assignPhotosToThemes(analyzedPhotos, albumThemes, memoryCorpus, memorial.subject_name, contributors || [])
+    const albumThemes = await extractPhotoAlbumThemes(analyzedPhotos, memorial.subject_name)
+    analyzedPhotos = await assignPhotosToThemes(
+      analyzedPhotos,
+      albumThemes,
+      memoryCorpus,
+      memorial.subject_name,
+    )
 
     // US-20: link photos to the questionnaire-derived memory nodes, now that photo
     // vision analysis (analyzedPhotos) is available.
-    discoveryThemes = attachPhotosToMemoryNodes(analyzedPhotos, discoveryThemes, contributors || [])
+    discoveryThemes = attachPhotosToMemoryNodes(analyzedPhotos, discoveryThemes)
 
     // US-36: attach a per-contributor first-person summary to each memory node attribution.
     discoveryThemes = await attachContributorSummariesToMemoryNodes(
@@ -212,11 +183,8 @@ async function runPipelines(memorialId, jobId) {
           ai_labels: {
             ...(typeof photo.ai_labels === 'object' && photo.ai_labels ? photo.ai_labels : {}),
             vision: photo.analysis,
-            moderation: photo.moderation || null,
           },
           theme_ids: photo.matched_theme_ids,
-          is_flagged: photo.moderation?.is_flagged || photo.moderation?.is_blurry || false,
-          flagged_reason: photo.moderation?.flagged_reason || photo.moderation?.blur_reason || null,
         })
         .eq('id', photo.id)
     }
@@ -225,9 +193,7 @@ async function runPipelines(memorialId, jobId) {
     const enrichedRecordings = []
     for (const recording of recordings || []) {
       let row = recording
-      const needsTranscript = !recording.transcript_text
-      const needsTimings = !Array.isArray(recording.transcript_segments) || !recording.transcript_segments.length
-      if (process.env.ASSEMBLYAI_API_KEY && (needsTranscript || needsTimings) && recording.storage_path) {
+      if (CAN_USE_OPENAI && !recording.transcript_text && recording.storage_path) {
         try {
           const { data: blob } = await supabase.storage
             .from(recording.storage_bucket || 'memorial-assets')
@@ -235,41 +201,30 @@ async function runPipelines(memorialId, jobId) {
           if (blob) {
             const buffer = Buffer.from(await blob.arrayBuffer())
             const contributor = contributors?.find((c) => c.id === recording.contributor_id)
-            const voiceMeta = needsTranscript ? await processVoiceRecording({
+            const voiceMeta = await processVoiceRecording({
               fileBuffer: buffer,
               mimeType: recording.file_type || 'audio/webm',
               fileName: recording.file_name,
               subjectName: memorial.subject_name,
               contributorName: contributor?.name,
-            }) : await transcribeVoiceRecording(buffer)
-            // A failed timing backfill must not erase an existing transcript or highlight.
-            if (!voiceMeta.transcript_text) {
-              if (needsTranscript) await supabase.from('voice_recordings').update({ transcription_status: 'failed' }).eq('id', recording.id)
-              enrichedRecordings.push(recording)
-              continue
-            }
-            const updates = {
-              transcript_text: voiceMeta.transcript_text,
-              transcript_segments: voiceMeta.transcript_segments,
-              transcription_status: 'complete',
-              ...(needsTranscript ? {
+            })
+            const { data: updated } = await supabase
+              .from('voice_recordings')
+              .update({
+                transcript_text: voiceMeta.transcript_text,
                 key_quote: voiceMeta.key_quote,
                 ai_category: voiceMeta.ai_category,
+                transcription_status: voiceMeta.transcript_text ? 'complete' : 'failed',
                 ai_tags: {
                   intro_line: voiceMeta.intro_line,
                   clip_start_seconds: voiceMeta.clip_start_seconds ?? 0,
                   clip_end_seconds: voiceMeta.clip_end_seconds ?? null,
                 },
-              } : {}),
-            }
-            const { data: updated, error: updateError } = await supabase
-              .from('voice_recordings')
-              .update(updates)
+              })
               .eq('id', recording.id)
               .select('*')
               .single()
-            if (updateError) throw updateError
-            row = updated || { ...recording, ...updates }
+            row = updated || { ...recording, ...voiceMeta, ai_tags: voiceMeta }
           }
         } catch (voiceErr) {
           console.error('[Pipeline] voice transcription failed:', recording.id, voiceErr.message)
@@ -291,16 +246,11 @@ async function runPipelines(memorialId, jobId) {
 
     const voices = enrichedRecordings.map((r) => {
       const tags = typeof r.ai_tags === 'object' && r.ai_tags ? r.ai_tags : {}
-      const contributor = contributors.find((person) => person.id === r.contributor_id)
       return {
         id: r.id,
-        contributor_id: r.contributor_id,
-        contributor_name: contributor?.display_name || 'A contributor',
         contributor_title: r.contributor_title,
         key_quote: r.key_quote || r.transcript_text?.slice(0, 150) || 'No transcript yet',
         transcript_text: r.transcript_text || 'Transcription pending',
-        transcript_segments: Array.isArray(r.transcript_segments) ? r.transcript_segments : [],
-        duration_seconds: r.duration_seconds,
         ai_category: r.ai_category || 'memory',
         audio_url: r.storage_path,
         storage_bucket: r.storage_bucket,
@@ -333,7 +283,6 @@ async function runPipelines(memorialId, jobId) {
           const contributor = contributors?.find((c) => c.id === p.contributor_id)
           return {
             id: p.id,
-            contributor_id: p.contributor_id,
             url: p.storage_path,
             storage_path: p.storage_path,
             storage_bucket: p.storage_bucket,

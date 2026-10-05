@@ -10,7 +10,6 @@ const upload = multer()
 // After the existing requires:
 const { enrichMemorialsForClient, enrichMemorialForClient } = require('../services/storageUrls')
 const { getContributorHighlights } = require('../services/contributorHighlights')
-const { withContributorDisplayNames, withOutputDisplayNames } = require('../services/contributorPrivacy')
 
 const CONTRIBUTOR_REVIEW_STATUSES = new Set(['in_progress', 'submitted', 'approved', 'rejected'])
 
@@ -1047,12 +1046,7 @@ router.get('/:id/output', authMiddleware, async (req, res) => {
       console.error('[output] fetch error:', error)
       return res.status(404).json({ error: 'Output not found. Generation may not be complete yet.' })
     }
-    const { data: contributors, error: contributorsError } = await supabase.from('contributors')
-      .select('id, name, is_anonymous, relationship_type, relationship_label, status, submitted_at, created_at')
-      .eq('memorial_id', req.params.id)
-    if (contributorsError) return res.status(500).json({ error: 'Could not resolve contributor display names.' })
-    const visibleContributors = (contributors || []).filter((person) => ['submitted', 'approved'].includes(person.status))
-    res.json({ ...withOutputDisplayNames(output.output_json, contributors || []), contributor: withContributorDisplayNames(visibleContributors) })
+    res.json(output.output_json)
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
