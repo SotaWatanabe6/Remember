@@ -158,7 +158,7 @@ export default function StoryPage() {
 
   return (
     <main className="flex min-h-screen flex-col bg-r-bg text-r-text">
-      <ContributorUploadNav backHref={`/contribute/${inviteToken}/upload`} disabled={saving || listening} />
+      <ContributorUploadNav backHref={`/contribute/${inviteToken}/voice`} disabled={saving || listening} />
       <div className="flex flex-1 flex-col items-center gap-12 px-6 pb-[50px] pt-10 sm:gap-[100px] sm:px-[50px] sm:pt-[50px]">
         <header className="text-center">
           <h1 className="text-h1">Upload your memories</h1>

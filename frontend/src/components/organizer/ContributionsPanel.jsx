@@ -1,13 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
-  ChevronLeft,
-  ChevronRight,
   Loader2,
   Play,
-  Search,
   Trash2,
   X,
 } from "lucide-react";
@@ -34,6 +31,8 @@ import {
   setAllSelected,
   toggleSelected,
 } from "@/lib/organizer/contributionReview";
+import ContributorNavigation from "@/components/organizer/ContributorNavigation";
+import { matchesContributorName } from "@/lib/organizer/contributorSearch";
 
 function formatDate(value, fallback = "No date provided") {
   if (!value) return fallback;
@@ -55,15 +54,6 @@ function getContributorName(contributor) {
 
 function getRelationship(contributor) {
   return contributor?.relationship_label || contributor?.relationship_type || "No relationship";
-}
-
-function buildSearchText(contributor) {
-  return [
-    contributor?.name,
-    contributor?.relationship_label,
-    contributor?.relationship_type,
-    contributor?.status,
-  ].filter(Boolean).join(" ").toLowerCase();
 }
 
 function TabLoading() {
@@ -186,7 +176,7 @@ function SubTabPills({ tabs, active, onChange }) {
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(tab.key)}
-            className={`flex h-[50px] min-w-[160px] items-center justify-center rounded-full border border-r-muted px-7 text-[24px] italic leading-none transition [font-family:var(--font-family-display)] ${
+            className={`flex h-[50px] min-w-[160px] items-center justify-center rounded-full border border-r-muted px-7 text-[24px] italic leading-none transition [font-family:var(--font-family-display)] sm:min-w-[207px] ${
               isActive ? "bg-[#9E9384] text-r-modal" : "text-r-muted hover:text-r-text"
             }`}
           >
@@ -564,6 +554,8 @@ export default function ContributionsPanel({
   const [searchQuery, setSearchQuery] = useState("");
   const [currentIndex, setCurrentIndex] = useState(0);
   const [submissionDetail, setSubmissionDetail] = useState(null);
+  const [detailContributorId, setDetailContributorId] = useState(null);
+  const detailRequest = useRef(0);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState(null);
   const [actionPending, setActionPending] = useState(false);
@@ -604,11 +596,9 @@ export default function ContributionsPanel({
   }, [loadContributors]);
 
   const awaitingContributors = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-
     return contributors
       .filter(isAwaitingReview)
-      .filter((contributor) => !query || buildSearchText(contributor).includes(query))
+      .filter((contributor) => matchesContributorName(contributor, searchQuery))
       .sort((a, b) => new Date(b.submitted_at || 0) - new Date(a.submitted_at || 0));
   }, [contributors, searchQuery]);
 
@@ -618,8 +608,12 @@ export default function ContributionsPanel({
   const currentContributorId = current?.id || null;
 
   const loadSubmissionDetail = useCallback(async () => {
+    const request = ++detailRequest.current;
+    setDetailContributorId(currentContributorId);
+    setSubmissionDetail(null);
     if (!memorialId || !currentContributorId) {
-      setSubmissionDetail(null);
+      setDetailLoading(false);
+      setDetailError(null);
       return;
     }
 
@@ -628,17 +622,21 @@ export default function ContributionsPanel({
 
     try {
       const detail = await getMemorialContributorSubmission(memorialId, currentContributorId);
+      if (request !== detailRequest.current) return;
       setSubmissionDetail(detail);
     } catch (submissionError) {
+      if (request !== detailRequest.current) return;
       setSubmissionDetail(null);
       setDetailError(submissionError instanceof Error ? submissionError.message : "Failed to load submission details");
     } finally {
-      setDetailLoading(false);
+      if (request === detailRequest.current) setDetailLoading(false);
     }
   }, [currentContributorId, memorialId]);
 
   useEffect(() => {
-    queueMicrotask(loadSubmissionDetail);
+    let cancelled = false;
+    queueMicrotask(() => { if (!cancelled) loadSubmissionDetail(); });
+    return () => { cancelled = true; detailRequest.current += 1; };
   }, [loadSubmissionDetail]);
 
   const retry = useCallback(() => {
@@ -649,13 +647,13 @@ export default function ContributionsPanel({
     loadContributors();
   }, [loadContributors, onRetry, usesExternalContributors]);
 
-  const handlePrev = () => setCurrentIndex((prev) => {
+  const handlePrev = () => setCurrentIndex(() => {
     if (!awaitingContributors.length) return 0;
-    return prev === 0 ? awaitingContributors.length - 1 : prev - 1;
+    return activeIndex === 0 ? awaitingContributors.length - 1 : activeIndex - 1;
   });
-  const handleNext = () => setCurrentIndex((prev) => {
+  const handleNext = () => setCurrentIndex(() => {
     if (!awaitingContributors.length) return 0;
-    return prev === awaitingContributors.length - 1 ? 0 : prev + 1;
+    return activeIndex === awaitingContributors.length - 1 ? 0 : activeIndex + 1;
   });
 
   const handleDeletePhoto = useCallback(async (assetId) => {
@@ -800,34 +798,16 @@ export default function ContributionsPanel({
   }, [actionPending, currentContributorId, memorialId, setContributors]);
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-[30px]">
+    <div className="flex w-full min-w-0 flex-col gap-[30px]">
       {/* Figma "contributor nav": search bar + 1/3 pager */}
-      <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
-        <div className="flex h-[63px] w-full max-w-[432px] items-center rounded-[30px] border border-r-muted px-[30px]">
-          <Search size={26} strokeWidth={1.8} className="text-r-text" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(event) => {
-              setSearchQuery(event.target.value);
-              setCurrentIndex(0);
-            }}
-            placeholder="Search for contributor"
-            className="ml-5 w-full bg-transparent text-[20px] leading-none text-r-secondary placeholder:text-r-secondary outline-none"
-          />
-        </div>
-        {awaitingContributors.length > 0 && (
-          <div className="flex w-[206px] items-center justify-between text-[24px] leading-none text-r-text [font-family:var(--font-family-display)]">
-            <button onClick={handlePrev} className="transition hover:opacity-70" aria-label="Previous submission">
-              <ChevronLeft size={46} strokeWidth={1.8} />
-            </button>
-            <span>{activeIndex + 1}/{awaitingContributors.length}</span>
-            <button onClick={handleNext} className="transition hover:opacity-70" aria-label="Next submission">
-              <ChevronRight size={46} strokeWidth={1.8} />
-            </button>
-          </div>
-        )}
-      </div>
+      <ContributorNavigation
+        query={searchQuery}
+        onQueryChange={(value) => { setSearchQuery(value); setCurrentIndex(0); }}
+        index={activeIndex}
+        count={awaitingContributors.length}
+        onPrevious={handlePrev}
+        onNext={handleNext}
+      />
 
       {isLoading && <TabLoading />}
       {!isLoading && loadError && (
@@ -841,9 +821,9 @@ export default function ContributionsPanel({
         <ApprovalDetail
           key={currentContributorId || "none"}
           contributor={current}
-          detail={submissionDetail}
-          loading={detailLoading}
-          error={detailError}
+          detail={detailContributorId === currentContributorId ? submissionDetail : null}
+          loading={detailLoading || detailContributorId !== currentContributorId}
+          error={detailContributorId === currentContributorId ? detailError : null}
           actionPending={actionPending}
           searching={Boolean(searchQuery.trim())}
           onApprove={handleApprove}

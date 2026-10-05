@@ -16,7 +16,7 @@ function fixture({ status = 'in_progress', submittedAt = null } = {}) {
       { id: 'share', token: 'share-token', link_type: 'share', memorial_id: 'memorial', is_active: true, expires_at: null },
     ],
     contributors: [
-      { id: 'owner', session_token: 'owner-session', memorial_id: 'memorial', status, submitted_at: submittedAt, is_anonymous: false, relationship_type: 'Friend', relationship_label: null },
+      { id: 'owner', name: 'Jane Doe', session_token: 'owner-session', memorial_id: 'memorial', status, submitted_at: submittedAt, is_anonymous: false, relationship_type: 'Friend', relationship_label: null },
     ],
     questionnaire_responses: [
       { id: 'answer', contributor_id: 'owner', memorial_id: 'memorial', order_index: 1, response_text: 'Original answer', approved_at: '2026-09-01T00:00:00Z' },
@@ -116,4 +116,37 @@ test('an approved contributor cannot be moved back to submitted', async () => {
   const f = fixture({ status: 'approved' })
   assert.equal((await f.call('post', '/:token/submit')).statusCode, 403)
   assert.equal(f.db.contributors[0].status, 'approved')
+})
+
+test('privacy choice persists separately from the real name and resolves again after relationship selection', async () => {
+  const f = fixture()
+  const anonymous = await f.call('post', '/:token/privacy', { body: { is_anonymous: true } })
+  assert.equal(anonymous.body.contributor.display_name, 'Friend')
+  assert.equal(f.db.contributors[0].name, 'Jane Doe')
+  const relationship = await f.call('post', '/:token/relationship', { body: { relationship_type: 'Family', relationship_label: 'Cousin' } })
+  assert.equal(relationship.body.contributor.display_name, 'Cousin')
+  const restored = await f.call('get', '/:token/privacy')
+  assert.equal(restored.body.contributor.is_anonymous, true)
+  assert.equal(restored.body.contributor.name, 'Jane Doe')
+  assert.equal(restored.body.contributor.display_name, 'Cousin')
+  assert.equal(restored.body.contributor.session_token, undefined)
+  const named = await f.call('post', '/:token/privacy', { body: { is_anonymous: false } })
+  assert.equal(named.body.contributor.display_name, 'Jane Doe')
+})
+
+test('restoring privacy is session-scoped and still works after submission', async () => {
+  const f = fixture({ status: 'submitted', submittedAt: '2026-10-03T12:00:00Z' })
+  assert.equal((await f.call('get', '/:token/privacy')).statusCode, 200)
+  assert.equal((await f.call('get', '/:token/privacy', { contributorToken: 'owner' })).statusCode, 404)
+  assert.equal((await f.call('get', '/:token/privacy', { contributorToken: null })).statusCode, 400)
+  assert.equal((await f.call('get', '/:token/privacy', { token: 'share-token' })).statusCode, 410)
+})
+
+test('privacy requires an actual boolean without changing the draft', async () => {
+  for (const value of ['true', 1, null, undefined]) {
+    const f = fixture()
+    const before = JSON.stringify(f.db)
+    assert.equal((await f.call('post', '/:token/privacy', { body: { is_anonymous: value } })).statusCode, 400)
+    assert.equal(JSON.stringify(f.db), before)
+  }
 })
