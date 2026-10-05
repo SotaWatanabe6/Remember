@@ -4,8 +4,8 @@ const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-// NS-7: the Approve Contributions tab and its content sub-tabs only exist
-// while something is pending review. Run the helper module with Node alone.
+// Manage tabs stay visible; content sub-tabs depend on pending review.
+// Run the helper module with Node alone.
 function loadHelpers() {
   const source = readFileSync(path.resolve(__dirname, '../src/lib/organizer/contributionReview.js'), 'utf8')
     .replace(/^export /gm, '');
@@ -20,24 +20,24 @@ const approved = { id: 'b', status: 'approved' };
 const inProgress = { id: 'c', status: 'in_progress' };
 const keys = (tabs) => tabs.map((tab) => tab.key);
 
-test('approve contributions tab is hidden when nothing is pending review', () => {
-  assert.deepEqual(helpers.getManageTabs([approved, inProgress]), ['Archive', 'Outputs']);
-  assert.deepEqual(helpers.getManageTabs([]), ['Archive', 'Outputs']);
-  assert.deepEqual(helpers.getManageTabs(undefined), ['Archive', 'Outputs']);
+test('archive and approve contributions stay visible when nothing is pending review', () => {
+  assert.deepEqual(helpers.getManageTabs([approved, inProgress]), ['Archive', 'Approve Contributions']);
+  assert.deepEqual(helpers.getManageTabs([]), ['Archive', 'Approve Contributions']);
+  assert.deepEqual(helpers.getManageTabs(undefined), ['Archive', 'Approve Contributions']);
   assert.equal(helpers.hasPendingContributions(undefined), false);
 });
 
 test('approve contributions tab is shown while any contributor is submitted', () => {
-  assert.deepEqual(helpers.getManageTabs([approved, submitted]), ['Archive', 'Approve Contributions', 'Outputs']);
-  assert.deepEqual(helpers.getManageTabs([{ status: 'SUBMITTED' }]), ['Archive', 'Approve Contributions', 'Outputs']);
+  assert.deepEqual(helpers.getManageTabs([approved, submitted]), ['Archive', 'Approve Contributions']);
+  assert.deepEqual(helpers.getManageTabs([{ status: 'SUBMITTED' }]), ['Archive', 'Approve Contributions']);
 });
 
-test('approving the last pending submission falls back to the archive tab', () => {
+test('approving the last pending submission keeps the approval tab selected', () => {
   const before = helpers.getManageTabs([submitted]);
   assert.equal(helpers.resolveManageTab('Approve Contributions', before), 'Approve Contributions');
   const after = helpers.getManageTabs([{ ...submitted, status: 'approved' }]);
-  assert.equal(helpers.resolveManageTab('Approve Contributions', after), 'Archive');
-  assert.equal(helpers.resolveManageTab('Outputs', after), 'Outputs');
+  assert.equal(helpers.resolveManageTab('Approve Contributions', after), 'Approve Contributions');
+  assert.equal(helpers.resolveManageTab('Outputs', after), 'Archive');
 });
 
 test('only content types with pending items get a sub-tab', () => {

@@ -21,8 +21,16 @@ async function ask(client, instruction, input) {
 async function extractMemoryNodes({ responses = [], contributors = [], subjectName, client }) {
   if (!client) return []
   const people = new Map(contributors.map((person) => [person.id, person]))
-  const sources = responses.filter((response) => !response.is_flagged &&
-    people.has(response.contributor_id) && typeof response.response_text === 'string' && response.response_text.trim())
+  const seenKeys = new Set()
+  const sources = responses.filter((response) => {
+    if (response.is_flagged || !people.has(response.contributor_id)) return false
+    if (people.get(response.contributor_id)?.is_flagged) return false
+    if (typeof response.response_text !== 'string' || !response.response_text.trim()) return false
+    const key = `${response.contributor_id}::${response.question_id || ''}::${response.response_text.trim().toLowerCase()}`
+    if (seenKeys.has(key)) return false
+    seenKeys.add(key)
+    return true
+  })
   const nodes = []
   for (let offset = 0; offset < sources.length; offset += 20) {
     const batch = sources.slice(offset, offset + 20)
@@ -99,8 +107,10 @@ function matchScore(candidate) {
   return Math.min(...factors.map((factor) => factor.confidence))
 }
 
-async function matchMemoryPhotos({ nodes = [], analyzedPhotos = [], subjectName, client }) {
+async function matchMemoryPhotos({ nodes = [], analyzedPhotos = [], contributors = [], subjectName, client }) {
+  const flaggedContributorIds = new Set((contributors || []).filter((c) => c.is_flagged).map((c) => c.id))
   const photos = analyzedPhotos.filter((photo) => photo.id && photo.storage_path && !photo.is_flagged &&
+    !flaggedContributorIds.has(photo.contributor_id) &&
     photo.analysis && photoEvidence(photo).subject_in_photo !== false && photo.analysis.people_count !== 0)
   const results = []
   for (const node of nodes) {

@@ -3,6 +3,7 @@
 // frontend/src/components/contributor/PrivacySelector.jsx
 
 import Link from "next/link";
+import ContributorEntryNav from "@/components/contributor/ContributorEntryNav.jsx";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -32,23 +33,6 @@ const privacyErrorCopy = {
     body: "Please return to the invitation page and enter your name before choosing your privacy setting.",
   },
 };
-
-function ContributorNav({ backHref }) {
-  return (
-    <nav className="w-full flex items-center justify-between px-6 sm:px-[50px] py-6">
-      <div className="flex items-center gap-2">
-        <img src="/Logo.svg" alt="" width={36} height={36} aria-hidden="true" />
-        <span className="text-r-text text-2xl leading-8 font-display">Remember</span>
-      </div>
-      <Link href={backHref} className="flex items-center gap-2 text-r-text transition-opacity hover:opacity-70">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-          <path d="M7.82484 13L12.7248 17.9C12.9248 18.1 13.0208 18.3334 13.0128 18.6C13.0048 18.8667 12.9005 19.1 12.6998 19.3C12.4998 19.4834 12.2665 19.5794 11.9998 19.588C11.7332 19.5967 11.4998 19.5007 11.2998 19.3L4.69984 12.7C4.59984 12.6 4.52884 12.4917 4.48684 12.375C4.44484 12.2584 4.42451 12.1334 4.42584 12C4.42718 11.8667 4.44818 11.7417 4.48884 11.625C4.52951 11.5084 4.60018 11.4 4.70084 11.3L11.3008 4.70005C11.4842 4.51672 11.7135 4.42505 11.9888 4.42505C12.2642 4.42505 12.5015 4.51672 12.7008 4.70005C12.9008 4.90005 13.0008 5.13772 13.0008 5.41305C13.0008 5.68838 12.9008 5.92572 12.7008 6.12505L7.82484 11H18.9998C19.2832 11 19.5208 11.096 19.7128 11.288C19.9048 11.48 20.0005 11.7174 19.9998 12C19.9992 12.2827 19.9032 12.5204 19.7118 12.713C19.5205 12.9057 19.2832 13.0014 18.9998 13H7.82484Z" fill="currentColor"/>
-        </svg>
-        <span className="text-base font-normal">Back</span>
-      </Link>
-    </nav>
-  );
-}
 
 function LoadingState() {
   return (
@@ -87,22 +71,27 @@ function PrivacyErrorState({ status, inviteToken }) {
   );
 }
 
-function PrivacyOptionCard({ label, isSelected, isBusy, isDisabled, onSelect }) {
+function PrivacyOptionCard({ label, isSelected, isBusy, isDisabled, value, onSelect }) {
   return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={isSelected}
-      disabled={isDisabled}
-      onClick={onSelect}
-      className={`flex min-h-[351px] w-full max-w-[433px] items-center justify-center rounded-[20px] border border-[#97877B] px-6 text-center transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-r-border-focus disabled:cursor-not-allowed disabled:opacity-55 ${
+    <label className="relative w-full max-w-[433px] cursor-pointer">
+      <input
+        type="radio"
+        name="contribution-privacy"
+        value={value}
+        checked={isSelected}
+        disabled={isDisabled}
+        onChange={onSelect}
+        onClick={() => { if (isSelected) onSelect(); }}
+        className="peer sr-only"
+      />
+      <span className={`flex min-h-[180px] sm:min-h-[382px] w-full items-center justify-center rounded-[20px] border border-r-muted px-6 text-center transition duration-200 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-4 peer-focus-visible:outline-r-border-focus peer-disabled:cursor-not-allowed peer-disabled:opacity-55 ${
         isSelected ? "bg-r-card" : "bg-transparent hover:bg-r-card/45"
-      }`}
-    >
-      <span className="[font-family:var(--font-family-display)] text-2xl font-medium leading-[31px] text-r-muted whitespace-pre-line">
-        {isBusy ? "Saving..." : label}
+      }`}>
+        <span className="font-display text-2xl font-medium leading-[31px] text-r-muted">
+          {isBusy ? "Saving..." : label}
+        </span>
       </span>
-    </button>
+    </label>
   );
 }
 
@@ -144,6 +133,7 @@ export default function PrivacySelector({ inviteToken }) {
   async function handleSelect(isAnonymous) {
     if (isSaving) return;
 
+    const previousSelection = selection;
     setSelection(isAnonymous);
     setSubmitError("");
     setIsSaving(true);
@@ -152,6 +142,7 @@ export default function PrivacySelector({ inviteToken }) {
       await saveContributorPrivacy(inviteToken, isAnonymous);
       router.push(`/contribute/${inviteToken}/relationship`);
     } catch (err) {
+      setSelection(previousSelection);
       setSubmitError(
         err instanceof Error ? err.message : "We could not save your choice yet. Please try again.",
       );
@@ -168,14 +159,14 @@ export default function PrivacySelector({ inviteToken }) {
   }
 
   return (
-    <main className="min-h-screen bg-r-bg text-r-text flex flex-col">
-      <ContributorNav backHref={`/contribute/${inviteToken}/public-contributor`} />
+    <main className="min-h-screen bg-r-bg px-6 py-8 text-r-text sm:px-[50px] sm:py-[50px]">
+      <ContributorEntryNav backHref={`/contribute/${inviteToken}/public-contributor`} />
 
-      <div className="flex-1 px-6 sm:px-[50px] pt-6 pb-16">
-        <div className="mx-auto flex w-full max-w-[886px] flex-col items-center pt-[101px] max-sm:pt-16">
+      <div className="pb-16">
+        <div className="mx-auto flex w-full max-w-[886px] flex-col items-center pt-[100px] max-sm:pt-16">
 
           <div className="flex flex-col items-center gap-5 text-center">
-            <h1 className="[font-family:var(--font-family-display)] text-[40px] font-bold leading-[52px] text-r-text">
+            <h1 className="[font-family:var(--font-family-display)] text-[32px] font-bold leading-10 text-r-text sm:text-[40px] sm:leading-[45.725px]">
               Contribution privacy
             </h1>
             <p className="text-xl leading-[26px] text-r-secondary">
@@ -186,23 +177,30 @@ export default function PrivacySelector({ inviteToken }) {
           <div
             className="mt-[100px] grid w-full grid-cols-1 justify-items-center gap-5 sm:grid-cols-2 max-sm:mt-16"
             role="radiogroup"
+            aria-busy={isSaving}
             aria-label="Contribution privacy"
           >
             <PrivacyOptionCard
-              label={"Include my name in\ncontributions"}
+              label="Display my name in the memorial."
+              value="named"
               isSelected={selection === false}
               isBusy={isSaving && selection === false}
               isDisabled={isSaving}
               onSelect={() => handleSelect(false)}
             />
             <PrivacyOptionCard
-              label={"I want to remain\nanonymous"}
+              label="I want to remain anonymous in the memorial."
+              value="anonymous"
               isSelected={selection === true}
               isBusy={isSaving && selection === true}
               isDisabled={isSaving}
               onSelect={() => handleSelect(true)}
             />
           </div>
+
+          <p className="mt-6 max-w-[578px] text-center text-base leading-6 text-r-secondary">
+            If you stay anonymous, viewers will see your relationship instead of your name. The organizer will always see your real name.
+          </p>
 
           {submitError ? (
             <p className="mt-6 text-center text-sm leading-5 text-r-danger" role="alert">{submitError}</p>
