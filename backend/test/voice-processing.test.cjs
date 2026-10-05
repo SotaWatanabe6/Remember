@@ -108,6 +108,9 @@ async function generateFixture(recording, { fail = false, noKey = false, persist
   const services = {
     buildMemoryCorpus: () => '', extractThemes: async () => [], extractPhotoAlbumThemes: async () => [],
     analyzePhotoWithVision: async () => null, assignPhotosToThemes: async (photos) => photos,
+    moderatePhotoContent: async () => ({ is_flagged: false, is_blurry: false }),
+    moderateQuestionnaireResponse: async () => ({ is_flagged: false }),
+    moderateContribution: async () => ({ is_flagged: false }),
     composeStorySlideshow: async () => [], attachPhotosToMemoryNodes: (_photos, nodes) => nodes,
     attachContributorSummariesToMemoryNodes: async (nodes) => nodes,
     buildConstellationFromMemories: async () => ({ nodes: [], edges: [] }),

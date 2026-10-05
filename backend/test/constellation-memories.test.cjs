@@ -197,6 +197,9 @@ test('generation route passes the full photo pool and answers through to saved m
   const services = {
     buildMemoryCorpus: () => '', extractThemes: async () => [], extractPhotoAlbumThemes: async () => [],
     analyzePhotoWithVision: async () => photo('fixture').analysis,
+    moderatePhotoContent: async () => ({ is_flagged: false, is_blurry: false }),
+    moderateQuestionnaireResponse: async () => ({ is_flagged: false }),
+    moderateContribution: async () => ({ is_flagged: false }),
     assignPhotosToThemes: async (input) => input, composeStorySlideshow: async () => [],
     attachPhotosToMemoryNodes: (_photos, nodes) => nodes,
     attachContributorSummariesToMemoryNodes: async (nodes) => nodes,
