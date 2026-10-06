@@ -70,7 +70,7 @@ function routerFixture(routeFile, { failContributors = false } = {}) {
     contributors: [...people.map((person) => ({ ...person, memorial_id: 'memorial' })),
       { id: 'draft', name: 'Unsubmitted', status: 'in_progress', memorial_id: 'memorial' }],
     ai_outputs: [{ id: 'output', memorial_id: 'memorial', output_json: saved }],
-    contributor_stories: [], media_assets: [], voice_recordings: [],
+    contributor_stories: [], media_assets: [], voice_recordings: [], questionnaire_responses: [],
   }
   const supabase = createClient('https://privacy-fixture.invalid', 'fixture-key', {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
@@ -85,7 +85,7 @@ function routerFixture(routeFile, { failContributors = false } = {}) {
       }))
       const fields = url.searchParams.get('select')
       const selected = !fields || fields === '*' ? rows : rows.map((row) => Object.fromEntries(fields.split(',').map((key) => [key.trim(), row[key.trim()]])))
-      return Response.json(['contributors', 'contributor_stories', 'media_assets', 'voice_recordings'].includes(table) ? selected : selected[0])
+      return Response.json(['contributors', 'contributor_stories', 'media_assets', 'voice_recordings', 'questionnaire_responses'].includes(table) ? selected : selected[0])
     } },
   })
   const filename = path.resolve(__dirname, `../src/routes/${routeFile}.js`)

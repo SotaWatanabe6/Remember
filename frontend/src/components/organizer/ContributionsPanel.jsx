@@ -18,6 +18,7 @@ import {
   getMemorialContributorSubmission,
   getMemorialContributors,
   updateMemorialContributorStatus,
+  resolveContributorModeration,
 } from "@/services/contributorService";
 import {
   getPendingSubmissionSections,
@@ -33,6 +34,8 @@ import {
 } from "@/lib/organizer/contributionReview";
 import ContributorNavigation from "@/components/organizer/ContributorNavigation";
 import { matchesContributorName } from "@/lib/organizer/contributorSearch";
+
+import ModerationReview, { getModerationReviewItems } from "@/components/organizer/ModerationReview";
 
 function formatDate(value, fallback = "No date provided") {
   if (!value) return fallback;
@@ -413,6 +416,7 @@ function ApprovalDetail({
   onDeleteResponse,
   onDeleteStory,
   onApproveType,
+  onResolveModeration,
   onRetry,
 }) {
   const [requestedSubTab, setRequestedSubTab] = useState(null);
@@ -460,6 +464,7 @@ function ApprovalDetail({
   const currentContributor = detail?.contributor || contributor;
   const submittedDate = formatDate(currentContributor.submitted_at, "No date provided");
   const { photos, stories, voices, responses } = sections;
+  const hasModeration = getModerationReviewItems(detail).length > 0;
 
   return (
     <div className="flex flex-col gap-[30px]">
@@ -477,6 +482,8 @@ function ApprovalDetail({
         </span>
       </div>
 
+      <ModerationReview detail={detail} disabled={actionPending} onResolve={onResolveModeration} />
+
       <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
         {subTabs.length > 0 ? (
           <SubTabPills tabs={subTabs} active={activeSubTab} onChange={setRequestedSubTab} />
@@ -493,7 +500,7 @@ function ApprovalDetail({
             />
           )}
           <ActionButtons
-            disabled={actionPending}
+            disabled={actionPending || hasModeration}
             onApprove={activeSubTab ? undefined : onApprove}
             onDelete={onDelete}
           />
@@ -513,10 +520,10 @@ function ApprovalDetail({
         />
       )}
 
-      {subTabs.length === 0 && (
+      {subTabs.length === 0 && !hasModeration && (
         <TabEmpty
-          title="No saved memories in this submission"
-          message="This contributor submitted, but no photos, stories, or voice recordings were found."
+          title="No memories awaiting approval"
+          message="All saved content has been reviewed or left out of this memorial."
         />
       )}
       {activeSubTab === "photos" && <PhotoSection photos={photos} selected={selected} onToggle={toggleItem} onDeletePhoto={onDeletePhoto} />}
@@ -528,7 +535,7 @@ function ApprovalDetail({
       {activeSubTab && (
         <button
           type="button"
-          disabled={actionPending}
+          disabled={actionPending || hasModeration}
           onClick={() => setApprovingType(activeSubTab)}
           className="sticky bottom-8 self-end rounded-full bg-r-btn px-10 py-4 text-[18px] font-medium text-r-btn-text shadow-sm transition hover:opacity-85 disabled:opacity-45 sm:min-w-[434px]"
         >
@@ -655,6 +662,20 @@ export default function ContributionsPanel({
     if (!awaitingContributors.length) return 0;
     return activeIndex === awaitingContributors.length - 1 ? 0 : activeIndex + 1;
   });
+
+  const handleResolveModeration = useCallback(async (decision) => {
+    if (actionPending || !currentContributorId) return;
+    setActionPending(true);
+    setDetailError(null);
+    try {
+      await resolveContributorModeration(memorialId, currentContributorId, decision);
+      await loadSubmissionDetail();
+      const result = await getMemorialContributors(memorialId);
+      setContributors(result.contributors || []);
+    } catch (error) {
+      setDetailError(error.message || "Could not save the moderation decision.");
+    } finally { setActionPending(false); }
+  }, [actionPending, currentContributorId, memorialId, loadSubmissionDetail, setContributors]);
 
   const handleDeletePhoto = useCallback(async (assetId) => {
     if (!memorialId || !currentContributorId || actionPending) return
@@ -833,6 +854,7 @@ export default function ContributionsPanel({
           onDeleteResponse={handleDeleteResponse}
           onDeleteStory={handleDeleteStory}
           onApproveType={handleApproveType}
+          onResolveModeration={handleResolveModeration}
           onRetry={loadSubmissionDetail}
         />
       )}

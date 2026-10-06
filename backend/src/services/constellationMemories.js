@@ -164,7 +164,8 @@ Return {"candidate":null} or {"candidate":{"photo_id":"supplied id",
 }
 
 async function buildMemoryConstellation(input) {
-  const nodes = await matchMemoryPhotos({ ...input, nodes: await extractMemoryNodes(input) })
+  const extracted = await extractMemoryNodes(input)
+  const nodes = await matchMemoryPhotos({ ...input, nodes: await mergeSharedMemories(extracted, input.client) })
   return {
     version: 2,
     nodes,
@@ -172,4 +173,48 @@ async function buildMemoryConstellation(input) {
   }
 }
 
-module.exports = { buildMemoryConstellation, extractMemoryNodes, matchMemoryPhotos, photoEvidence, matchScore }
+async function mergeSharedMemories(nodes, client) {
+  const groups = nodes.map(node => [node])
+  if (client && nodes.length > 1) {
+    try {
+      const result = await ask(client, `Compare memories from different contributors. Wording need not match.
+The same memory is one real-world occasion or recurring habit. Assess who was involved, the specific action,
+and the setting/context. Require at least TWO clearly matching factors; a shared topic/keyword alone is insufficient.
+Any clear contradiction (especially different occasions) vetoes a merge. Unknown factors do not count as matches.
+Jonah learning gardening at twelve and a cousin learning with Jonah that summer should merge.
+Gardening as a vague trait and a specific lesson must not merge. Different gardening occasions stay separate.
+Return {"pairs":[{"a":0,"b":1,"who":"match|unknown|contradiction","action":"match|unknown|contradiction",
+"setting":"match|unknown|contradiction"}]}. Only return pairs supported by the source excerpts.`, {
+        memories: nodes.map((node, index) => ({ index, contributor_id: node.contributor_id, excerpt: node.summary })),
+      })
+      const matches = new Set()
+      for (const pair of result.pairs || []) {
+        const { a, b } = pair
+        if (!Number.isInteger(a) || !Number.isInteger(b) || !nodes[a] || !nodes[b] || a === b ||
+          nodes[a].contributor_id === nodes[b].contributor_id) continue
+        const factors = [pair.who, pair.action, pair.setting]
+        if (factors.includes('contradiction') || factors.filter(f => f === 'match').length < 2) continue
+        matches.add([Math.min(a, b), Math.max(a, b)].join(':'))
+      }
+      // Every member must match every other member: no transitive topical merges.
+      for (let i = groups.length - 1; i >= 0; i--) {
+        const target = groups.slice(0, i).find(group => group.every(a => groups[i].every(b => {
+          const ai = nodes.indexOf(a), bi = nodes.indexOf(b)
+          return matches.has([Math.min(ai, bi), Math.max(ai, bi)].join(':'))
+        })))
+        if (target) target.push(...groups.splice(i, 1)[0])
+      }
+    } catch (error) {
+      console.warn('[ConstellationMemories] merge unavailable:', error.message)
+    }
+  }
+  return groups.map(group => {
+    const attributions = group.map(node => ({ contributor_id: node.contributor_id, contributor_name: node.contributor_name,
+      relationship_type: node.relationship_type, response_id: node.source_response_id, quote: node.summary }))
+    const contributorCount = new Set(attributions.map(a => a.contributor_id)).size
+    return { ...group[0], attributions, quotes: group.flatMap(node => node.quotes), contributor_count: contributorCount,
+      prominence_score: Math.min(1, 0.55 + contributorCount * 0.15) }
+  })
+}
+
+module.exports = { buildMemoryConstellation, extractMemoryNodes, matchMemoryPhotos, photoEvidence, matchScore, mergeSharedMemories }

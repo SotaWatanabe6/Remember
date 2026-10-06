@@ -7,7 +7,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import Image from "next/image";
-import { buildConstellationNodes } from "@/lib/constellationNodes.mjs";
+import { buildConstellationNodes, isConstellationNodeVisible } from "@/lib/constellationNodes.mjs";
 
 import { useParams, usePathname } from "next/navigation";
 import { getContributorHighlights } from "@/lib/api"
@@ -361,18 +361,9 @@ export default function ConstellationGraph({
       const centerId = memorial?.id || 'memorial-center';
       displayNode = graphNodes.filter(
         (node) =>
-          node.id === centerId || !hiddenRelationshipType[node.relationship_type],
+          node.id === centerId || isConstellationNodeVisible(node, hiddenContributors, hiddenRelationshipType),
       );
-      displayLink = graphLinks.filter((link) => !hiddenRelationshipType[link.type]);
-      displayNode = displayNode.filter(
-        (item) => item.id === centerId || !hiddenContributors[item.contributor_id || item.id],
-      );
-      displayLink = displayLink.filter(
-        (link) =>
-          !hiddenContributors[
-            typeof link.target === 'object' ? (link.target.contributor_id || link.target.id) : (nodes.find((node) => node.id === link.target)?.contributor_id || link.target)
-          ],
-      );
+      displayLink = graphLinks;
     }
 
     // Both contributor filters and individual memory toggles must keep edges in sync.
@@ -681,11 +672,18 @@ export default function ConstellationGraph({
                         <h1 className="text-5xl font-serif text-[#4A443E] mb-6">
                           {selectedNode.name || selectedNode.label}
                         </h1>
-                        <p className="text-[#6B655F] leading-relaxed mb-12">
+                        {!selectedNode.attributions?.length && <p className="text-[#6B655F] leading-relaxed mb-12">
                           {selectedNode.summary || "No summary available for this memory."}
-                        </p>
+                        </p>}
                         {selectedNode.category === "memory" && (
-                          <p className="text-sm text-[#6B655F]">Shared by {selectedNode.contributor_name || "a contributor"}</p>
+                          <div className="space-y-6 text-[#6B655F]">
+                            {(selectedNode.attributions?.length ? selectedNode.attributions : [{ contributor_name: selectedNode.contributor_name }]).map((attribution, index) => (
+                              <div key={`${attribution.contributor_id || 'contributor'}-${index}`}>
+                                <p className="text-sm font-medium">Shared by {attribution.contributor_name || "a contributor"}{attribution.relationship_type ? ` · ${attribution.relationship_type.replaceAll('_', ' ')}` : ''}</p>
+                                {(attribution.contributor_summary || attribution.quote) && <blockquote className="mt-2 whitespace-pre-wrap">{attribution.contributor_summary || attribution.quote}</blockquote>}
+                              </div>
+                            ))}
+                          </div>
                         )}
                         {selectedNode.category !== "memory" && (
                         <button 

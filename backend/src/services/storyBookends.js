@@ -120,6 +120,7 @@ function buildCreditsSlide(contributors, quotes) {
 }
 
 async function addStoryBookends(slides, { memorial, subjectName, responses = [], contributors = [], voiceRecordings = [], client }) {
+  contributors = contributors.filter(c => !c.is_flagged && c.moderation_resolution !== 'excluded')
   const quotes = collectUpstreamQuotes(slides, voiceRecordings, responses, contributors)
   const candidates = buildQuoteCandidates(responses, contributors)
   const missingQuoteIds = contributors.filter((c) => !quotes.has(c.id)).map((c) => c.id)

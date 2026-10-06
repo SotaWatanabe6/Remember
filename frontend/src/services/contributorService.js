@@ -897,3 +897,11 @@ export async function deleteContributorStory(memorialId, contributorId, storyId,
     { method: 'DELETE' }
   )
 }
+
+export async function resolveContributorModeration(memorialId, contributorId, decision, token) {
+  return organizerContributorRequest(
+    `/memorials/${encodeURIComponent(memorialId)}/contributors/${encodeURIComponent(contributorId)}/moderation`,
+    token,
+    { method: 'PATCH', body: JSON.stringify(decision) }
+  );
+}

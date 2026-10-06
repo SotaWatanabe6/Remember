@@ -42,6 +42,10 @@ CREATE TABLE contributors (
   voice_done boolean DEFAULT false,
   submitted_at timestamptz,
   session_token text UNIQUE NOT NULL DEFAULT replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''),
+  is_flagged boolean DEFAULT false,
+  flagged_reason text,
+  moderation_resolution text CHECK (moderation_resolution IN ('approved', 'excluded')),
+  moderation_reviewed_at timestamptz,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -56,6 +60,10 @@ CREATE TABLE questionnaire_responses (
   order_index integer,
   reviewed_at timestamptz,
   approved_at timestamptz,
+  is_flagged boolean DEFAULT false,
+  flagged_reason text,
+  moderation_resolution text CHECK (moderation_resolution IN ('approved', 'excluded')),
+  moderation_reviewed_at timestamptz,
   created_at timestamptz DEFAULT now(),
   updated_at timestamptz DEFAULT now()
 );
@@ -93,8 +101,12 @@ CREATE TABLE media_assets (
   ai_scene text,
   ai_people_count integer,
   theme_ids jsonb,
+  is_blurry boolean DEFAULT false,
+  blur_reason text,
   is_flagged boolean DEFAULT false,
   flagged_reason text,
+  moderation_resolution text CHECK (moderation_resolution IN ('approved', 'excluded')),
+  moderation_reviewed_at timestamptz,
   reviewed_at timestamptz,
   approved_at timestamptz,
   created_at timestamptz DEFAULT now(),
@@ -120,6 +132,8 @@ CREATE TABLE voice_recordings (
   ai_tags jsonb,
   is_flagged boolean DEFAULT false,
   flagged_reason text,
+  moderation_resolution text CHECK (moderation_resolution IN ('approved', 'excluded')),
+  moderation_reviewed_at timestamptz,
   reviewed_at timestamptz,
   approved_at timestamptz,
   created_at timestamptz DEFAULT now(),

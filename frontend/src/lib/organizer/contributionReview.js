@@ -23,7 +23,8 @@ export function getSubTabNoun(key) {
 }
 
 export function isAwaitingReview(contributor) {
-  return String(contributor?.status || "").toLowerCase() === "submitted";
+  if (contributor?.moderation_resolution === "excluded" || contributor?.status === "rejected") return false;
+  return String(contributor?.status || "").toLowerCase() === "submitted" || contributor?.moderation_pending > 0 || Boolean(contributor?.is_flagged && !contributor?.moderation_resolution);
 }
 
 export function hasPendingContributions(contributors) {
@@ -53,7 +54,7 @@ export function isApproved(item) {
 // a response with no answer) were never pending content. Either way their
 // sub-tab is hidden once nothing of that type is left.
 export function getPendingSubmissionSections(detail) {
-  const pending = (items) => (Array.isArray(items) ? items : []).filter((item) => !isApproved(item));
+  const pending = (items) => (Array.isArray(items) ? items : []).filter((item) => !isApproved(item) && item.moderation_resolution !== "excluded");
 
   return {
     photos: pending(detail?.photos),

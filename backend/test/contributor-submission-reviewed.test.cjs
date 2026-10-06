@@ -57,6 +57,7 @@ function fixture() {
       const table = url.pathname.split('/').pop()
       assert.ok(db[table], `Unexpected request: ${method} ${url.pathname}`)
       const rows = db[table].filter((row) => [...url.searchParams].every(([key, value]) => {
+        if (key === 'or' && value === '(moderation_resolution.is.null,moderation_resolution.neq.excluded)') return row.moderation_resolution !== 'excluded'
         if (value.startsWith('eq.')) return String(row[key]) === value.slice(3)
         if (value === 'is.null') return row[key] === null || row[key] === undefined
         if (value === 'not.is.null') return row[key] !== null && row[key] !== undefined
@@ -115,8 +116,32 @@ function fixture() {
   const setStatus = (status, options) => call('patch', '/:id/contributors/:contributorId/status', { body: { status }, ...options })
   const remove = (routePath, params, options) => call('delete', routePath, { params, ...options })
   const stamped = (table) => db[table].map((row) => row.reviewed_at)
-  return { db, mutations, removedFiles, submission, setStatus, remove, stamped, approveType, approveSelected }
+  const resolveModeration = (body, options = {}) => call('patch', '/:id/contributors/:contributorId/moderation', { body, ...options })
+  const listContributors = () => call('get', '/:id/contributors')
+  const archive = () => call('get', '/:id/archive')
+  return { db, mutations, removedFiles, submission, setStatus, remove, stamped, approveType, approveSelected, resolveModeration, listContributors, archive }
 }
+
+test('moderation exclusions remain saved through bulk approval and stay out of the archive', async () => {
+  const f = fixture()
+  Object.assign(f.db.media_assets[0], { is_flagged: true })
+  await f.resolveModeration({ type: 'photos', item_id: 'p1', decision: 'excluded' })
+  const result = await f.approveSelected('photos', ['p2'])
+  assert.equal(result.statusCode, 200)
+  assert.deepEqual(result.body.deleted_ids, [])
+  assert.equal(result.body.awaiting_approval, 3, 'excluded photo does not count as pending')
+  assert.equal(f.db.media_assets[0].moderation_resolution, 'excluded')
+  assert.equal(f.removedFiles.length, 0)
+  assert.equal((await f.setStatus('approved')).statusCode, 200)
+  assert.equal(f.db.media_assets[0].approved_at, undefined, 'bulk approval cannot approve an excluded original')
+  assert.deepEqual((await f.archive()).body.photos.map(p => p.id), ['p2'])
+  await f.resolveModeration({ type: 'photos', item_id: 'p1', decision: 'approved' })
+  assert.equal(f.db.media_assets[0].moderation_resolution, 'excluded', 'stale requests cannot undo a resolved decision')
+  Object.assign(f.db.contributors[0], { is_flagged: true })
+  await f.resolveModeration({ type: 'contribution', item_id: 'jane', decision: 'excluded' })
+  assert.deepEqual((await f.archive()).body.contributors, [])
+  assert.equal(f.db.media_assets.length, 3)
+})
 
 test('submission payload carries reviewed_at per item and answer_text for responses', async () => {
   const f = fixture()
@@ -367,4 +392,78 @@ test('the submission payload says what is already approved', async () => {
   const { body } = await f.submission()
   assert.deepEqual(body.photos.map((photo) => [photo.id, Boolean(photo.approved_at)]), [['p2', true]])
   assert.deepEqual(body.stories.map((story) => story.approved_at), [undefined])
+})
+
+
+test('moderation exposes already-approved answers and organizer identity, then records approval override', async () => {
+  const f = fixture()
+  Object.assign(f.db.contributors[0], { status: 'approved', is_anonymous: true })
+  Object.assign(f.db.questionnaire_responses[0], { approved_at: 'earlier', is_flagged: true, flagged_reason: 'Wrong question' })
+  const list = await f.listContributors()
+  assert.equal(list.body.contributors.find(c => c.id === 'jane').moderation_pending, 1)
+  const detail = await f.submission()
+  assert.equal(detail.body.contributor.name, 'Jane Doe')
+  assert.equal(detail.body.responses[0].flagged_reason, 'Wrong question')
+  const approved = await f.resolveModeration({ type: 'responses', item_id: 'r1', decision: 'approved' })
+  assert.equal(approved.statusCode, 200)
+  assert.equal(approved.body.item.is_flagged, false)
+  assert.equal(approved.body.item.moderation_resolution, 'approved')
+  assert.ok(approved.body.item.moderation_reviewed_at)
+  assert.equal(f.db.questionnaire_responses[0].response_text, 'The lake.')
+  assert.equal((await f.listContributors()).body.contributors.find(c => c.id === 'jane').moderation_pending, 0)
+})
+
+test('organizer can edit/move a held answer and explicitly approve the replacement', async () => {
+  const f = fixture(); f.db.questionnaire_responses[0].is_flagged = true
+  const result = await f.resolveModeration({ type: 'responses', item_id: 'r1', decision: 'edited', response_text: 'We sailed at the lake every Sunday.', question_text: 'What did she enjoy doing?' })
+  assert.equal(result.statusCode, 200)
+  assert.equal(result.body.item.question_text, 'What did she enjoy doing?')
+  assert.equal(result.body.item.response_text, 'We sailed at the lake every Sunday.')
+  assert.equal(result.body.item.moderation_resolution, 'approved')
+  assert.equal(result.body.item.is_flagged, false)
+})
+
+test('leaving a photo out keeps the row/file and prevents destructive bulk approval', async () => {
+  const f = fixture(); f.db.media_assets[0].is_flagged = true
+  assert.equal((await f.approveSelected('photos', ['p2'])).statusCode, 409)
+  assert.equal((await f.setStatus('approved')).statusCode, 409)
+  assert.deepEqual(f.mutations, [])
+  const result = await f.resolveModeration({ type: 'photos', item_id: 'p1', decision: 'excluded' })
+  assert.equal(result.statusCode, 200)
+  assert.equal(f.db.media_assets[0].is_flagged, true)
+  assert.equal(f.db.media_assets[0].moderation_resolution, 'excluded')
+  assert.equal(f.db.media_assets.length, 3)
+  assert.deepEqual(f.removedFiles, [])
+})
+
+test('whole-contributor exclusion settles the queue without deleting their original items', async () => {
+  const f = fixture(); f.db.contributors[0].is_flagged = true
+  f.db.questionnaire_responses[0].is_flagged = true
+  const result = await f.resolveModeration({ type: 'contribution', item_id: 'jane', decision: 'excluded' })
+  assert.equal(result.statusCode, 200)
+  assert.equal((await f.listContributors()).body.contributors.find(c => c.id === 'jane').moderation_pending, 0)
+  assert.equal(f.db.questionnaire_responses[0].response_text, 'The lake.')
+})
+
+for (const [name, options, body, expected] of [
+  ['other organizer', { user: 'outsider' }, { type: 'photos', item_id: 'p1', decision: 'approved' }, 403],
+  ['other memorial item', {}, { type: 'photos', item_id: 'p3', decision: 'approved' }, 404],
+  ['invalid type', {}, { type: 'stories', item_id: 's1', decision: 'approved' }, 400],
+  ['invalid decision', {}, { type: 'photos', item_id: 'p1', decision: 'delete' }, 400],
+  ['empty edit', {}, { type: 'responses', item_id: 'r1', decision: 'edited', response_text: '', question_text: 'Question' }, 400],
+]) test(`moderation rejects ${name} without mutation`, async () => {
+  const f = fixture(); f.db.media_assets[0].is_flagged = true; f.db.questionnaire_responses[0].is_flagged = true
+  assert.equal((await f.resolveModeration(body, options)).statusCode, expected)
+  assert.deepEqual(f.mutations, [])
+})
+
+test('stale decisions and final/generating memorial edits are rejected', async () => {
+  const f = fixture(); f.db.media_assets[0].is_flagged = true
+  const decision = { type: 'photos', item_id: 'p1', decision: 'approved' }
+  assert.equal((await f.resolveModeration(decision)).statusCode, 200)
+  assert.equal((await f.resolveModeration(decision)).statusCode, 409)
+  for (const status of ['generating', 'complete']) {
+    f.db.memorials[0].status = status
+    assert.equal((await f.resolveModeration(decision)).statusCode, 409)
+  }
 })

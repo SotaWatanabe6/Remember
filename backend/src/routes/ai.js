@@ -6,15 +6,12 @@ const authMiddleware = require('../middleware/auth')
 const { resolveOutputMediaUrls } = require('../services/storageUrls')
 const {
   buildMemoryCorpus,
-  extractThemes,
   extractPhotoAlbumThemes,
   analyzePhotoWithVision,
   moderatePhotoContent,
   moderateQuestionnaireResponse,
   moderateContribution,
   assignPhotosToThemes,
-  attachPhotosToMemoryNodes,
-  attachContributorSummariesToMemoryNodes,
   buildConstellationFromMemories,
   composeStorySlideshow,
 } = require('../services/memorialGeneration')
@@ -22,6 +19,7 @@ const { processVoiceRecording, transcribeVoiceRecording } = require('../services
 const { withContributorDisplayNames } = require('../services/contributorPrivacy')
 
 const { loadGenerationPhotos } = require('../services/generationPhotos')
+const { needsModeration, isPendingModeration, isEligible, persistModeration } = require('../services/moderationState')
 const CAN_USE_OPENAI = Boolean(process.env.OPENAI_API_KEY)
 
 function serializeJob(job) {
@@ -36,10 +34,11 @@ function serializeJob(job) {
 
 async function updateJob(jobId, progress, current_step, status = 'processing') {
   console.log(`[Pipeline] ${progress}% — ${current_step}`)
-  await supabase
+  const { error } = await supabase
     .from('ai_jobs')
     .update({ progress, current_step, status })
     .eq('id', jobId)
+  if (error) throw error
 }
 
 async function saveOutput(memorialId, jobId, outputJson) {
@@ -55,10 +54,12 @@ async function saveOutput(memorialId, jobId, outputJson) {
 
 async function runPipelinesWithTimeout(memorialId, jobId) {
   const timeoutMs = Number(process.env.AI_PIPELINE_TIMEOUT_MS) || 8 * 60 * 1000
-  const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error(`Pipeline timed out after ${timeoutMs / 60000} minutes`)), timeoutMs),
-  )
-  return Promise.race([runPipelines(memorialId, jobId), timeoutPromise])
+  let timer
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Pipeline timed out after ${timeoutMs / 60000} minutes`)), timeoutMs)
+  })
+  try { return await Promise.race([runPipelines(memorialId, jobId), timeoutPromise]) }
+  finally { clearTimeout(timer) }
 }
 
 function startPipeline(memorialId, jobId) {
@@ -82,30 +83,33 @@ async function runPipelines(memorialId, jobId) {
   try {
     await updateJob(jobId, 10, 'Gathering contributions...')
 
-    const { data: contributorRows } = await supabase
+    const { data: contributorRows, error: contributorsError } = await supabase
       .from('contributors')
       .select('*')
       .eq('memorial_id', memorialId)
       .in('status', ['submitted', 'approved'])
+    if (contributorsError) throw contributorsError
     // Contributors who chose to stay anonymous on the privacy step are credited
     // by their relationship everywhere the generated memorial names them.
-    const contributors = withContributorDisplayNames(contributorRows)
+    let contributors = withContributorDisplayNames(contributorRows || [])
     const contributorIds = contributors.map((contributor) => contributor.id)
-    const { data: responses } = contributorIds.length
+    let { data: responses, error: responsesError } = contributorIds.length
       ? await supabase
         .from('questionnaire_responses')
         .select('*')
         .eq('memorial_id', memorialId)
         .in('contributor_id', contributorIds)
       : { data: [] }
+    if (responsesError) throw responsesError
     const photos = await loadGenerationPhotos(supabase, memorialId, contributorIds)
-    const { data: recordings } = contributorIds.length
+    const { data: recordings, error: recordingsError } = contributorIds.length
       ? await supabase
         .from('voice_recordings')
         .select('*')
         .eq('memorial_id', memorialId)
         .in('contributor_id', contributorIds)
       : { data: [] }
+    if (recordingsError) throw recordingsError
     const { data: memorial, error: memorialError } = await supabase
       .from('memorials')
       .select('*')
@@ -115,33 +119,58 @@ async function runPipelines(memorialId, jobId) {
     if (memorialError || !memorial) throw new Error('Memorial not found')
 
     await updateJob(jobId, 12, 'Reviewing questionnaire answers...')
+    const reviewableIds = new Set(contributors.filter(c => c.moderation_resolution !== 'excluded').map(c => c.id))
     for (const response of responses || []) {
+      if (!reviewableIds.has(response.contributor_id)) continue
+      if (!needsModeration(response)) continue
       const responseModeration = await moderateQuestionnaireResponse(response, memorial.subject_name)
-      if (responseModeration.is_flagged) {
-        await supabase
-          .from('questionnaire_responses')
-          .update({
-            is_flagged: true,
-            flagged_reason: responseModeration.flagged_reason,
-          })
-          .eq('id', response.id)
-      }
+      if (responseModeration.is_flagged) await persistModeration(supabase, 'questionnaire_responses', response, responseModeration)
     }
 
     await updateJob(jobId, 16, 'Reviewing full contributions...')
     for (const contributor of contributors || []) {
+      if (!needsModeration(contributor)) continue
       const contributionModeration = await moderateContribution(
         responses || [], contributor, contributors || [], memorial.subject_name,
       )
       if (contributionModeration.is_flagged) {
-        contributor.is_flagged = true
-        contributor.flagged_reason = contributionModeration.flagged_reason
-        await supabase
-          .from('contributors')
-          .update({ is_flagged: true, flagged_reason: contributionModeration.flagged_reason })
-          .eq('id', contributor.id)
+        await persistModeration(supabase, 'contributors', contributor, contributionModeration)
       }
     }
+
+    // Check the full photo pool before analysis/matching can remove any rows.
+    await updateJob(jobId, 20, 'Reviewing photos...')
+    for (const photo of photos) {
+      if (!reviewableIds.has(photo.contributor_id)) continue
+      if (!needsModeration(photo)) continue
+      let signedUrl = null
+      if (CAN_USE_OPENAI && photo.storage_path) {
+        const { data, error } = await supabase.storage.from(photo.storage_bucket || 'memorial-assets')
+          .createSignedUrl(photo.storage_path, 300)
+        if (error || !data?.signedUrl) throw new Error('Could not read photo for moderation')
+        signedUrl = data.signedUrl
+      }
+      const moderation = await moderatePhotoContent(signedUrl, memorial.subject_name, { biography: memorial.biography })
+      await persistModeration(supabase, 'media_assets', photo, moderation, {
+        is_blurry: Boolean(moderation.is_blurry),
+        blur_reason: moderation.blur_reason || null,
+        ai_labels: { ...(photo.ai_labels || {}), moderation },
+      })
+    }
+    const pending = contributors.some(isPendingModeration) || [...(responses || []), ...photos, ...(recordings || [])]
+      .some(row => reviewableIds.has(row.contributor_id) && isPendingModeration(row))
+    if (pending) {
+      await updateJob(jobId, 20, 'Review flagged contributions, then resume generation.', 'awaiting_review')
+      const { error } = await supabase.from('memorials').update({ status: 'collecting' }).eq('id', memorialId)
+      if (error) throw error
+      return
+    }
+    contributors = contributors.filter(isEligible)
+    const eligibleIds = new Set(contributors.map(c => c.id))
+    responses = (responses || []).filter(r => isEligible(r) && eligibleIds.has(r.contributor_id))
+    const eligiblePhotos = photos.filter(p => isEligible(p) && eligibleIds.has(p.contributor_id))
+    const eligibleRecordings = (recordings || []).filter(r => isEligible(r) && eligibleIds.has(r.contributor_id))
+    if (!contributors.length) throw new Error('No contributions remain eligible after moderation review')
 
     const memoryCorpus = buildMemoryCorpus(
       responses || [],
@@ -151,17 +180,11 @@ async function runPipelines(memorialId, jobId) {
     )
     console.log('[Pipeline] data — responses:', responses?.length || 0, 'photos:', photos?.length || 0)
 
-    await updateJob(jobId, 20, 'Finding themes from questionnaire memories...')
-    let discoveryThemes = await extractThemes(
-      responses || [],
-      contributors || [],
-      memorial.subject_name,
-      memorial,
-    )
+    let discoveryThemes = []
 
     await updateJob(jobId, 40, 'Understanding photos...')
     let analyzedPhotos = []
-    for (const photo of photos || []) {
+    for (const photo of eligiblePhotos) {
       try {
         let signedUrl = null
         if (CAN_USE_OPENAI && photo.storage_path) {
@@ -171,18 +194,16 @@ async function runPipelines(memorialId, jobId) {
           signedUrl = urlData?.signedUrl || null
         }
 
-        const moderation = await moderatePhotoContent(signedUrl, memorial.subject_name)
-
         const analysis = await analyzePhotoWithVision(signedUrl, memorial.subject_name, {
           dateOfBirth: memorial.date_of_birth,
           dateOfPassing: memorial.date_of_passing,
           deceasedPresent: null,
         })
 
-        analyzedPhotos.push({ ...photo, analysis, matched_theme_ids: [], moderation })
+        analyzedPhotos.push({ ...photo, analysis, matched_theme_ids: [] })
       } catch (err) {
         console.error('[Vision] failed for photo:', photo.id, err.message)
-        analyzedPhotos.push({ ...photo, analysis: null, matched_theme_ids: [], moderation: null })
+        analyzedPhotos.push({ ...photo, analysis: null, matched_theme_ids: [] })
       }
     }
 
@@ -190,19 +211,8 @@ async function runPipelines(memorialId, jobId) {
     const albumThemes = await extractPhotoAlbumThemes(analyzedPhotos, memorial.subject_name, contributors || [])
     analyzedPhotos = await assignPhotosToThemes(analyzedPhotos, albumThemes, memoryCorpus, memorial.subject_name, contributors || [])
 
-    // US-20: link photos to the questionnaire-derived memory nodes, now that photo
-    // vision analysis (analyzedPhotos) is available.
-    discoveryThemes = attachPhotosToMemoryNodes(analyzedPhotos, discoveryThemes, contributors || [])
-
-    // US-36: attach a per-contributor first-person summary to each memory node attribution.
-    discoveryThemes = await attachContributorSummariesToMemoryNodes(
-      discoveryThemes,
-      responses || [],
-      memorial.subject_name,
-    )
-
     for (const photo of analyzedPhotos) {
-      await supabase
+      const { error } = await supabase
         .from('media_assets')
         .update({
           ai_analysis_status: 'complete',
@@ -212,18 +222,16 @@ async function runPipelines(memorialId, jobId) {
           ai_labels: {
             ...(typeof photo.ai_labels === 'object' && photo.ai_labels ? photo.ai_labels : {}),
             vision: photo.analysis,
-            moderation: photo.moderation || null,
           },
           theme_ids: photo.matched_theme_ids,
-          is_flagged: photo.moderation?.is_flagged || photo.moderation?.is_blurry || false,
-          flagged_reason: photo.moderation?.flagged_reason || photo.moderation?.blur_reason || null,
         })
         .eq('id', photo.id)
+      if (error) throw error
     }
 
     await updateJob(jobId, 65, 'Processing voice recordings...')
     const enrichedRecordings = []
-    for (const recording of recordings || []) {
+    for (const recording of eligibleRecordings) {
       let row = recording
       const needsTranscript = !recording.transcript_text
       const needsTimings = !Array.isArray(recording.transcript_segments) || !recording.transcript_segments.length
@@ -317,6 +325,8 @@ async function runPipelines(memorialId, jobId) {
       contributors: contributors || [],
       responses: responses || [],
     })
+
+    discoveryThemes = constellation.nodes || []
 
     const albums = albumThemes.map((theme) => {
       const themePhotos = analyzedPhotos.filter((p) =>

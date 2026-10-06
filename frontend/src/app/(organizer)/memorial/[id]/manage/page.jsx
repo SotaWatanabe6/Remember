@@ -14,7 +14,7 @@ import { getAuthToken } from "@/lib/api.js";
 import MemorialCoverImage from "@/components/memorial/MemorialCoverImage.jsx";
 import ContributionsPanel from "@/components/organizer/ContributionsPanel.jsx";
 import ArchiveQaPanel from "@/components/organizer/ArchiveQaPanel.jsx";
-import { APPROVE_TAB, ARCHIVE_TAB, getManageTabs, resolveManageTab } from "@/lib/organizer/contributionReview";
+import { APPROVE_TAB, ARCHIVE_TAB, getManageTabs, isAwaitingReview, resolveManageTab } from "@/lib/organizer/contributionReview";
 
 // ─── Generation constants ─────────────────────────────────────────────────────
 
@@ -716,6 +716,13 @@ export default function MemorialManagePage() {
         for (let attempt = 0; attempt < GENERATION_MAX_POLL_ATTEMPTS; attempt += 1) {
           const status = String(latestJob?.status || "").toLowerCase();
           if (GENERATION_SUCCESS_STATUSES.has(status)) break;
+          if (status === "awaiting_review") {
+            setGenerationError("Generation is paused. Resolve flagged content in Approve Contributions, then create the memorial again to resume.");
+            setActiveTab("Approve Contributions");
+            await loadContributors();
+            await refreshMemorial();
+            return;
+          }
           if (GENERATION_FAILURE_STATUSES.has(status)) throw new Error(latestJob?.error_message || "Generation failed. Please try again.");
           await sleep(GENERATION_POLL_INTERVAL_MS);
           const jobStatus = await getGenerationJobStatus(initialJob.id, token);
@@ -734,7 +741,7 @@ export default function MemorialManagePage() {
     } catch (err) {
       setGenerationError(err instanceof Error ? err.message : "Generation failed. Please try again.");
     } finally { if (!keepGenerating) setGenerating(false); }
-  }, [generating, loadOutput, memorialId, refreshMemorial]);
+  }, [generating, loadOutput, memorialId, refreshMemorial, loadContributors]);
 
   const handleGenerateClick = useCallback(() => {
     setShowGenerateConfirm(true)
@@ -775,10 +782,10 @@ export default function MemorialManagePage() {
   // organizer has cleared the Awaiting approval list and kept at least one
   // contributor.
   const awaitingApprovalCount = contributors.filter(
-    (contributor) => String(contributor?.status || "").toLowerCase() === "submitted",
+    (contributor) => isAwaitingReview(contributor),
   ).length;
   const approvedContributionCount = contributors.filter(
-    (contributor) => String(contributor?.status || "").toLowerCase() === "approved",
+    (contributor) => String(contributor?.status || "").toLowerCase() === "approved" && contributor?.moderation_resolution !== "excluded",
   ).length;
 
   // The header flips to View Memorial as soon as an output exists, without
