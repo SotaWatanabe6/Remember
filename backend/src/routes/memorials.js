@@ -1088,12 +1088,26 @@ router.get('/:id/output', authMiddleware, async (req, res) => {
   }
 })
 
-// POST /memorials/:id/share
+// POST /memorials/:id/share — viewing and sharing reuse the same active link.
 router.post('/:id/share', authMiddleware, async (req, res) => {
   try {
     const { data: memorial, error: memError } = await supabase
       .from('memorials').select('id').eq('id', req.params.id).eq('user_id', req.user.sub).single()
     if (memError || !memorial) return res.status(403).json({ error: 'Not authorized' })
+    const { data: existing, error: linkError } = await supabase
+      .from('invite_links')
+      .select('token')
+      .eq('memorial_id', req.params.id)
+      .eq('link_type', 'share')
+      .eq('is_active', true)
+      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (linkError) return res.status(500).json({ error: 'Could not load the memorial share link.' })
+    if (existing) {
+      return res.json({ share_link: { token: existing.token, url: `${process.env.NEXT_PUBLIC_APP_URL}/share/${existing.token}` } })
+    }
     const token = crypto.randomBytes(12).toString('hex')
     const { data, error } = await supabase
       .from('invite_links')

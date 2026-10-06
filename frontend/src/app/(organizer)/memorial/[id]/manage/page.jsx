@@ -14,6 +14,7 @@ import { getAuthToken } from "@/lib/api.js";
 import MemorialCoverImage from "@/components/memorial/MemorialCoverImage.jsx";
 import ContributionsPanel from "@/components/organizer/ContributionsPanel.jsx";
 import ArchiveQaPanel from "@/components/organizer/ArchiveQaPanel.jsx";
+import ViewMemorialButton from "@/components/organizer/ViewMemorialButton.jsx";
 import { APPROVE_TAB, ARCHIVE_TAB, getManageTabs, isAwaitingReview, resolveManageTab } from "@/lib/organizer/contributionReview";
 
 // ─── Generation constants ─────────────────────────────────────────────────────
@@ -153,12 +154,10 @@ function MemorialHeader({ memorial, generated, inviteToken, onShare, contributor
             Upload Memories
           </Link>
           {generated ? (
-          <Link
-            href={memorial?.id ? `/memorial/${memorial.id}/output` : '#'}
-            className="rounded-full bg-r-btn px-4 py-[18px] text-center text-[20px] leading-[26px] text-r-btn-text transition hover:opacity-85"
-          >
-            View Memorial
-          </Link>
+          <ViewMemorialButton
+            memorialId={memorial?.id}
+            className="w-full rounded-full bg-r-btn px-4 py-[18px] text-center text-[20px] leading-[26px] text-r-btn-text transition hover:opacity-85 disabled:cursor-wait disabled:opacity-60"
+          />
         ) : (
           <button
             type="button"

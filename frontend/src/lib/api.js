@@ -1968,11 +1968,8 @@ export async function getMemorialOutput(memorialId) {
 
 /**
  * GET /share/:shareToken
- * Viewer-only access — returns four tabs only, no memorial wrapper.
- * PHASE 4: Now calls real backend at http://localhost:3001
- * CONFIRMED by Ashwini: returns { story, constellation, voices, photos } only
- * Memorial header data (name, dates, photo) comes from GET /memorials/:id separately
- * Invalid token returns 404
+ * Public viewer output, memorial profile, and privacy-safe contributors.
+ * Invalid and expired links fail explicitly; never substitute another memorial.
  */
 export async function getShareToken(shareToken) {
   if (shareToken === 'invalid') throw new Error('This share link is invalid or has expired');
@@ -1986,16 +1983,11 @@ export async function getShareToken(shareToken) {
     });
 
     if (!response.ok) {
-      if (response.status === 404) throw new Error('This share link is invalid or has expired');
+      if (response.status === 404 || response.status === 410) throw new Error('This share link is invalid or has expired');
       throw new Error('Failed to load memorial');
     }
 
-    const data = await response.json();
-
-    // Backend returns just { story, constellation, voices, photos }
-    // Memorial header data fetched separately in the share page component
-    // using GET /memorials/:id — see share/page.jsx
-    return data;
+    return await response.json();
   } catch (error) {
     if (shareToken === 'invalid' || error.message === 'This share link is invalid or has expired') {
       throw error;
@@ -2004,8 +1996,7 @@ export async function getShareToken(shareToken) {
       throw new Error('Loading the memorial timed out. Please try again.');
     }
 
-    await delay(MOCK_DELAY);
-    return getMockMemorialOutput();
+    throw error;
   } finally {
     clearTimeout(timeoutId);
   }

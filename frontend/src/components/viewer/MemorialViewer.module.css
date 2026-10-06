@@ -1,0 +1,281 @@
+.shell {
+  --header-height: 90px;
+  min-height: 100svh;
+  position: relative;
+  background: var(--color-r-bg);
+  color: var(--color-r-text);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--header-height);
+  padding: 50px 50px 0;
+  position: relative;
+  z-index: 2;
+}
+
+.header a:focus-visible,
+.shell button:focus-visible {
+  outline: 2px solid var(--color-r-shape);
+  outline-offset: 6px;
+}
+
+.login {
+  font-size: 16px;
+}
+
+.landing {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 100px;
+  padding: 100px 24px 80px;
+}
+
+.profile {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 50px;
+  width: 100%;
+  max-width: 886px;
+}
+
+.portrait {
+  width: 314px;
+  height: 314px;
+  flex-shrink: 0;
+  font-size: 80px;
+}
+
+.personInfo {
+  width: 100%;
+  max-width: 433px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-wrap: anywhere;
+}
+
+.personInfo h1 {
+  font-family: var(--font-family-display);
+  font-size: 40px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+.years {
+  font-size: 16px;
+  line-height: 21px;
+  color: var(--color-r-secondary);
+}
+
+.biography {
+  font-size: 20px;
+  line-height: 26px;
+  color: var(--color-r-secondary);
+}
+
+.start {
+  width: 100%;
+  max-width: 434px;
+  min-height: 62px;
+  padding: 18px 24px;
+  border-radius: 999px;
+  background: var(--color-r-btn);
+  color: var(--color-r-btn-text);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.start:hover {
+  filter: brightness(0.97);
+}
+
+.navigation {
+  display: grid;
+  place-items: center;
+  min-height: max(650px, 100svh);
+  margin-top: calc(-1 * var(--header-height));
+  padding: 150px 24px;
+}
+
+.circleNavigation {
+  --portrait-size: 314px;
+  position: relative;
+  width: var(--portrait-size);
+  height: var(--portrait-size);
+}
+
+.circlePortrait {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.circleAsset {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 314px;
+  height: 314px;
+  max-width: none;
+}
+
+.navigationPortrait {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  font-size: 80px;
+}
+
+.sectionLink {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  padding: 0;
+  color: var(--color-r-secondary);
+  cursor: pointer;
+  background: transparent;
+  min-height: 50px;
+}
+
+.sectionLabel {
+  position: relative;
+  font-family: var(--font-family-display);
+  font-size: 36px;
+  line-height: 50px;
+  font-weight: 500;
+  font-style: italic;
+  white-space: nowrap;
+}
+
+.selectionLine {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  transform: scaleX(0.15625) scaleY(0.03125);
+  transform-origin: bottom left;
+}
+
+.sectionLink:hover .sectionLabel {
+  text-decoration: underline;
+  text-underline-offset: 8px;
+}
+
+.marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 50px;
+  height: 50px;
+  flex-shrink: 0;
+}
+
+.right {
+  top: 50%;
+  left: calc(100% - 25px);
+  transform: translateY(-50%);
+}
+
+.left {
+  top: 50%;
+  right: calc(100% - 25px);
+  transform: translateY(-50%);
+  flex-direction: row-reverse;
+}
+
+.top {
+  bottom: calc(100% - 25px);
+  left: 50%;
+  transform: translateX(-50%);
+  flex-direction: column-reverse;
+  gap: 10px;
+}
+
+.bottom {
+  top: calc(100% - 25px);
+  left: 50%;
+  transform: translateX(-50%);
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sectionMain {
+  padding: 48px 50px 64px;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 50px;
+  font-family: var(--font-family-display);
+  font-size: 24px;
+  color: var(--color-r-text);
+  cursor: pointer;
+}
+
+.sectionContent {
+  margin-top: 40px;
+  min-width: 0;
+}
+
+.status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  min-height: calc(100svh - 90px);
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.status h1 {
+  font-family: var(--font-family-display);
+  font-size: 32px;
+  line-height: 1.3;
+}
+
+.status p {
+  max-width: 433px;
+  color: var(--color-r-secondary);
+}
+
+@media (max-width: 900px) {
+  .shell { --header-height: 64px; }
+  .header { padding: 24px 24px 0; }
+  .landing { padding-top: 64px; gap: 64px; }
+  .circleNavigation { --portrait-size: 240px; }
+  .circleAsset { transform: scale(0.764331); transform-origin: top left; }
+  .sectionLink { gap: 12px; }
+  .sectionLabel { font-size: 28px; }
+  .sectionMain { padding: 32px 24px 48px; }
+}
+
+@media (max-width: 600px) {
+  .circleNavigation { --portrait-size: 180px; margin-left: -48px; }
+  .circleAsset { transform: scale(0.573248); }
+  .sectionLink { gap: 0; }
+  .sectionLabel { font-size: 24px; }
+  .personInfo h1 { font-size: 36px; }
+  .portrait { width: 240px; height: 240px; }
+  .profile { gap: 32px; }
+}
+
+@media (max-width: 400px) {
+  .shell { --header-height: 56px; }
+  .header { padding: 20px 16px 0; }
+  .login { font-size: 14px; }
+  .circleNavigation { --portrait-size: 140px; margin-left: -68px; }
+  .circleAsset { transform: scale(0.44586); }
+  .sectionLabel { font-size: 20px; }
+  .left .marker, .right .marker { width: 24px; }
+  .left { right: calc(100% - 12px); }
+  .right { left: calc(100% - 12px); }
+}
