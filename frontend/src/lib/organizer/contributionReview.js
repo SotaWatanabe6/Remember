@@ -1,15 +1,10 @@
-// Visibility rules for the organizer's contribution review (NS-7).
-//
-// The Approve Contributions tab — and each content-type sub-tab inside a
-// submission — only exists while there is something pending review. Same idea
-// as US-24 (hide the Voices output tab when there are no recordings), applied
-// to the whole tab plus each of its sub-tabs.
+// Organizer management always shows Archive and Approve Contributions.
+// Submission sub-tabs still depend on the content awaiting review.
 
 export const ARCHIVE_TAB = "Archive";
 export const APPROVE_TAB = "Approve Contributions";
-export const OUTPUTS_TAB = "Outputs";
 
-const ALL_MANAGE_TABS = [ARCHIVE_TAB, APPROVE_TAB, OUTPUTS_TAB];
+const ALL_MANAGE_TABS = [ARCHIVE_TAB, APPROVE_TAB];
 
 // Sub-tabs of a submission, in the order Figma shows them. Q&A is not in the
 // approval wireframes but the organizer still needs to review answers before
@@ -28,19 +23,16 @@ export function getSubTabNoun(key) {
 }
 
 export function isAwaitingReview(contributor) {
-  return String(contributor?.status || "").toLowerCase() === "submitted";
+  if (contributor?.moderation_resolution === "excluded" || contributor?.status === "rejected") return false;
+  return String(contributor?.status || "").toLowerCase() === "submitted" || contributor?.moderation_pending > 0 || Boolean(contributor?.is_flagged && !contributor?.moderation_resolution);
 }
 
 export function hasPendingContributions(contributors) {
   return Array.isArray(contributors) && contributors.some(isAwaitingReview);
 }
 
-// Top-level tabs on the manage page. Approve Contributions disappears as soon
-// as no contributor is awaiting review.
-export function getManageTabs(contributors) {
-  return hasPendingContributions(contributors)
-    ? ALL_MANAGE_TABS
-    : ALL_MANAGE_TABS.filter((tab) => tab !== APPROVE_TAB);
+export function getManageTabs() {
+  return [...ALL_MANAGE_TABS];
 }
 
 export function resolveManageTab(requestedTab, tabs) {
@@ -62,7 +54,7 @@ export function isApproved(item) {
 // a response with no answer) were never pending content. Either way their
 // sub-tab is hidden once nothing of that type is left.
 export function getPendingSubmissionSections(detail) {
-  const pending = (items) => (Array.isArray(items) ? items : []).filter((item) => !isApproved(item));
+  const pending = (items) => (Array.isArray(items) ? items : []).filter((item) => !isApproved(item) && item.moderation_resolution !== "excluded");
 
   return {
     photos: pending(detail?.photos),

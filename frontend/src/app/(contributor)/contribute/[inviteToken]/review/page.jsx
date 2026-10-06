@@ -190,7 +190,7 @@ export default function ReviewPage() {
 
   return (
     <main className="min-h-screen bg-r-bg text-r-text flex flex-col">
-      <ContributorNav backHref={`/contribute/${inviteToken}/upload`} disabled={controlsDisabled || Boolean(editingKey)} />
+      <ContributorNav backHref={`/contribute/${inviteToken}/story`} disabled={controlsDisabled || Boolean(editingKey)} />
 
       <div className="flex-1 px-6 pb-[50px] pt-10 sm:px-[50px] sm:pt-[50px]">
         <div className="mx-auto flex w-full max-w-[886px] flex-col">

@@ -1,6 +1,6 @@
 # US-20: memory photo matching
 
-Newly generated Relationship outputs use questionnaire memory nodes (`constellation.version: 2`). The previous generator built nodes from photo groups and required every node to have photos, so it could not support US-20. The replacement selects concrete, exact excerpts from known contributors' unflagged answers and validates their source attribution. Photo-only inputs never invent a memory. Cross-contributor memory merging (US-23) and polished contributor summaries (US-36) are separate work.
+Newly generated Relationship outputs use questionnaire memory nodes (`constellation.version: 2`). The previous generator built nodes from photo groups and required every node to have photos, so it could not support US-20. The replacement selects concrete, exact excerpts from known contributors' unflagged answers and validates their source attribution. Photo-only inputs never invent a memory. Cross-contributor memory merging (US-23) and contributor summaries (US-36) now enrich these same saved nodes; see [moderation review and shared memories](moderation-review.md).
 
 Each memory is compared against the full eligible bulk upload pool, regardless of who uploaded a photo. Reads paginate by creation time and ID, replacing the former 60-photo cutoff. Photos without storage paths or analysis, flagged photos, photos explicitly excluding the subject, and photos with zero people are excluded from matching. Album and Story composition still use their existing logic; Story retains its 20-slide photo selection limit.
 

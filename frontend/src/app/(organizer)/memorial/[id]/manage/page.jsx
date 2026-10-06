@@ -9,14 +9,12 @@ import { generateMemorialOutput, getGenerationJobStatus, getMemorialOutput } fro
 import { getMemorialApprovedArchive, getMemorialContributors } from '@/services/contributorService';
 import { getMemorial, createInviteLink, createShareLink } from '@/lib/api';
 import { copyTextToClipboard, normalizeShareUrl } from '@/lib/copyToClipboard';
-import ConstellationGraph from "@/components/output/constellation";
-import StorySlideshow from "@/components/output/StorySlideshow";
-import VoicesTab from "@/components/output/VoicesTab";
 import ProcessingTextSequence from "@/components/dashboard/ProcessingTextSequence";
 import { getAuthToken } from "@/lib/api.js";
 import MemorialCoverImage from "@/components/memorial/MemorialCoverImage.jsx";
 import ContributionsPanel from "@/components/organizer/ContributionsPanel.jsx";
-import { APPROVE_TAB, ARCHIVE_TAB, OUTPUTS_TAB, getManageTabs, resolveManageTab } from "@/lib/organizer/contributionReview";
+import ArchiveQaPanel from "@/components/organizer/ArchiveQaPanel.jsx";
+import { APPROVE_TAB, ARCHIVE_TAB, getManageTabs, isAwaitingReview, resolveManageTab } from "@/lib/organizer/contributionReview";
 
 // ─── Generation constants ─────────────────────────────────────────────────────
 
@@ -70,60 +68,6 @@ function getManageStatus(status) {
 
 // ─── Pagination arrows (shared) ───────────────────────────────────────────────
 
-function PrevArrow({ onClick, disabled }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="transition-opacity hover:opacity-70 disabled:opacity-30"
-      aria-label="Previous page"
-    >
-      <svg width="25" height="50" viewBox="0 0 25 50" fill="none">
-        <path fillRule="evenodd" clipRule="evenodd"
-          d="M3.83906 26.4813L15.6245 38.2667L18.5703 35.3208L8.25781 25.0083L18.5703 14.6958L15.6245 11.75L3.83906 23.5354C3.4485 23.9261 3.22909 24.4559 3.22909 25.0083C3.22909 25.5608 3.4485 26.0906 3.83906 26.4813Z"
-          fill="#423F39"/>
-      </svg>
-    </button>
-  );
-}
-
-function NextArrow({ onClick, disabled }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="transition-opacity hover:opacity-70 disabled:opacity-30"
-      aria-label="Next page"
-    >
-      <svg width="25" height="50" viewBox="0 0 25 50" fill="none">
-        <path fillRule="evenodd" clipRule="evenodd"
-          d="M21.1609 26.4813L9.37552 38.2667L6.42969 35.3208L16.7422 25.0083L6.42969 14.6958L9.37552 11.75L21.1609 23.5354C21.5515 23.9261 21.7709 24.4559 21.7709 25.0083C21.7709 25.5608 21.5515 26.0906 21.1609 26.4813Z"
-          fill="#423F39"/>
-      </svg>
-    </button>
-  );
-}
-
-function FilterSelect({ value, onChange, children, className = "" }) {
-  return (
-    <div className={`relative ${className}`}>
-      <select
-        value={value}
-        onChange={onChange}
-        className="w-full appearance-none rounded-[12.7px] border border-r-border bg-transparent px-5 py-4 pr-12 text-xl font-medium text-r-text focus:outline-none cursor-pointer"
-        style={{ fontFamily: "var(--font-family-display)" }}
-      >
-        {children}
-      </select>
-      <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2">
-        <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
-          <path d="M15 30L2.00962 7.5L27.9904 7.5L15 30Z" fill="#423F39" />
-        </svg>
-      </span>
-    </div>
-  );
-}
-
 function formatMemorialDate(value) {
   if (!value) return '';
   const parts = String(value).split('T')[0].split('-');
@@ -144,11 +88,11 @@ function MemorialHeader({ memorial, generated, inviteToken, onShare, contributor
   const biography = memorial?.bio || memorial?.biography || ""
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[240px_1fr_220px] lg:items-start">
+    <div className="grid gap-8 md:grid-cols-[220px_minmax(0,1fr)] md:items-center xl:min-h-[314px] xl:grid-cols-3 xl:gap-5">
 
       {/* Avatar */}
-      <div className="flex justify-center lg:justify-start">
-        <div className="relative size-[220px] overflow-hidden rounded-full bg-r-card border border-r-border">
+      <div className="flex justify-center md:justify-start">
+        <div className="relative size-[220px] shrink-0 overflow-hidden rounded-full bg-r-card border border-r-border xl:size-[314px]">
           <MemorialCoverImage
             src={memorial?.cover_photo_url}
             name={memorial?.subject_name}
@@ -159,23 +103,23 @@ function MemorialHeader({ memorial, generated, inviteToken, onShare, contributor
       </div>
 
       {/* Info */}
-      <div className="min-w-0 pt-2">
+      <div className="flex min-w-0 flex-col items-start gap-[14px]">
         <h1
-          className="text-[36px] font-medium italic leading-[36px] text-r-text"
+          className="break-words text-[36px] font-medium italic leading-[44px] text-r-text"
           style={{ fontFamily: 'var(--font-family-display)' }}
         >
           {memorial?.subject_name || ''}
         </h1>
-        <p className="mt-4 text-[16px] leading-[16px] text-r-secondary">
+        <p className="text-[16px] leading-[24px] text-r-secondary">
           {birthDate}{birthDate && passingDate ? " - " : ""}{passingDate}
         </p>
         {biography ? (
-          <p className="mt-6 max-w-[520px] text-[20px] leading-[26px] text-r-secondary">
+          <p className="w-full break-words text-[20px] leading-[26px] text-r-secondary">
             {biography}
           </p>
         ) : null}
         {typeof contributorCount === 'number' && (
-          <p className="mt-4 text-[15px] leading-[20px] text-r-secondary">
+          <p className="text-[15px] leading-[20px] text-r-secondary">
             {contributorCount} contributor{contributorCount === 1 ? '' : 's'} invited
             {typeof submittedCount === 'number' && (
               <> · {submittedCount} submitted</>
@@ -183,12 +127,12 @@ function MemorialHeader({ memorial, generated, inviteToken, onShare, contributor
           </p>
         )}
         {memorial?.status && (
-          <span className={`mt-6 inline-block rounded-full px-5 py-2 text-sm font-medium ${status.className}`}>
+          <span className={`inline-flex min-h-[50px] min-w-[207px] items-center justify-center rounded-full px-5 py-2 text-sm font-medium ${status.className}`}>
             {status.label}
           </span>
         )}
         {memorial?.status === 'complete' && memorial?.generated_at && (
-          <p className="mt-2 text-sm leading-5 text-r-secondary">
+          <p className="text-sm leading-5 text-r-secondary">
             Generated on{' '}
             {new Date(memorial.generated_at).toLocaleDateString('en-US', {
               month: 'long',
@@ -200,18 +144,18 @@ function MemorialHeader({ memorial, generated, inviteToken, onShare, contributor
       </div>
 
       {/* Actions */}
-      <div className="flex flex-col gap-6">
-        <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6 md:col-start-2 md:w-[208px] md:justify-self-end xl:col-start-auto xl:min-h-[314px] xl:justify-between xl:py-[30px]">
+        <div className="flex flex-col gap-5">
           <Link
             href={inviteToken ? `/contribute/${inviteToken}` : '#'}
-            className="rounded-full bg-r-btn px-6 py-5 text-center text-[18px] leading-[20px] text-r-btn-text transition hover:opacity-85"
+            className="rounded-full bg-r-btn px-4 py-[18px] text-center text-[20px] leading-[26px] text-r-btn-text transition hover:opacity-85"
           >
             Upload Memories
           </Link>
           {generated ? (
           <Link
             href={memorial?.id ? `/memorial/${memorial.id}/output` : '#'}
-            className="rounded-full bg-r-btn px-6 py-5 text-center text-[18px] leading-[20px] text-r-btn-text transition hover:opacity-85"
+            className="rounded-full bg-r-btn px-4 py-[18px] text-center text-[20px] leading-[26px] text-r-btn-text transition hover:opacity-85"
           >
             View Memorial
           </Link>
@@ -221,19 +165,19 @@ function MemorialHeader({ memorial, generated, inviteToken, onShare, contributor
             onClick={onGenerateClick}
             disabled={!canGenerate || generating}
             title={!canGenerate && !generating ? disabledMessage || undefined : undefined}
-            className="rounded-full bg-r-btn px-6 py-5 text-center text-[18px] leading-[20px] text-r-btn-text transition hover:opacity-85 disabled:opacity-45 disabled:cursor-not-allowed border-none"
+            className="rounded-full bg-r-btn px-4 py-[18px] text-center text-[20px] leading-[26px] text-r-btn-text transition hover:opacity-85 disabled:opacity-45 disabled:cursor-not-allowed border-none"
           >
             {generating ? 'Generating…' : 'Create Memorial'}
           </button>
         )}
         </div>
-        <div className="flex items-center justify-end gap-10 text-r-text">
-          <button type="button" onClick={onShare} className="transition hover:opacity-70" aria-label="Share memorial">
+        <div className="flex items-center justify-end gap-[30px] text-r-text">
+          <button type="button" onClick={onShare} className="flex size-[50px] items-center justify-center transition hover:opacity-70" aria-label="Share memorial">
             <svg width="42" height="42" viewBox="0 0 24 24" fill="currentColor">
               <path d="M18 16.08c-.76 0-1.44.3-1.96.77l-7.13-4.16a3.27 3.27 0 000-1.38l7.12-4.15A2.99 2.99 0 0018 7.91a3 3 0 10-2.83-4 3 3 0 00.12 1.49L8.17 9.56a3 3 0 100 4.88l7.12 4.16c-.08.23-.12.47-.12.72a3 3 0 103-3.24z"/>
             </svg>
           </button>
-          <button type="button" className="transition hover:opacity-70" aria-label="Memorial settings">
+          <button type="button" className="flex size-[50px] items-center justify-center transition hover:opacity-70" aria-label="Memorial settings">
             <svg width="46" height="46" viewBox="0 0 24 24" fill="currentColor">
               <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.6-.22l-2.39.96a7.03 7.03 0 00-1.63-.94l-.36-2.54a.49.49 0 00-.49-.42h-3.84a.49.49 0 00-.49.42l-.36 2.54c-.58.22-1.13.53-1.63.94l-2.39-.96a.5.5 0 00-.6.22L2.54 8.84a.5.5 0 00.12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32c.14.24.43.34.69.22l2.39-.96c.5.4 1.05.72 1.63.94l.36 2.54c.05.24.25.42.49.42h3.84c.24 0 .44-.18.49-.42l.36-2.54c.58-.22 1.13-.53 1.63-.94l2.39.96c.26.12.55.02.69-.22l1.92-3.32a.5.5 0 00-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1112 8a3.5 3.5 0 010 7.5z"/>
             </svg>
@@ -255,7 +199,7 @@ function TabBar({ tabs, active, onChange }) {
           <button
             key={tab}
             onClick={() => onChange(tab)}
-            className={`flex h-10 flex-1 items-center justify-center text-center text-[24px] leading-none text-r-text transition-colors ${
+            className={`flex min-h-10 min-w-0 flex-1 items-center justify-center text-center text-[20px] leading-tight text-r-text transition-colors sm:text-[24px] ${
               isActive ? 'border-b-2 border-r-text font-bold' : 'border-b border-r-text/60 font-medium hover:border-r-text'
             }`}
             style={{ fontFamily: 'var(--font-family-display)' }}
@@ -310,10 +254,6 @@ function TabError({ title, message, onRetry }) {
 
 const EMPTY_ARCHIVE = { contributors: [], photos: [], voices: [], stories: [], responses: [] };
 
-function isApprovedContributor(contributor) {
-  return String(contributor?.status || '').toLowerCase() === 'approved';
-}
-
 function formatArchiveDate(value) {
   if (!value) return '';
   const date = new Date(value);
@@ -323,7 +263,7 @@ function formatArchiveDate(value) {
 
 function ArchiveSection({ title, count, children }) {
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex flex-col gap-[30px] lg:gap-[50px]">
       <div className="flex items-baseline justify-between">
         <h3 className="text-[28px] font-medium text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
           {title}
@@ -339,18 +279,17 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
   const [archive, setArchive] = useState(EMPTY_ARCHIVE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [activeSubTab, setActiveSubTab] = useState('photos');
 
-  // Re-fetch whenever the set of approved contributors changes (e.g. after an
-  // organizer approves a submission in the Contributions tab).
-  const approvedKey = (contributors || [])
-    .filter(isApprovedContributor)
-    .map((contributor) => contributor.id)
+  // Per-type approvals can enter the archive while the contributor is still
+  // submitted. Let the archive API decide which items have been approved.
+  const reviewKey = (contributors || [])
+    .map((contributor) => `${contributor.id}:${contributor.status}:${contributor.updated_at || ''}`)
     .sort()
     .join(',');
 
   const loadArchive = useCallback(async () => {
     if (!memorialId) return;
-    if (!approvedKey) { setArchive(EMPTY_ARCHIVE); setError(null); setLoading(false); return; }
 
     setLoading(true); setError(null);
     try {
@@ -361,7 +300,7 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
       setError(err instanceof Error ? err.message : 'Failed to load the archive');
       setArchive(EMPTY_ARCHIVE);
     } finally { setLoading(false); }
-  }, [approvedKey, memorialId]);
+  }, [reviewKey, memorialId]);
 
   useEffect(() => { queueMicrotask(loadArchive); }, [loadArchive]);
 
@@ -373,7 +312,7 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
   const photos = archive.photos || [];
   const voices = archive.voices || [];
   const stories = archive.stories || [];
-  const responses = (archive.responses || []).filter((response) => String(response.answer_text || '').trim());
+  const responses = (archive.responses || []).filter((response) => String(response.answer_text || '').trim() || response.response_audio_url);
   const approvedContributorCount = (archive.contributors || []).length;
   const totalItems = photos.length + voices.length + stories.length + responses.length;
 
@@ -393,15 +332,33 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
   }
 
   return (
-    <div className="flex flex-col gap-12 pt-8">
+    <div className="flex flex-col gap-[30px] lg:gap-[50px]">
+      <div className="flex flex-wrap gap-5" aria-label="Archive content">
+        {[['photos', 'Photos'], ['voices', 'Voice'], ['stories', 'Stories'], ['responses', 'Q&A']].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={activeSubTab === key}
+            onClick={() => setActiveSubTab(key)}
+            className={`flex h-[50px] min-w-[140px] items-center justify-center rounded-full border border-r-muted px-7 text-[24px] font-medium leading-none transition [font-family:var(--font-family-display)] sm:min-w-[206px] focus-visible:outline-2 focus-visible:outline-r-muted ${activeSubTab === key ? 'bg-[#9E9384] text-r-modal' : 'text-r-muted hover:text-r-text'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <p className="text-sm text-r-secondary">
-        {totalItems} memor{totalItems === 1 ? 'y' : 'ies'} from {approvedContributorCount} approved contributor
+        {totalItems} approved memor{totalItems === 1 ? 'y' : 'ies'} from {approvedContributorCount} contributor
         {approvedContributorCount === 1 ? '' : 's'}
       </p>
 
-      {photos.length > 0 && (
+      {activeSubTab !== 'responses' && archive[activeSubTab].length === 0 && (
+        <p className="py-14 text-center text-r-secondary">No approved {activeSubTab === 'voices' ? 'voice recordings' : activeSubTab} yet.</p>
+      )}
+
+      {activeSubTab === 'photos' && photos.length > 0 && (
         <ArchiveSection title="Photos" count={`${photos.length} photo${photos.length === 1 ? '' : 's'}`}>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {photos.map((photo) => (
               <div key={photo.id} className="group rounded-xl overflow-hidden border border-r-border bg-r-card">
                 {photo.url || photo.photo_url ? (
@@ -434,9 +391,9 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
         </ArchiveSection>
       )}
 
-      {voices.length > 0 && (
+      {activeSubTab === 'voices' && voices.length > 0 && (
         <ArchiveSection title="Voices" count={`${voices.length} recording${voices.length === 1 ? '' : 's'}`}>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             {voices.map((voice) => (
               <article key={voice.id} className="flex flex-col gap-3 rounded-xl border border-r-border bg-r-card p-6">
                 <h4 className="text-[22px] leading-[26px] text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
@@ -461,9 +418,9 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
         </ArchiveSection>
       )}
 
-      {stories.length > 0 && (
+      {activeSubTab === 'stories' && stories.length > 0 && (
         <ArchiveSection title="Stories" count={`${stories.length} stor${stories.length === 1 ? 'y' : 'ies'}`}>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             {stories.map((story) => (
               <article key={story.id} className="flex flex-col gap-2 rounded-xl border border-r-border bg-r-card p-6">
                 {story.title && (
@@ -481,21 +438,7 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
         </ArchiveSection>
       )}
 
-      {responses.length > 0 && (
-        <ArchiveSection title="Written memories" count={`${responses.length} answer${responses.length === 1 ? '' : 's'}`}>
-          <div className="flex flex-col gap-4">
-            {responses.map((response) => (
-              <article key={response.id} className="flex flex-col gap-2 rounded-xl border border-r-border bg-r-card p-6">
-                <p className="text-sm font-medium text-r-secondary">{response.question_text || 'Question'}</p>
-                <p className="text-[18px] leading-7 text-r-text">{response.answer_text}</p>
-                {response.contributor_name && (
-                  <p className="text-xs text-r-secondary">Submitted by {response.contributor_name}</p>
-                )}
-              </article>
-            ))}
-          </div>
-        </ArchiveSection>
-      )}
+      {activeSubTab === 'responses' && <ArchiveQaPanel contributors={archive.contributors || []} responses={responses} />}
     </div>
   );
 }
@@ -514,386 +457,6 @@ function ApproveContributionsTab({ memorialId, contributorslist, loading, error,
     />
   );
 }
-
-// ─── Lightbox (my version — object-contain, no face cropping) ────────────────
-
-function Lightbox({ photo, onClose, onPrev, onNext }) {
-  useEffect(() => {
-    function handleKey(e) {
-      if (e.key === 'Escape') onClose();
-      if (e.key === 'ArrowLeft') onPrev();
-      if (e.key === 'ArrowRight') onNext();
-    }
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [onClose, onPrev, onNext]);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4" onClick={onClose}>
-      <div className="relative max-w-3xl w-full" onClick={(e) => e.stopPropagation()}>
-        <div className="relative w-full max-h-[80vh] overflow-hidden rounded-2xl bg-neutral-900 flex items-center justify-center">
-          {photo.url
-            ? <img src={photo.url} alt={photo.caption || ''} className="max-h-[80vh] w-auto max-w-full object-contain" />
-            : <div className="h-64 w-full bg-neutral-700 flex items-center justify-center"><span className="text-neutral-500 text-sm">No image</span></div>}
-        </div>
-        <div className="mt-3 px-1">
-          {photo.caption && <p className="text-white text-sm font-medium">{photo.caption}</p>}
-          <p className="text-neutral-400 text-xs mt-0.5">
-            {photo.contributor_name}{photo.taken_at && ` · ${new Date(photo.taken_at).getFullYear()}`}
-          </p>
-        </div>
-        <button onClick={onPrev} className="absolute left-[-48px] top-1/2 -translate-y-1/2 p-2 text-white hover:text-neutral-300">
-          <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-        </button>
-        <button onClick={onNext} className="absolute right-[-48px] top-1/2 -translate-y-1/2 p-2 text-white hover:text-neutral-300">
-          <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
-        </button>
-        <button onClick={onClose} className="absolute -top-10 right-0 p-2 text-white hover:text-neutral-300">
-          <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── All Photos Section ───────────────────────────────────────────────────────
-
-function AllPhotosSection({ albums, onGenerate, generating, canGenerate }) {
-  
-  const [filterView, setFilterView] = useState('all');
-  const [contributorFilter, setContributorFilter] = useState('all');
-  const [sortOrder, setSortOrder] = useState('recently_added');
-  
-  const [openAlbum, setOpenAlbum] = useState(null);
-  const [lightboxPhoto, setLightboxPhoto] = useState(null);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
-
-  const albumList = (() => {
-    if (!albums) return [];
-    if (albums.albums && Array.isArray(albums.albums)) {
-      return albums.albums.map((a) => ({
-        album_name: a.name || a.album_name || 'Album',
-        cover_photo_url: a.cover_photo_url || a.photos?.[0]?.url || null,
-        photo_count: a.photo_count ?? a.photos?.length ?? 0,
-        photos: (a.photos || []).map((p) => ({
-          id: p.id, url: p.url || null, caption: p.caption || null,
-          taken_at: p.taken_at || null, contributor_name: p.contributor_name || null,
-        })),
-      }));
-    }
-    if (Array.isArray(albums)) {
-      return albums.map((a) => ({
-        album_name: a.album_name || a.name || 'Album',
-        cover_photo_url: a.cover_photo_url || a.photos?.[0]?.url || null,
-        photo_count: a.photo_count ?? a.photos?.length ?? 0,
-        photos: a.photos || [],
-      }));
-    }
-    return [];
-  })();
-
-  const allPhotos = albumList.flatMap((album) =>
-    (album.photos || []).map((p) => ({ ...p, album_name: album.album_name }))
-  );
-  const contributorNames = [...new Set(allPhotos.map((photo) => photo.contributor_name).filter(Boolean))].sort((a, b) =>
-    a.localeCompare(b, undefined, { sensitivity: 'base' })
-  );
-  const filteredAllPhotos = contributorFilter === 'all'
-    ? allPhotos
-    : allPhotos.filter((photo) => photo.contributor_name === contributorFilter);
-  const isAlbumView = filterView === 'albums';
-
-  function handleFilterChange(val) {
-    setFilterView(val);
-    setOpenAlbum(null);
-    setContributorFilter('all');
-    setSortOrder('recently_added');
-  }
-  function handleAlbumClick(album) { setOpenAlbum(album); }
-  function handleBackToAlbums() { setOpenAlbum(null); }
-
-  function sortPhotos(photos) {
-    return [...photos].sort((a, b) => {
-      if (sortOrder === 'oldest') return new Date(a.taken_at || a.created_at || 0) - new Date(b.taken_at || b.created_at || 0);
-      if (sortOrder === 'name') return (a.caption || '').localeCompare(b.caption || '');
-      return new Date(b.taken_at || b.created_at || 0) - new Date(a.taken_at || a.created_at || 0);
-    });
-  }
-
-  function sortAlbums(list) {
-    return [...list].sort((a, b) => sortOrder === 'name' ? (a.album_name || '').localeCompare(b.album_name || '') : 0);
-  }
-
-  let itemsForPagination = [];
-  if (openAlbum) itemsForPagination = sortPhotos(openAlbum.photos || []);
-  else if (isAlbumView) itemsForPagination = sortAlbums(albumList);
-  else itemsForPagination = sortPhotos(filteredAllPhotos);
-
-  const paginatedItems = itemsForPagination;
-
-  function openLightbox(photo, index) { setLightboxPhoto(photo); setLightboxIndex(index); }
-  function prevPhoto() { const i = (lightboxIndex - 1 + paginatedItems.length) % paginatedItems.length; setLightboxIndex(i); setLightboxPhoto(paginatedItems[i]); }
-  function nextPhoto() { const i = (lightboxIndex + 1) % paginatedItems.length; setLightboxIndex(i); setLightboxPhoto(paginatedItems[i]); }
-
-  const sortOptions = (isAlbumView && !openAlbum)
-    ? [{ value: 'recently_added', label: 'Recently added' }, { value: 'name', label: 'Name' }]
-    : [{ value: 'recently_added', label: 'Recently added' }, { value: 'oldest', label: 'Oldest' }, { value: 'name', label: 'Name' }];
-
-  return (
-    <div className="flex flex-col gap-5">
-
-      {/* Back to albums header */}
-      {openAlbum && (
-        <div className="flex items-center gap-3">
-          <button onClick={handleBackToAlbums} className="flex items-center gap-1.5 text-r-secondary text-sm hover:text-r-text transition-colors">
-            <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-            Albums
-          </button>
-          <span className="text-[24px] font-medium italic text-r-text" style={{ fontFamily: 'var(--font-family-display)' }}>
-            {openAlbum.album_name}
-          </span>
-        </div>
-      )}
-
-      {/* Filter + Sort */}
-      {!openAlbum && (
-        <div className="flex items-center justify-between gap-4">
-          <FilterSelect value={filterView} onChange={(e) => handleFilterChange(e.target.value)} className="flex-1 max-w-[434px]">
-            <option value="all">All photos</option>
-            <option value="albums">Albums</option>
-          </FilterSelect>
-          <div className="flex items-center gap-3">
-            {!isAlbumView && contributorNames.length > 0 ? (
-              <FilterSelect value={contributorFilter} onChange={(e) => setContributorFilter(e.target.value)} className="w-[220px]">
-                <option value="all">All contributors</option>
-                {contributorNames.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </FilterSelect>
-            ) : null}
-            <FilterSelect value={sortOrder} onChange={(e) => { setSortOrder(e.target.value); }} className="w-[207px]">
-              {sortOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-            </FilterSelect>
-          </div>
-        </div>
-      )}
-      {openAlbum && (
-        <div className="flex justify-end">
-          <FilterSelect value={sortOrder} onChange={(e) => { setSortOrder(e.target.value); }} className="w-[207px]">
-            {sortOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-          </FilterSelect>
-        </div>
-      )}
-
-      {/* Albums grid */}
-      {isAlbumView && !openAlbum && (
-        albumList.length === 0
-          ? <div className="flex flex-col items-center justify-center py-16 text-center"><p className="text-base font-medium text-r-text">No albums yet</p><p className="text-sm text-r-secondary mt-1 max-w-xs">AI-named albums are created after Generate runs.</p></div>
-          : <div className="max-h-[600px] overflow-y-auto pr-1">
-              <div className="grid grid-cols-3 gap-5">
-              {paginatedItems.map((album, index) => (
-                <button key={album.album_name || index} onClick={() => handleAlbumClick(album)}
-                  className="group relative rounded-2xl overflow-hidden border border-r-border bg-r-card text-left cursor-pointer hover:opacity-90 transition-opacity" style={{ aspectRatio: '4/3' }}>
-                  {album.cover_photo_url
-                    ? <img src={album.cover_photo_url} alt={album.album_name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                    : <div className="h-full w-full bg-r-card" />}
-                  <div className="absolute inset-0 bg-black/20 flex flex-col justify-end p-4">
-                    <p className="text-white text-sm font-medium truncate" style={{ fontFamily: 'var(--font-family-display)' }}>{album.album_name}</p>
-                    <p className="text-white/70 text-xs mt-0.5">{album.photo_count || album.photos?.length || 0} photos</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-            </div>
-      )}
-
-      {/* Photos grid */}
-      {(!isAlbumView || openAlbum) && (
-        paginatedItems.length === 0
-          ? <div className="flex flex-col items-center justify-center py-16 text-center">
-              <p className="text-base font-medium text-r-text">{openAlbum ? 'No photos in this album' : 'No photos yet'}</p>
-              <p className="text-sm text-r-secondary mt-1 max-w-xs">
-                {openAlbum
-                  ? 'This album has no photos assigned yet.'
-                  : contributorFilter === 'all'
-                    ? 'Photos will appear here once contributors have submitted and the memorial has been generated.'
-                    : 'No photos match this contributor filter.'}
-              </p>
-            </div>
-          : <div className="max-h-[600px] overflow-y-auto pr-1">
-              <div className="grid grid-cols-3 gap-5">
-              {paginatedItems.map((photo, index) => (
-                <button key={photo.id || index} onClick={() => openLightbox(photo, index)}
-                  className="group relative w-full overflow-hidden rounded-2xl bg-r-card" style={{ aspectRatio: '4/3' }}>
-                  {photo.url
-                    ? <img src={photo.url} alt={photo.caption || ''} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                    : <div className="h-full w-full bg-r-card" />}
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors duration-200 flex items-end p-3 opacity-0 group-hover:opacity-100">
-                    <div className="w-full">
-                      {photo.caption && <p className="text-white text-xs font-semibold truncate">{photo.caption}</p>}
-                      {photo.contributor_name && <p className="text-white text-xs truncate">{photo.contributor_name}</p>}
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-            </div>
-      )}
-
-      {lightboxPhoto && (
-        <Lightbox photo={lightboxPhoto} onClose={() => setLightboxPhoto(null)} onPrev={prevPhoto} onNext={nextPhoto} />
-      )}
-    </div>
-  );
-}
-
-// ─── Pre-generation empty state ───────────────────────────────────────────────
-
-function PreGenerationEmpty({ canGenerate, disabledMessage, generationError, generationJob, generating, onGenerate }) {
-  const isPending = generating && !generationError;
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="h-16 w-16 rounded-full bg-r-card flex items-center justify-center mb-4">
-        <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" className="text-r-muted">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-        </svg>
-      </div>
-      <p className="text-r-text text-base font-medium">
-        {isPending ? "Generation is in progress" : "Generation hasn't run yet"}
-      </p>
-      <p className="text-r-secondary text-sm mt-1 max-w-xs leading-relaxed">
-        {isPending
-          ? "Outputs will appear here automatically once the memorial is ready."
-          : "Once you have contributions, click Generate to create the Story, Constellation, Voices, and Photos."}
-      </p>
-      <button type="button" onClick={onGenerate} disabled={!canGenerate || generating}
-        className="mt-6 flex h-[50px] w-[207px] items-center justify-center rounded-full px-6 text-sm font-medium text-r-btn-text transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-45 border-none"
-        style={{ backgroundColor: 'var(--color-r-btn)' }}>
-        {generating ? "Generating..." : "Generate"}
-      </button>
-      {isPending && (
-        <div className="mt-4 w-full max-w-xs" aria-live="polite">
-          <div className="h-1.5 overflow-hidden rounded-full bg-r-card">
-            <div className="h-full rounded-full bg-r-text transition-all duration-300"
-              style={{ width: `${Math.max(10, generationJob?.progress ?? 10)}%` }} />
-          </div>
-          <p className="mt-2 text-xs font-medium text-r-secondary">{generationJob?.current_step || "Preparing generation..."}</p>
-          <ProcessingTextSequence />
-        </div>
-      )}
-      {!generating && disabledMessage && <p className="mt-3 max-w-xs text-xs text-r-secondary">{disabledMessage}</p>}
-      {generationError && <p className="mt-3 max-w-xs text-sm text-r-danger" role="alert">{generationError}</p>}
-    </div>
-  );
-}
-
-// ─── Outputs Tab (my version — 5-section arrow navigation, no dropdowns) ─────
-
-const OUTPUT_SECTIONS = [
-  { key: 'story',                       label: 'Story' },
-  { key: 'constellation-themes',        label: 'Constellation | Themes' },
-  { key: 'constellation-relationships', label: 'Constellation | Relationships' },
-  { key: 'voices',                      label: 'Voices' },
-  { key: 'photos',                      label: 'All photos' },
-];
-
-function OutputsTab({ memorial, contributors, canGenerate, disabledMessage, generationError, generationJob, generating, onGenerate, output, loading, error, onRetry }) {
-  const [sectionIndex, setSectionIndex] = useState(0);
-
-  if (loading) return <TabLoading />;
-  if (error) {
-    return <TabError title="Unable to load outputs" message="The generated memorial output could not be loaded. Archive and Contributions are still available." onRetry={onRetry} />;
-  }
-  if (!output) {
-    return (
-      <div className="pt-6">
-        <PreGenerationEmpty canGenerate={canGenerate} disabledMessage={disabledMessage} generationError={generationError} generationJob={generationJob} generating={generating} onGenerate={onGenerate} />
-      </div>
-    );
-  }
-
-  const currentSection = OUTPUT_SECTIONS[sectionIndex];
-  const total = OUTPUT_SECTIONS.length;
-
-  // Constellation page: 1 = Themes, 2 = Relationships
-  const constellationPage = currentSection.key === 'constellation-relationships' ? 2 : 1;
-
-  return (
-    <div className="flex flex-col pt-4 gap-6">
-
-      {/* Top row: section title + Generate + arrows */}
-      <div className="flex items-center justify-between gap-4">
-        <h2
-          className="text-[36px] font-medium italic text-r-text"
-          style={{ fontFamily: 'var(--font-family-display)' }}
-        >
-          {currentSection.label}
-        </h2>
-        <div className="flex items-center gap-4">
-          {memorial?.status !== 'complete' && (
-          <button
-            onClick={onGenerate}
-            disabled={!canGenerate || generating}
-            className="rounded-full px-6 py-[14px] text-base text-r-btn-text transition-opacity hover:opacity-80 disabled:opacity-45 disabled:cursor-not-allowed border-none"
-            style={{ backgroundColor: 'var(--color-r-btn)' }}
-          >
-            {generating ? 'Generating…' : 'Generate'}
-          </button>
-        )}
-          <div className="flex items-center gap-3">
-            <PrevArrow
-              onClick={() => setSectionIndex((i) => Math.max(0, i - 1))}
-              disabled={sectionIndex === 0}
-            />
-            <span
-              className="text-2xl font-medium text-r-text min-w-[64px] text-center"
-              style={{ fontFamily: 'var(--font-family-display)' }}
-            >
-              {sectionIndex + 1} / {total}
-            </span>
-            <NextArrow
-              onClick={() => setSectionIndex((i) => Math.min(total - 1, i + 1))}
-              disabled={sectionIndex === total - 1}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Section content */}
-      {currentSection.key === 'story' && (
-        <StorySlideshow output={output} story={output?.story} />
-      )}
-      {(currentSection.key === 'constellation-themes' || currentSection.key === 'constellation-relationships') && (
-        <ConstellationGraph
-          key={constellationPage}
-          ai_output={output}
-          memorial={memorial}
-          contributor={contributors}
-          page={constellationPage}
-          width={800}
-          height={800}
-        />
-      )}
-
-      {currentSection.key === 'voices' && (
-        <VoicesTab output={output} voices={output?.voices} />
-      )}
-
-      {currentSection.key === 'photos' && (
-        <AllPhotosSection
-          albums={output?.photos}
-          onGenerate={onGenerate}
-          generating={generating}
-          canGenerate={canGenerate}
-        />
-      )}
-
-    </div>
-  );
-}
-
 
 // ─── Share Modal ──────────────────────────────────────────────────────────────
 
@@ -1058,14 +621,12 @@ function GenerateConfirmModal({ onConfirm, onCancel, subjectName }) {
   )
 }
 
-// ─── Page (my structure — full-width nav, 960px content, inviteToken) ─────────
+// ─── Page (Figma organizer shell: 50px margins, 100px section spacing) ─────────
 
-export default function MemorialOutputPage() {
+export default function MemorialManagePage() {
   const { id } = useParams();
-  const [activeTab, setActiveTab] = useState(OUTPUTS_TAB);
+  const [activeTab, setActiveTab] = useState(ARCHIVE_TAB);
   const [output, setOutput] = useState(null);
-  const [outputLoading, setOutputLoading] = useState(true);
-  const [outputError, setOutputError] = useState(null);
   const [contributorsLoading, setContributorsLoading] = useState(true);
   const [contributorsError, setContributorsError] = useState(null);
   const [showShare, setShowShare] = useState(false);
@@ -1117,17 +678,16 @@ export default function MemorialOutputPage() {
 
   const loadOutput = useCallback(async (options = {}) => {
     if (!id) return;
-    setOutputLoading(true); setOutputError(null);
     try {
       const token = await getAuthToken();
       const data = await getMemorialOutput(id, token, options);
       setOutput(data);
       return data;
     } catch (err) {
-      setOutputError(err instanceof Error ? err.message : "Failed to fetch memorial output");
+      console.error("Failed to fetch memorial output", err);
       setOutput(null);
       return null;
-    } finally { setOutputLoading(false); }
+    }
   }, [id]);
 
   const refreshMemorial = useCallback(async () => {
@@ -1156,6 +716,13 @@ export default function MemorialOutputPage() {
         for (let attempt = 0; attempt < GENERATION_MAX_POLL_ATTEMPTS; attempt += 1) {
           const status = String(latestJob?.status || "").toLowerCase();
           if (GENERATION_SUCCESS_STATUSES.has(status)) break;
+          if (status === "awaiting_review") {
+            setGenerationError("Generation is paused. Resolve flagged content in Approve Contributions, then create the memorial again to resume.");
+            setActiveTab("Approve Contributions");
+            await loadContributors();
+            await refreshMemorial();
+            return;
+          }
           if (GENERATION_FAILURE_STATUSES.has(status)) throw new Error(latestJob?.error_message || "Generation failed. Please try again.");
           await sleep(GENERATION_POLL_INTERVAL_MS);
           const jobStatus = await getGenerationJobStatus(initialJob.id, token);
@@ -1174,7 +741,7 @@ export default function MemorialOutputPage() {
     } catch (err) {
       setGenerationError(err instanceof Error ? err.message : "Generation failed. Please try again.");
     } finally { if (!keepGenerating) setGenerating(false); }
-  }, [generating, loadOutput, memorialId, refreshMemorial]);
+  }, [generating, loadOutput, memorialId, refreshMemorial, loadContributors]);
 
   const handleGenerateClick = useCallback(() => {
     setShowGenerateConfirm(true)
@@ -1193,7 +760,7 @@ export default function MemorialOutputPage() {
       const data = await getMemorialOutput(id, token);
       if (cancelled) return;
       if (data) {
-        setOutput(data); setOutputError(null); setGenerating(false);
+        setOutput(data); setGenerating(false);
         setGenerationJob((job) => job ? { ...job, status: 'complete', progress: 100, current_step: 'Complete' } : job);
         try {
           const memorialApi = await getMemorial(id);
@@ -1215,10 +782,10 @@ export default function MemorialOutputPage() {
   // organizer has cleared the Awaiting approval list and kept at least one
   // contributor.
   const awaitingApprovalCount = contributors.filter(
-    (contributor) => String(contributor?.status || "").toLowerCase() === "submitted",
+    (contributor) => isAwaitingReview(contributor),
   ).length;
   const approvedContributionCount = contributors.filter(
-    (contributor) => String(contributor?.status || "").toLowerCase() === "approved",
+    (contributor) => String(contributor?.status || "").toLowerCase() === "approved" && contributor?.moderation_resolution !== "excluded",
   ).length;
 
   // The header flips to View Memorial as soon as an output exists, without
@@ -1240,20 +807,18 @@ export default function MemorialOutputPage() {
           ? "Generation is available after you approve at least one contribution."
           : "";
 
-  // NS-7: Approve Contributions only exists while a submission is pending.
-  // Approving or deleting the last one drops the organizer back to Archive.
-  const manageTabs = getManageTabs(contributors);
+  const manageTabs = getManageTabs();
   const currentTab = resolveManageTab(activeTab, manageTabs);
 
   useEffect(() => { queueMicrotask(loadContributors); }, [loadContributors]);
   useEffect(() => { queueMicrotask(loadOutput); }, [loadOutput]);
 
   return (
-    <main className="min-h-screen bg-r-bg text-r-text flex flex-col">
+    <main className="min-h-screen bg-r-bg p-6 text-r-text flex flex-col sm:p-[50px]">
 
       {/* Full-width nav */}
-      <nav className="w-full flex items-center justify-between px-6 sm:px-[50px] py-6">
-        <div className="flex items-center gap-2">
+      <nav className="min-h-10 w-full flex items-center justify-between">
+        <div className="flex items-center gap-5">
           <img src="/Logo.svg" alt="" width={36} height={36} aria-hidden="true" />
           <span className="text-r-text text-2xl leading-8 [font-family:var(--font-family-display)]">Remember</span>
         </div>
@@ -1265,9 +830,9 @@ export default function MemorialOutputPage() {
         </Link>
       </nav>
 
-      {/* Content constrained to 960px */}
-      <div className="flex-1 px-6 sm:px-[50px] pb-16">
-        <div className="mx-auto flex w-full max-w-[960px] flex-col gap-8">
+      {/* The profile and both tabs share the navigation's outer margins. */}
+      <div className="mt-12 flex-1 lg:mt-[100px]">
+        <div className="flex w-full flex-col gap-12 lg:gap-[100px]">
           <MemorialHeader
             memorial={memorial}
             generated={memorialGenerated}
@@ -1279,35 +844,35 @@ export default function MemorialOutputPage() {
             disabledMessage={generationDisabledMessage}
             generating={generating}
             onGenerateClick={handleGenerateClick} />
-          <TabBar tabs={manageTabs} active={currentTab} onChange={setActiveTab} />
-          <div>
-            {currentTab === ARCHIVE_TAB && <ArchiveTab memorialId={memorialId} contributors={contributors} contributorsLoading={contributorsLoading} />}
-            {currentTab === APPROVE_TAB && (
-              <ApproveContributionsTab
-                memorialId={memorialId}
-                contributorslist={contributors}
-                loading={contributorsLoading}
-                error={contributorsError}
-                onRetry={loadContributors}
-                onContributorsChange={setContributors}
-              />
-            )}
-            {currentTab === OUTPUTS_TAB && (
-              <OutputsTab
-                memorial={memorial}
-                contributors={contributors}
-                canGenerate={canGenerate}
-                disabledMessage={generationDisabledMessage}
-                generationError={generationError}
-                generationJob={generationJob}
-                generating={generating}
-                onGenerate={handleGenerateClick}
-                output={output}
-                loading={outputLoading}
-                error={outputError}
-                onRetry={loadOutput}
-              />
-            )}
+          {generating && !generationError && (
+            <div className="rounded-2xl border border-r-border p-6 text-center" role="status">
+              <p className="text-base font-medium text-r-text">Generation is in progress</p>
+              <div className="mx-auto mt-4 w-full max-w-xs">
+                <div className="h-1.5 overflow-hidden rounded-full bg-r-card">
+                  <div className="h-full rounded-full bg-r-text transition-all duration-300"
+                    style={{ width: `${Math.max(10, generationJob?.progress ?? 10)}%` }} />
+                </div>
+                <p className="mt-2 text-xs font-medium text-r-secondary">{generationJob?.current_step || "Preparing generation..."}</p>
+                <ProcessingTextSequence />
+              </div>
+            </div>
+          )}
+          {generationError && <p className="text-sm text-r-danger" role="alert">{generationError}</p>}
+          <div className={`flex min-w-0 flex-col ${currentTab === ARCHIVE_TAB ? 'gap-[30px] lg:gap-[50px]' : 'gap-[30px]'}`}>
+            <TabBar tabs={manageTabs} active={currentTab} onChange={setActiveTab} />
+            <div>
+              {currentTab === ARCHIVE_TAB && <ArchiveTab memorialId={memorialId} contributors={contributors} contributorsLoading={contributorsLoading} />}
+              {currentTab === APPROVE_TAB && (
+                <ApproveContributionsTab
+                  memorialId={memorialId}
+                  contributorslist={contributors}
+                  loading={contributorsLoading}
+                  error={contributorsError}
+                  onRetry={loadContributors}
+                  onContributorsChange={setContributors}
+                />
+              )}
+            </div>
           </div>
         </div>
       </div>

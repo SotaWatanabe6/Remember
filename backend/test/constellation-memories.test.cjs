@@ -1,6 +1,6 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { extractMemoryNodes, matchMemoryPhotos, buildMemoryConstellation, photoEvidence } = require('../src/services/constellationMemories')
+const { extractMemoryNodes, matchMemoryPhotos, buildMemoryConstellation, photoEvidence, mergeSharedMemories } = require('../src/services/constellationMemories')
 const { loadGenerationPhotos } = require('../src/services/generationPhotos')
 const { resolveOutputMediaUrls } = require('../src/services/storageUrls')
 
@@ -46,7 +46,7 @@ test('flagged and unknown sources are excluded; anonymous names stay private', a
       return { memories: [{ source_index: 0, excerpt }] }
     }),
   })
-  assert.equal(nodes[0].contributor_name, 'Anonymous')
+  assert.equal(nodes[0].contributor_name, 'Grandchild')
   assert.equal(JSON.stringify(nodes).includes('Jonah'), false)
 })
 
@@ -178,7 +178,7 @@ test('generation route passes the full photo pool and answers through to saved m
   const filename = path.resolve(__dirname, '../src/routes/ai.js')
   const realRequire = createRequire(filename)
   const photos = Array.from({ length: 61 }, (_, i) => photo(`p${i}`))
-  const rows = { contributors, questionnaire_responses: responses, media_assets: photos, voice_recordings: [], memorials: { subject_name: 'Robin' } }
+  const rows = { contributors: [...contributors, { id: 'someone-else', name: 'Another contributor' }], questionnaire_responses: responses, media_assets: photos, voice_recordings: [], memorials: { subject_name: 'Robin' } }
   let saved
   const supabase = {
     storage: { from: (bucket) => ({ createSignedUrl: async (path) => ({ data: { signedUrl: `https://fixture.invalid/${bucket}/${path}` } }) }) },
@@ -189,7 +189,7 @@ test('generation route passes the full photo pool and answers through to saved m
         update() { mutation = true; return this },
         insert(value) { if (table === 'ai_outputs') saved = value.output_json; mutation = true; return this },
         range(from, to) { return Promise.resolve({ data: rows[table].slice(from, to + 1) }) },
-        then(resolve, reject) { return Promise.resolve({ data: mutation ? null : rows[table] }).then(resolve, reject) },
+        then(resolve, reject) { return Promise.resolve({ data: mutation ? { id: 'updated' } : rows[table] }).then(resolve, reject) },
       }
       return query
     },
@@ -197,7 +197,12 @@ test('generation route passes the full photo pool and answers through to saved m
   const services = {
     buildMemoryCorpus: () => '', extractThemes: async () => [], extractPhotoAlbumThemes: async () => [],
     analyzePhotoWithVision: async () => photo('fixture').analysis,
+    moderatePhotoContent: async () => ({ is_flagged: false, is_blurry: false }),
+    moderateQuestionnaireResponse: async () => ({ is_flagged: false }),
+    moderateContribution: async () => ({ is_flagged: false }),
     assignPhotosToThemes: async (input) => input, composeStorySlideshow: async () => [],
+    attachPhotosToMemoryNodes: (_photos, nodes) => nodes,
+    attachContributorSummariesToMemoryNodes: async (nodes) => nodes,
     buildConstellationFromMemories: async (input) => {
       assert.equal(input.analyzedPhotos.length, 61)
       assert.equal(input.responses[0].response_text, responses[0].response_text)
@@ -223,4 +228,29 @@ test('generation route passes the full photo pool and answers through to saved m
   assert.equal(saved.constellation.nodes[0].summary, excerpt)
   assert.deepEqual(saved.constellation.nodes[0].photo_ids, ['p60'])
   assert.deepEqual(saved.constellation.nodes[0].photo_urls, ['https://fixture.invalid/family-photos/p60.jpg'])
+})
+
+const sharedNodes = [
+  { id: 'n1', contributor_id: 'jonah', contributor_name: 'Jonah', source_response_id: 'r1', summary: 'She taught me to garden the summer I turned twelve.', quotes: [] },
+  { id: 'n2', contributor_id: 'cousin', contributor_name: 'Cousin', source_response_id: 'r2', summary: 'She taught me and Jonah how to garden together that summer.', quotes: [] },
+]
+
+test('two clear same-memory factors merge, one shared topic or a contradiction does not', async () => {
+  for (const [factors, count] of [
+    [{ who: 'match', action: 'match', setting: 'unknown' }, 1],
+    [{ who: 'unknown', action: 'match', setting: 'unknown' }, 2],
+    [{ who: 'match', action: 'match', setting: 'contradiction' }, 2],
+  ]) {
+    const output = await mergeSharedMemories(sharedNodes, client(() => ({ pairs: [{ a: 0, b: 1, ...factors }] })))
+    assert.equal(output.length, count)
+    assert.equal(output[0].attributions[0].quote, sharedNodes[0].summary)
+  }
+})
+
+test('malformed or unavailable merge results preserve separate, attributed memories', async () => {
+  for (const ai of [null, client(() => { throw new Error('offline') }), client(() => ({ pairs: [{ a: 0, b: 99, who: 'match', action: 'match', setting: 'match' }] }))]) {
+    const output = await mergeSharedMemories(sharedNodes, ai)
+    assert.equal(output.length, 2)
+    assert.equal(output[0].contributor_count, 1)
+  }
 })

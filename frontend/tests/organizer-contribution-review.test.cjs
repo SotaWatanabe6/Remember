@@ -4,14 +4,14 @@ const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-// NS-7: the Approve Contributions tab and its content sub-tabs only exist
-// while something is pending review. Run the helper module with Node alone.
+// Manage tabs stay visible; content sub-tabs depend on pending review.
+// Run the helper module with Node alone.
 function loadHelpers() {
   const source = readFileSync(path.resolve(__dirname, '../src/lib/organizer/contributionReview.js'), 'utf8')
     .replace(/^export /gm, '');
   // Same realm as the assertions so arrays compare structurally with deepEqual.
   return vm.runInThisContext(`(() => { ${source}
-    return { getManageTabs, resolveManageTab, hasPendingContributions, getPendingSubmissionSections, getSubmissionSubTabs, resolveSubTab, isUnreviewed, hasUnreviewedItems, markSectionReviewed, isApproved, markSectionApproved, getSubTabNoun, SUBMISSION_SUB_TABS, getSelectedIds, toggleSelected, setAllSelected }; })()`);
+    return { getManageTabs, resolveManageTab, isAwaitingReview, hasPendingContributions, getPendingSubmissionSections, getSubmissionSubTabs, resolveSubTab, isUnreviewed, hasUnreviewedItems, markSectionReviewed, isApproved, markSectionApproved, getSubTabNoun, SUBMISSION_SUB_TABS, getSelectedIds, toggleSelected, setAllSelected }; })()`);
 }
 
 const helpers = loadHelpers();
@@ -20,24 +20,29 @@ const approved = { id: 'b', status: 'approved' };
 const inProgress = { id: 'c', status: 'in_progress' };
 const keys = (tabs) => tabs.map((tab) => tab.key);
 
-test('approve contributions tab is hidden when nothing is pending review', () => {
-  assert.deepEqual(helpers.getManageTabs([approved, inProgress]), ['Archive', 'Outputs']);
-  assert.deepEqual(helpers.getManageTabs([]), ['Archive', 'Outputs']);
-  assert.deepEqual(helpers.getManageTabs(undefined), ['Archive', 'Outputs']);
+test('excluded source content stays out of bulk approval selections', () => {
+  const sections = helpers.getPendingSubmissionSections({ photos: [{ id: 'held', moderation_resolution: 'excluded' }, { id: 'eligible' }] });
+  assert.deepEqual(sections.photos.map(p => p.id), ['eligible']);
+});
+
+test('archive and approve contributions stay visible when nothing is pending review', () => {
+  assert.deepEqual(helpers.getManageTabs([approved, inProgress]), ['Archive', 'Approve Contributions']);
+  assert.deepEqual(helpers.getManageTabs([]), ['Archive', 'Approve Contributions']);
+  assert.deepEqual(helpers.getManageTabs(undefined), ['Archive', 'Approve Contributions']);
   assert.equal(helpers.hasPendingContributions(undefined), false);
 });
 
 test('approve contributions tab is shown while any contributor is submitted', () => {
-  assert.deepEqual(helpers.getManageTabs([approved, submitted]), ['Archive', 'Approve Contributions', 'Outputs']);
-  assert.deepEqual(helpers.getManageTabs([{ status: 'SUBMITTED' }]), ['Archive', 'Approve Contributions', 'Outputs']);
+  assert.deepEqual(helpers.getManageTabs([approved, submitted]), ['Archive', 'Approve Contributions']);
+  assert.deepEqual(helpers.getManageTabs([{ status: 'SUBMITTED' }]), ['Archive', 'Approve Contributions']);
 });
 
-test('approving the last pending submission falls back to the archive tab', () => {
+test('approving the last pending submission keeps the approval tab selected', () => {
   const before = helpers.getManageTabs([submitted]);
   assert.equal(helpers.resolveManageTab('Approve Contributions', before), 'Approve Contributions');
   const after = helpers.getManageTabs([{ ...submitted, status: 'approved' }]);
-  assert.equal(helpers.resolveManageTab('Approve Contributions', after), 'Archive');
-  assert.equal(helpers.resolveManageTab('Outputs', after), 'Outputs');
+  assert.equal(helpers.resolveManageTab('Approve Contributions', after), 'Approve Contributions');
+  assert.equal(helpers.resolveManageTab('Outputs', after), 'Archive');
 });
 
 test('only content types with pending items get a sub-tab', () => {
@@ -227,4 +232,12 @@ test('approving a selection drops the deleted items and stamps only the approved
     ['p3', '2026-09-01T00:00:00.000Z'],
   ]);
   assert.deepEqual(keys(helpers.getSubmissionSubTabs(helpers.getPendingSubmissionSections(next))), [], 'nothing of the type is left pending');
+});
+
+test('approved contributors with moderation concerns return to review; excluded/rejected contributors do not', () => {
+  assert.equal(helpers.isAwaitingReview({ status: 'approved', moderation_pending: 1 }), true);
+  assert.equal(helpers.isAwaitingReview({ status: 'approved', is_flagged: true }), true);
+  assert.equal(helpers.isAwaitingReview({ status: 'approved', is_flagged: false, moderation_resolution: 'approved' }), false);
+  assert.equal(helpers.isAwaitingReview({ status: 'submitted', moderation_resolution: 'excluded', moderation_pending: 3 }), false);
+  assert.equal(helpers.isAwaitingReview({ status: 'rejected', moderation_pending: 1 }), false);
 });

@@ -944,7 +944,7 @@ export async function startContribution(token, name) {
 
 /**
  * POST /contribute/:token/privacy
- * Saves whether the contributor is credited by name or as "Anonymous".
+ * Saves whether the contributor is credited by name or by relationship.
  * Body: { contributor_token, is_anonymous }
  */
 export async function savePrivacyChoice(token, { contributor_token, is_anonymous }) {
@@ -963,6 +963,22 @@ export async function savePrivacyChoice(token, { contributor_token, is_anonymous
     method: "POST",
     body: JSON.stringify({ contributor_token, is_anonymous }),
   });
+}
+
+export async function getPrivacyChoice(token, contributorToken) {
+  if (isLocalMockInviteToken(token)) {
+    const session = readContributorSession(token);
+    return { contributor: {
+      id: session?.contributorId,
+      name: session?.contributorName || '',
+      status: session?.status || 'in_progress',
+      is_anonymous: session?.is_anonymous ?? false,
+      relationship_type: session?.relationship_type || null,
+      relationship_label: session?.relationship_custom_label || session?.relationship_label || null,
+      display_name: session?.display_name || null,
+    } };
+  }
+  return requestJson(`/contribute/${encodeURIComponent(token)}/privacy?contributor_token=${encodeURIComponent(contributorToken)}`);
 }
 
 /**

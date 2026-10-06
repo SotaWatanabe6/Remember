@@ -16,7 +16,17 @@ export function buildConstellationNodes(constellation) {
       photo_urls: photoUrls,
       photos: isMemory ? (photoUrls.length ? node.photo_ids : []) : (node.photos || node.photo_ids || []),
       quotes: node.quotes || [],
-      contributions: isMemory ? 1 : photoUrls.length,
+      attributions: node.attributions || [],
+      contributor_ids: node.attributions?.length ? [...new Set(node.attributions.map(a => a.contributor_id))] : [node.contributor_id],
+      contributions: isMemory ? (node.contributor_count || 1) : photoUrls.length,
     };
+  });
+}
+
+export function isConstellationNodeVisible(node, hiddenContributors, hiddenRelationshipTypes) {
+  const people = node.attributions?.length ? node.attributions : [{ contributor_id: node.contributor_id || node.id, relationship_type: node.relationship_type }];
+  return people.some(person => {
+    const relationship = (person.relationship_type || 'other').replace(/^./, letter => letter.toUpperCase());
+    return !hiddenContributors[person.contributor_id] && !hiddenRelationshipTypes[relationship];
   });
 }

@@ -1,5 +1,6 @@
 require('dotenv').config()
 const OpenAI = require('openai')
+const { buildTranscriptSegments } = require('./transcriptSegments')
 
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null
 const ASSEMBLYAI_API_KEY = process.env.ASSEMBLYAI_API_KEY || null
@@ -90,7 +91,10 @@ async function transcribeWithAssemblyAI(audioUrl) {
     const transcript = await pollResponse.json()
 
     if (transcript.status === 'completed') {
-      return transcript.text || ''
+      return {
+        transcript_text: (transcript.text || '').trim(),
+        transcript_segments: buildTranscriptSegments(transcript.words),
+      }
     }
 
     if (transcript.status === 'error') {
@@ -113,6 +117,7 @@ async function transcribeWithAssemblyAI(audioUrl) {
 async function processVoiceRecording({ fileBuffer, mimeType, fileName, subjectName, contributorName }) {
   const emptyResult = {
     transcript_text: null,
+    transcript_segments: [],
     key_quote: null,
     intro_line: null,
     clip_start_seconds: 0,
@@ -125,9 +130,11 @@ async function processVoiceRecording({ fileBuffer, mimeType, fileName, subjectNa
   }
 
   let transcriptText = ''
+  let transcriptSegments = []
   try {
-    const uploadUrl = await uploadAudioToAssemblyAI(fileBuffer)
-    transcriptText = (await transcribeWithAssemblyAI(uploadUrl)).trim()
+    const transcript = await transcribeVoiceRecording(fileBuffer)
+    transcriptText = transcript.transcript_text
+    transcriptSegments = transcript.transcript_segments
   } catch (err) {
     console.error('[voice] assemblyai error:', err.message)
     return { ...emptyResult, error: err.message }
@@ -140,6 +147,7 @@ async function processVoiceRecording({ fileBuffer, mimeType, fileName, subjectNa
   if (!openai) {
     return {
       transcript_text: transcriptText,
+      transcript_segments: transcriptSegments,
       key_quote: transcriptText.slice(0, 150),
       intro_line: null,
       clip_start_seconds: 0,
@@ -182,6 +190,7 @@ Pick a natural spoken excerpt. If the memo is very short, use clip_start_seconds
 
     return {
       transcript_text: transcriptText,
+      transcript_segments: transcriptSegments,
       key_quote: parsed.key_quote || transcriptText.slice(0, 150),
       intro_line: parsed.intro_line || null,
       clip_start_seconds: start,
@@ -192,6 +201,7 @@ Pick a natural spoken excerpt. If the memo is very short, use clip_start_seconds
     console.error('[voice] highlight error:', err.message)
     return {
       transcript_text: transcriptText,
+      transcript_segments: transcriptSegments,
       key_quote: transcriptText.slice(0, 150),
       intro_line: null,
       clip_start_seconds: 0,
@@ -201,4 +211,9 @@ Pick a natural spoken excerpt. If the memo is very short, use clip_start_seconds
   }
 }
 
-module.exports = { processVoiceRecording }
+async function transcribeVoiceRecording(fileBuffer) {
+  const uploadUrl = await uploadAudioToAssemblyAI(fileBuffer)
+  return transcribeWithAssemblyAI(uploadUrl)
+}
+
+module.exports = { processVoiceRecording, transcribeVoiceRecording }

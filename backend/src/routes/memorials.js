@@ -3,6 +3,8 @@ const express = require('express')
 const router = express.Router()
 const supabase = require('../supabase')
 const authMiddleware = require('../middleware/auth')
+const { registerModerationReview, getModerationItems } = require('../services/moderationReview')
+const { isPendingModeration } = require('../services/moderationState')
 const crypto = require('crypto')
 const multer = require('multer')
 const upload = multer()
@@ -10,6 +12,7 @@ const upload = multer()
 // After the existing requires:
 const { enrichMemorialsForClient, enrichMemorialForClient } = require('../services/storageUrls')
 const { getContributorHighlights } = require('../services/contributorHighlights')
+const { withContributorDisplayNames, withOutputDisplayNames } = require('../services/contributorPrivacy')
 
 const CONTRIBUTOR_REVIEW_STATUSES = new Set(['in_progress', 'submitted', 'approved', 'rejected'])
 
@@ -29,7 +32,7 @@ const REVIEWED_ON_STATUSES = new Set(['approved', 'rejected'])
 async function getOwnedMemorial(memorialId, userId) {
   const { data, error } = await supabase
     .from('memorials')
-    .select('id')
+    .select('id, status')
     .eq('id', memorialId)
     .eq('user_id', userId)
     .single()
@@ -86,6 +89,8 @@ async function createSignedAssetUrls(items = [], urlKey) {
     }
   }))
 }
+
+registerModerationReview(router, supabase, authMiddleware, getOwnedMemorial)
 
 // POST /memorials/cover-photo — upload cover photo, returns storage URL
 router.post('/cover-photo', authMiddleware, async (req, res) => {
@@ -404,6 +409,7 @@ router.get('/:id/archive', authMiddleware, async (req, res) => {
       .select('id, name, relationship_type, relationship_label, status, submitted_at, created_at, updated_at')
       .eq('memorial_id', req.params.id)
       .in('status', ['submitted', 'approved'])
+      .or('moderation_resolution.is.null,moderation_resolution.neq.excluded')
       .order('submitted_at', { ascending: false })
 
     if (contributorsError) return res.status(400).json({ error: contributorsError.message })
@@ -426,6 +432,7 @@ router.get('/:id/archive', authMiddleware, async (req, res) => {
         .eq('memorial_id', req.params.id)
         .in('contributor_id', reviewedIds)
         .not('approved_at', 'is', null)
+        .or('moderation_resolution.is.null,moderation_resolution.neq.excluded')
         .order('order_index', { ascending: true }),
       supabase
         .from('contributor_stories')
@@ -440,6 +447,7 @@ router.get('/:id/archive', authMiddleware, async (req, res) => {
         .eq('memorial_id', req.params.id)
         .in('contributor_id', reviewedIds)
         .not('approved_at', 'is', null)
+        .or('moderation_resolution.is.null,moderation_resolution.neq.excluded')
         .order('created_at', { ascending: false }),
       supabase
         .from('voice_recordings')
@@ -447,6 +455,7 @@ router.get('/:id/archive', authMiddleware, async (req, res) => {
         .eq('memorial_id', req.params.id)
         .in('contributor_id', reviewedIds)
         .not('approved_at', 'is', null)
+        .or('moderation_resolution.is.null,moderation_resolution.neq.excluded')
         .order('created_at', { ascending: false }),
     ])
 
@@ -490,7 +499,7 @@ router.get('/:id/contributors', authMiddleware, async (req, res) => {
 
     const { data: contributors, error } = await supabase
       .from('contributors')
-      .select('id, name, is_anonymous, relationship_type, relationship_label, status, questionnaire_done, photos_done, voice_done, submitted_at, created_at, updated_at')
+      .select('id, name, is_anonymous, is_flagged, flagged_reason, moderation_resolution, moderation_reviewed_at, relationship_type, relationship_label, status, questionnaire_done, photos_done, voice_done, submitted_at, created_at, updated_at')
       .eq('memorial_id', req.params.id)
       .order('created_at', { ascending: false })
 
@@ -506,16 +515,21 @@ router.get('/:id/contributors', authMiddleware, async (req, res) => {
       { data: stories, error: storiesError },
       { data: photos, error: photosError },
       { data: voices, error: voicesError },
+      { data: responses, error: responsesError },
     ] = await Promise.all([
       supabase.from('contributor_stories').select('id, contributor_id').in('contributor_id', contributorIds),
-      supabase.from('media_assets').select('id, contributor_id').in('contributor_id', contributorIds),
-      supabase.from('voice_recordings').select('id, contributor_id').in('contributor_id', contributorIds),
+      supabase.from('media_assets').select('id, contributor_id, is_flagged, moderation_resolution').in('contributor_id', contributorIds),
+      supabase.from('voice_recordings').select('id, contributor_id, is_flagged, moderation_resolution').in('contributor_id', contributorIds),
+      supabase.from('questionnaire_responses').select('id, contributor_id, is_flagged, moderation_resolution').in('contributor_id', contributorIds),
     ])
 
-    const countError = storiesError || photosError || voicesError
+    const countError = storiesError || photosError || voicesError || responsesError
     if (countError) return res.status(400).json({ error: countError.message })
 
-    res.json({ contributors: enrichContributors(contributors, stories, photos, voices) })
+    const pending = countByContributor([...(photos || []), ...(voices || []), ...(responses || [])].filter(isPendingModeration))
+    res.json({ contributors: enrichContributors(contributors, stories, photos, voices).map(c => ({
+      ...c, moderation_pending: c.moderation_resolution === 'excluded' ? 0 : (pending[c.id] || 0) + Number(isPendingModeration(c)),
+    })) })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -544,7 +558,7 @@ router.get('/:id/contributors/:contributorId/submission', authMiddleware, async 
 
     const { data: contributor, error: contributorError } = await supabase
       .from('contributors')
-      .select('id, name, is_anonymous, relationship_type, relationship_label, status, questionnaire_done, photos_done, voice_done, submitted_at, created_at, updated_at')
+      .select('id, name, is_anonymous, is_flagged, flagged_reason, moderation_resolution, moderation_reviewed_at, relationship_type, relationship_label, status, questionnaire_done, photos_done, voice_done, submitted_at, created_at, updated_at')
       .eq('id', req.params.contributorId)
       .eq('memorial_id', req.params.id)
       .single()
@@ -559,7 +573,7 @@ router.get('/:id/contributors/:contributorId/submission', authMiddleware, async 
     ] = await Promise.all([
       supabase
         .from('questionnaire_responses')
-        .select('id, question_text, response_text, response_audio_url, order_index, reviewed_at, approved_at, created_at, updated_at')
+        .select('id, question_text, response_text, response_audio_url, order_index, is_flagged, flagged_reason, moderation_resolution, moderation_reviewed_at, reviewed_at, approved_at, created_at, updated_at')
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', req.params.id)
         .order('order_index', { ascending: true }),
@@ -571,13 +585,13 @@ router.get('/:id/contributors/:contributorId/submission', authMiddleware, async 
         .order('created_at', { ascending: true }),
       supabase
         .from('media_assets')
-        .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption, is_flagged, flagged_reason, reviewed_at, approved_at, created_at')
+        .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, taken_at, caption, is_flagged, flagged_reason, moderation_resolution, moderation_reviewed_at, reviewed_at, approved_at, created_at')
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', req.params.id)
         .order('created_at', { ascending: true }),
       supabase
         .from('voice_recordings')
-        .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, duration_seconds, contributor_title, transcript_text, key_quote, is_flagged, flagged_reason, reviewed_at, approved_at, created_at')
+        .select('id, contributor_id, storage_path, storage_bucket, file_name, file_type, file_size_bytes, duration_seconds, contributor_title, transcript_text, key_quote, is_flagged, flagged_reason, moderation_resolution, moderation_reviewed_at, reviewed_at, approved_at, created_at')
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', req.params.id)
         .order('created_at', { ascending: true }),
@@ -629,18 +643,23 @@ async function markSubmissionReviewed(memorialId, contributorId, types) {
 // How many of a contributor's items are still awaiting approval, across every
 // content type. Zero means the whole submission has been through approval.
 async function countPendingApproval(memorialId, contributorId) {
-  const results = await Promise.all(Object.values(REVIEWABLE_SUBMISSION_TABLES).map((table) => supabase
+  const results = await Promise.all(Object.values(REVIEWABLE_SUBMISSION_TABLES).map((table) => withoutExcluded(supabase
     .from(table)
     .select('id', { count: 'exact', head: true })
     .eq('contributor_id', contributorId)
     .eq('memorial_id', memorialId)
-    .is('approved_at', null)))
+    .is('approved_at', null), table)))
 
   const failed = results.find((result) => result.error)
   return {
     count: results.reduce((total, result) => total + (result.count || 0), 0),
     error: failed?.error || null,
   }
+}
+
+// A moderation exclusion keeps the source saved, outside bulk approval/deletion.
+function withoutExcluded(query, table) {
+  return table === 'contributor_stories' ? query : query.or('moderation_resolution.is.null,moderation_resolution.neq.excluded')
 }
 
 // PATCH /memorials/:id/contributors/:contributorId/submission/approve — approve one content type
@@ -672,18 +691,23 @@ router.patch('/:id/contributors/:contributorId/submission/approve', authMiddlewa
 
     if (contributorError || !contributor) return res.status(404).json({ error: 'Contributor not found' })
 
+    const moderationItems = await getModerationItems(supabase, req.params.id, req.params.contributorId)
+    if (Object.values(moderationItems).flat().some(isPendingModeration)) {
+      return res.status(409).json({ error: 'Resolve flagged content using the moderation review controls first.' })
+    }
+
     const selectedIds = req.body?.ids
     if (selectedIds !== undefined && (!Array.isArray(selectedIds) || selectedIds.some((id) => typeof id !== 'string'))) {
       return res.status(400).json({ error: 'ids must be an array of item ids' })
     }
 
     const hasFiles = STORED_SUBMISSION_TYPES.has(type)
-    const { data: awaiting, error: awaitingError } = await supabase
+    const { data: awaiting, error: awaitingError } = await withoutExcluded(supabase
       .from(table)
       .select(hasFiles ? 'id, storage_path, storage_bucket' : 'id')
       .eq('contributor_id', contributor.id)
       .eq('memorial_id', req.params.id)
-      .is('approved_at', null)
+      .is('approved_at', null), table)
 
     if (awaitingError) return res.status(400).json({ error: awaitingError.message })
 
@@ -746,7 +770,7 @@ router.patch('/:id/contributors/:contributorId/submission/approve', authMiddlewa
         .update({ status: 'approved', updated_at: new Date().toISOString() })
         .eq('id', contributor.id)
         .eq('memorial_id', req.params.id)
-        .select('id, name, is_anonymous, relationship_type, relationship_label, status, questionnaire_done, photos_done, voice_done, submitted_at, created_at, updated_at')
+        .select('id, name, is_anonymous, is_flagged, flagged_reason, moderation_resolution, moderation_reviewed_at, relationship_type, relationship_label, status, questionnaire_done, photos_done, voice_done, submitted_at, created_at, updated_at')
         .single()
 
       if (error || !data) return res.status(400).json({ error: error?.message || 'Failed to approve contributor' })
@@ -777,12 +801,19 @@ router.patch('/:id/contributors/:contributorId/status', authMiddleware, async (r
       return res.status(400).json({ error: 'Invalid contributor status' })
     }
 
+    if (status === 'approved') {
+      const moderationItems = await getModerationItems(supabase, req.params.id, req.params.contributorId)
+      if (Object.values(moderationItems).flat().some(isPendingModeration)) {
+        return res.status(409).json({ error: 'Resolve flagged content using the moderation review controls first.' })
+      }
+    }
+
     const { data, error } = await supabase
       .from('contributors')
       .update({ status, updated_at: new Date().toISOString() })
       .eq('id', req.params.contributorId)
       .eq('memorial_id', req.params.id)
-      .select('id, name, is_anonymous, relationship_type, relationship_label, status, questionnaire_done, photos_done, voice_done, submitted_at, created_at, updated_at')
+      .select('id, name, is_anonymous, is_flagged, flagged_reason, moderation_resolution, moderation_reviewed_at, relationship_type, relationship_label, status, questionnaire_done, photos_done, voice_done, submitted_at, created_at, updated_at')
       .single()
 
     if (error || !data) return res.status(404).json({ error: 'Contributor not found' })
@@ -796,13 +827,13 @@ router.patch('/:id/contributors/:contributorId/status', authMiddleware, async (r
 
       // Approving the contributor outright approves whatever is left of theirs.
       if (status === 'approved') {
-        const approved = await Promise.all(Object.values(REVIEWABLE_SUBMISSION_TABLES).map((table) => supabase
+        const approved = await Promise.all(Object.values(REVIEWABLE_SUBMISSION_TABLES).map((table) => withoutExcluded(supabase
           .from(table)
           .update({ approved_at: reviewedAt })
           .eq('contributor_id', data.id)
           .eq('memorial_id', req.params.id)
           .is('approved_at', null)
-          .select('id')))
+          .select('id'), table)))
 
         const approveError = approved.find((result) => result.error)
         if (approveError) return res.status(400).json({ error: approveError.error.message })
@@ -1046,7 +1077,12 @@ router.get('/:id/output', authMiddleware, async (req, res) => {
       console.error('[output] fetch error:', error)
       return res.status(404).json({ error: 'Output not found. Generation may not be complete yet.' })
     }
-    res.json(output.output_json)
+    const { data: contributors, error: contributorsError } = await supabase.from('contributors')
+      .select('id, name, is_anonymous, is_flagged, flagged_reason, moderation_resolution, moderation_reviewed_at, relationship_type, relationship_label, status, submitted_at, created_at')
+      .eq('memorial_id', req.params.id)
+    if (contributorsError) return res.status(500).json({ error: 'Could not resolve contributor display names.' })
+    const visibleContributors = (contributors || []).filter((person) => ['submitted', 'approved'].includes(person.status))
+    res.json({ ...withOutputDisplayNames(output.output_json, contributors || []), contributor: withContributorDisplayNames(visibleContributors) })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

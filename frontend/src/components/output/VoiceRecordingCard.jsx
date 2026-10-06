@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import SyncedTranscript from './SyncedTranscript';
 
 const WAVE_BARS = [16, 26, 20, 34, 24, 42, 18, 30, 46, 22, 36, 28, 44, 24, 34, 48, 22, 40, 30, 36, 20, 32];
 
@@ -12,10 +13,11 @@ function PlayIcon() {
   );
 }
 
-function StopIcon() {
+function PauseIcon() {
   return (
     <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="7" y="7" width="10" height="10" rx="1.5" />
+      <rect x="6" y="4" width="4" height="16" rx="1" />
+      <rect x="14" y="4" width="4" height="16" rx="1" />
     </svg>
   );
 }
@@ -24,20 +26,6 @@ function clampAudioTime(value, duration) {
   if (!Number.isFinite(value) || value < 0) return 0;
   if (!Number.isFinite(duration) || duration <= 0) return value;
   return Math.min(value, duration);
-}
-
-function formatSegmentTime(value) {
-  const seconds = Number(value);
-  if (!Number.isFinite(seconds) || seconds < 0) return null;
-
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = Math.floor(seconds % 60);
-  return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-}
-
-function getSegmentText(segment) {
-  if (typeof segment === 'string') return segment;
-  return segment?.text || segment?.transcript || segment?.transcript_text || '';
 }
 
 function joinClassNames(...classes) {
@@ -52,6 +40,7 @@ export function VoiceWavePlayer({
   onPlay,
   onPause,
   onEnded,
+  onTimeUpdate,
   size = 'organizer',
 }) {
   const audioRef = useRef(null);
@@ -80,7 +69,9 @@ export function VoiceWavePlayer({
     }
 
     function syncCurrentTime() {
-      setCurrentTime(clampAudioTime(audio.currentTime, audio.duration));
+      const time = clampAudioTime(audio.currentTime, audio.duration);
+      setCurrentTime(time);
+      onTimeUpdate?.(time);
     }
 
     function handleCanPlay() {
@@ -94,15 +85,20 @@ export function VoiceWavePlayer({
     }
 
     function handleEnded() {
-      audio.currentTime = 0;
-      setCurrentTime(0);
+      syncCurrentTime();
       setIsPlaying(false);
       onEnded?.(recordingId);
     }
 
+    function handlePlay() { setIsPlaying(true); }
+    function handlePause() { setIsPlaying(false); }
+
     audio.addEventListener('loadedmetadata', syncDuration);
     audio.addEventListener('durationchange', syncDuration);
     audio.addEventListener('timeupdate', syncCurrentTime);
+    audio.addEventListener('seeked', syncCurrentTime);
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('pause', handlePause);
     audio.addEventListener('canplay', handleCanPlay);
     audio.addEventListener('canplaythrough', handleCanPlay);
     audio.addEventListener('error', handleError);
@@ -112,12 +108,15 @@ export function VoiceWavePlayer({
       audio.removeEventListener('loadedmetadata', syncDuration);
       audio.removeEventListener('durationchange', syncDuration);
       audio.removeEventListener('timeupdate', syncCurrentTime);
+      audio.removeEventListener('seeked', syncCurrentTime);
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('canplay', handleCanPlay);
       audio.removeEventListener('canplaythrough', handleCanPlay);
       audio.removeEventListener('error', handleError);
       audio.removeEventListener('ended', handleEnded);
     };
-  }, [onEnded, recordingId]);
+  }, [onEnded, onTimeUpdate, recordingId, src]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -128,12 +127,14 @@ export function VoiceWavePlayer({
     audio.load();
     setIsPlaying(false);
     setCurrentTime(0);
+    onTimeUpdate?.(0);
     setLoadedDuration(0);
     setHasError(false);
-  }, [src]);
+    return () => audio.pause();
+  }, [src, onTimeUpdate]);
 
   useEffect(() => {
-    if (isActive) return;
+    if (isActive !== false) return;
 
     const audio = audioRef.current;
     if (!audio) return;
@@ -158,19 +159,17 @@ export function VoiceWavePlayer({
     }
   }
 
-  function stopAudio() {
+  function pauseAudio() {
     const audio = audioRef.current;
     if (!audio) return;
 
     audio.pause();
-    audio.currentTime = 0;
-    setCurrentTime(0);
     setIsPlaying(false);
     onPause?.(recordingId);
   }
 
   function togglePlayback() {
-    if (isPlaying) stopAudio();
+    if (isPlaying) pauseAudio();
     else playAudio();
   }
 
@@ -178,6 +177,7 @@ export function VoiceWavePlayer({
     const clampedTime = clampAudioTime(nextTime, safeDuration);
 
     setCurrentTime(clampedTime);
+    onTimeUpdate?.(clampedTime);
     if (audioRef.current) audioRef.current.currentTime = clampedTime;
   }
 
@@ -210,18 +210,18 @@ export function VoiceWavePlayer({
   }
 
   return (
-    <div className={joinClassNames('flex items-center', isLarge ? 'gap-[14px]' : 'gap-[10px]')}>
+    <div className={joinClassNames('flex max-w-full items-center', isLarge ? 'gap-[14px]' : 'gap-[10px]')}>
       <button
         type="button"
         onClick={togglePlayback}
         disabled={isUnavailable}
-        aria-label={isPlaying ? 'Stop recording' : 'Play recording'}
+        aria-label={isPlaying ? 'Pause recording' : 'Play recording'}
         className={joinClassNames(
           'grid shrink-0 place-items-center rounded-full bg-r-text text-r-bg transition hover:opacity-85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-r-border-focus disabled:cursor-not-allowed disabled:bg-r-border disabled:text-r-muted',
           isLarge ? 'size-[68px]' : 'size-[50px]',
         )}
       >
-        {isPlaying ? <StopIcon /> : <PlayIcon />}
+        {isPlaying ? <PauseIcon /> : <PlayIcon />}
       </button>
 
       <div
@@ -235,7 +235,7 @@ export function VoiceWavePlayer({
         onClick={seekFromPointer}
         onKeyDown={handleWaveKeyDown}
         className={joinClassNames(
-          'flex shrink-0 cursor-pointer items-center gap-[3px] rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-r-border-focus',
+          'flex min-w-0 cursor-pointer items-center gap-[3px] rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-r-border-focus',
           isLarge ? 'h-[68px] w-[235px]' : 'h-[50px] w-[173px]',
           isUnavailable ? 'cursor-not-allowed opacity-45' : '',
         )}
@@ -264,48 +264,6 @@ export function VoiceWavePlayer({
   );
 }
 
-function SegmentTranscript({ segments }) {
-  if (!Array.isArray(segments) || segments.length === 0) return null;
-
-  return (
-    <div className="space-y-3">
-      {segments.map((segment, index) => {
-        const text = getSegmentText(segment);
-        if (!text) return null;
-
-        const start = formatSegmentTime(segment?.start ?? segment?.start_time ?? segment?.startTime);
-        const end = formatSegmentTime(segment?.end ?? segment?.end_time ?? segment?.endTime);
-        const speaker = segment?.speaker || segment?.speaker_name;
-        const label = [speaker, start && end ? `${start}-${end}` : start].filter(Boolean).join(' - ');
-
-        return (
-          <div key={`${label || 'segment'}-${index}`}>
-            {label ? <p className="mb-1 text-caption uppercase text-r-muted">{label}</p> : null}
-            <p className="text-body-2 text-r-text">{text}</p>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function TranscriptBlock({ recording, className = '', id }) {
-  const hasSegments = Array.isArray(recording.transcriptSegments) && recording.transcriptSegments.length > 0;
-
-  if (!recording.transcriptText && !hasSegments) {
-    return <p id={id} className={joinClassNames('text-body-2 text-r-muted', className)}>Transcript unavailable.</p>;
-  }
-
-  return (
-    <div id={id} className={className}>
-      {recording.transcriptText ? (
-        <p className="whitespace-pre-line text-body-2 text-r-text">&ldquo;{recording.transcriptText}&rdquo;</p>
-      ) : null}
-      <SegmentTranscript segments={recording.transcriptSegments} />
-    </div>
-  );
-}
-
 function VoiceTag({ label }) {
   if (!label) return null;
 
@@ -330,7 +288,13 @@ export default function VoiceRecordingCard({
   const submittedLine = recording.submittedLabel ? `Submitted ${recording.submittedLabel}` : '';
   const isViewer = variant === 'viewer';
 
-  const audioControl = useMemo(() => (
+  const [playback, setPlayback] = useState({ src: recording.audioUrl, time: 0 });
+  const currentTime = playback.src === recording.audioUrl ? playback.time : 0;
+  const handleTimeUpdate = useCallback((time) => {
+    setPlayback({ src: recording.audioUrl, time });
+  }, [recording.audioUrl]);
+
+  const audioControl = (
     <VoiceWavePlayer
       src={recording.audioUrl}
       recordingId={recording.id}
@@ -339,15 +303,16 @@ export default function VoiceRecordingCard({
       onPlay={onPlay}
       onPause={onPause}
       onEnded={onEnded}
+      onTimeUpdate={handleTimeUpdate}
       size={isViewer ? 'viewer' : 'organizer'}
     />
-  ), [isActive, isViewer, onEnded, onPause, onPlay, recording.audioUrl, recording.durationSeconds, recording.id]);
+  );
 
   if (isViewer) {
     return (
-      <section aria-label={recording.title} className="flex w-full max-w-[658px] flex-col items-start justify-center gap-[50px]">
+      <section aria-label={recording.title} className="flex w-full min-w-0 max-w-[658px] flex-col items-start justify-center gap-[50px]">
         {audioControl}
-        <TranscriptBlock recording={recording} className="max-w-full" />
+        <SyncedTranscript recording={recording} currentTime={currentTime} className="w-full max-w-full" id={transcriptId} />
         <VoiceTag label={tagLabel} />
       </section>
     );
@@ -374,8 +339,9 @@ export default function VoiceRecordingCard({
           </div>
         </div>
 
-        <TranscriptBlock
+        <SyncedTranscript
           recording={recording}
+          currentTime={currentTime}
           className="w-full max-w-[560px]"
           id={transcriptId}
         />
