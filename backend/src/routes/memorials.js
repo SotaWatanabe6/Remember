@@ -254,18 +254,25 @@ router.get('/:id', authMiddleware, async (req, res) => {
   }
 })
 
-// PATCH /memorials/:id — update memorial fields (e.g. attach cover photo)
+// PATCH /memorials/:id — update the memorial profile before generation completes
 router.patch('/:id', authMiddleware, async (req, res) => {
   try {
     const { data: memorial, error: memError } = await supabase
       .from('memorials')
-      .select('id')
+      .select('id, status')
       .eq('id', req.params.id)
       .eq('user_id', req.user.sub)
       .single()
 
     if (memError || !memorial) {
       return res.status(403).json({ error: 'Not authorized' })
+    }
+
+    if (String(memorial.status || '').toLowerCase() === 'complete') {
+      return res.status(409).json({
+        error: 'This memorial profile can no longer be edited after generation.',
+        code: 'memorial_profile_locked',
+      })
     }
 
     const allowedFields = [
