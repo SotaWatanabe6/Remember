@@ -5,6 +5,7 @@
 
 import {
   createMemorial as apiCreateMemorial,
+  updateMemorial as apiUpdateMemorial,
   getMemorials as apiGetMemorials,
   getMemorial as apiGetMemorial,
   getAuthToken,
@@ -78,6 +79,37 @@ export async function createMemorial(memorialInput) {
     cover_photo_url:
       memorialInput.cover_photo_url || memorialInput.profile_photo_url || null,
   });
+  return normalizeMemorial(response.memorial);
+}
+
+/**
+ * Updates an organizer-owned memorial profile before generation completes.
+ */
+export async function updateMemorial(memorialId, memorialInput) {
+  const updates = {
+    subject_name:
+      memorialInput.subject_name || memorialInput.deceased_name || "",
+    nickname: memorialInput.nickname || null,
+    date_of_birth:
+      memorialInput.date_of_birth || memorialInput.birth_date || null,
+    date_of_passing:
+      memorialInput.date_of_passing || memorialInput.death_date || null,
+    biography:
+      memorialInput.biography ||
+      memorialInput.description ||
+      memorialInput.brief_biography ||
+      "",
+  };
+
+  if (
+    memorialInput.cover_photo_url !== undefined ||
+    memorialInput.profile_photo_url !== undefined
+  ) {
+    updates.cover_photo_url =
+      memorialInput.cover_photo_url || memorialInput.profile_photo_url || null;
+  }
+
+  const response = await apiUpdateMemorial(memorialId, updates);
   return normalizeMemorial(response.memorial);
 }
 

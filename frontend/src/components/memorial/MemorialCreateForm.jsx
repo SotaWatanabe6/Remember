@@ -2,17 +2,22 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createMemorial } from "@/services/memorialService.js";
+import Image from "next/image";
+import { createMemorial, updateMemorial } from "@/services/memorialService.js";
 import { uploadMemorialCoverPhoto } from "@/lib/api.js";
 import MemorialDateFields from "@/components/memorial/MemorialDateFields.jsx";
 import ProfilePhotoCropper from "@/components/memorial/ProfilePhotoCropper.jsx";
 import { DEFAULT_CROP } from "@/lib/imageCrop.js";
+import { combineSubjectName, memorialProfileFormValues } from "@/lib/memorialProfile.mjs";
 
 const fieldClassName =
   "h-[69px] w-full rounded-[18px] border border-r-border bg-[#F6EFE7] px-5 font-family-body text-[20px] leading-[20px] text-[#5F5A52] outline-none transition placeholder:text-[#5F5A52] focus:border-r-border-focus focus:ring-2 focus:ring-r-border/30";
 
 const labelClassName =
   "font-family-display text-[24px] font-medium leading-[24px] text-r-text";
+
+const editFieldClassName =
+  "h-[63px] w-full rounded-[13px] border border-r-muted bg-transparent px-5 font-family-body text-[20px] leading-[20px] text-r-secondary outline-none transition placeholder:text-r-secondary focus:border-r-text focus:ring-2 focus:ring-r-muted/25 disabled:opacity-50";
 
 const initialRemembered = {
   firstName: "",
@@ -48,21 +53,32 @@ function UploadIcon() {
   );
 }
 
-function TextField({ id, label, labelClass = labelClassName, required, error, ...props }) {
+function TextField({
+  id,
+  label,
+  labelClass = labelClassName,
+  inputClassName = fieldClassName,
+  required,
+  showRequiredIndicator = true,
+  error,
+  ...props
+}) {
   const errorId = error ? `${id}-error` : undefined;
 
   return (
     <div className="flex w-full flex-col gap-[10px]">
       <label htmlFor={id} className={labelClass}>
         {label}
-        {required && <span className="ml-1 text-red-500" aria-hidden="true">*</span>}
+        {required && showRequiredIndicator ? (
+          <span className="ml-1 text-red-500" aria-hidden="true">*</span>
+        ) : null}
       </label>
       <input
         id={id}
         aria-invalid={Boolean(error)}
         aria-describedby={errorId}
         aria-required={required}
-        className={fieldClassName}
+        className={inputClassName}
         {...props}
       />
       {error ? (
@@ -74,12 +90,23 @@ function TextField({ id, label, labelClass = labelClassName, required, error, ..
   );
 }
 
-export default function MemorialCreateForm() {
+export default function MemorialCreateForm({
+  mode = "create",
+  memorialId,
+  initialMemorial = null,
+  backHref,
+  onSaved,
+}) {
   const router = useRouter();
   const fileInputRef = useRef(null);
   const previewUrlRef = useRef(null);
+  const isEdit = mode === "edit";
+  const initialProfile = memorialProfileFormValues(initialMemorial || {});
 
-  const [remembered, setRemembered] = useState(initialRemembered);
+  const [remembered, setRemembered] = useState(() => ({
+    ...initialRemembered,
+    ...(isEdit ? initialProfile : {}),
+  }));
   // The untouched file the organizer picked. Kept so the crop can be adjusted
   // again later without re-encoding an already-cropped image.
   const [originalPhoto, setOriginalPhoto] = useState(null);
@@ -169,7 +196,9 @@ export default function MemorialCreateForm() {
     if (!remembered.firstName.trim()) nextFieldErrors.firstName = "First name is required.";
     if (!remembered.lastName.trim()) nextFieldErrors.lastName = "Last name is required.";
     if (!remembered.briefBiography.trim()) nextFieldErrors.briefBiography = "Brief biography is required.";
-    if (!remembered.photo) nextFieldErrors.photo = "A profile photo is required.";
+    if (!remembered.photo && !remembered.photoPreview) {
+      nextFieldErrors.photo = "A profile photo is required.";
+    }
 
     const nextDateErrors = { date_of_birth: "", date_of_passing: "" };
     if (!remembered.date_of_birth) nextDateErrors.date_of_birth = "Date of birth is required.";
@@ -199,18 +228,22 @@ export default function MemorialCreateForm() {
     try {
       const controller = new AbortController();
       const uploadTimeout = setTimeout(() => controller.abort(), 20_000);
-      let coverPhotoUrl = null;
+      let coverPhotoUrl = isEdit ? initialProfile.photoPreview : null;
 
-      try {
-        const upload = await uploadMemorialCoverPhoto(remembered.photo, {
-          signal: controller.signal,
-        });
-        coverPhotoUrl = upload.cover_photo_url || upload.storage_path || upload.url || null;
-      } catch (uploadErr) {
-        throw new Error(
-          `Photo upload failed: ${uploadErr.message || "unknown error"}. Please try again.`,
-        );
-      } finally {
+      if (remembered.photo) {
+        try {
+          const upload = await uploadMemorialCoverPhoto(remembered.photo, {
+            signal: controller.signal,
+          });
+          coverPhotoUrl = upload.storage_path || upload.cover_photo_url || upload.url || null;
+        } catch (uploadErr) {
+          throw new Error(
+            `Photo upload failed: ${uploadErr.message || "unknown error"}. Please try again.`,
+          );
+        } finally {
+          clearTimeout(uploadTimeout);
+        }
+      } else {
         clearTimeout(uploadTimeout);
       }
 
@@ -218,43 +251,185 @@ export default function MemorialCreateForm() {
         throw new Error("Photo uploaded but no URL was returned. Please try again.");
       }
 
-      const subjectName = `${remembered.firstName} ${remembered.lastName}`.trim();
+      const subjectName = combineSubjectName(remembered.firstName, remembered.lastName);
 
-      const memorial = await createMemorial({
+      const memorialInput = {
         subject_name: subjectName,
         nickname: remembered.nickName || null,
         date_of_birth: remembered.date_of_birth || null,
         date_of_passing: remembered.date_of_passing || null,
         biography: remembered.briefBiography.trim(),
-        cover_photo_url: coverPhotoUrl,
         related_people: [],
-      });
+      };
+      if (!isEdit || remembered.photo) {
+        memorialInput.cover_photo_url = coverPhotoUrl;
+      }
+      const memorial = isEdit
+        ? await updateMemorial(memorialId, memorialInput)
+        : await createMemorial(memorialInput);
 
       if (!memorial?.id) {
         throw new Error(
-          "Memorial may have been created but we could not open it. Check your dashboard.",
+          isEdit
+            ? "The memorial may have been updated, but it could not be reloaded."
+            : "Memorial may have been created but we could not open it. Check your dashboard.",
         );
       }
 
-      router.push(`/memorial/${memorial.id}/manage`);
+      await onSaved?.(memorial);
+      router.push(backHref || `/memorial/${memorial.id}/manage`);
+      router.refresh();
     } catch (err) {
-      setError(err.message || "Failed to create memorial. Please try again.");
+      setError(
+        err.message ||
+          (isEdit
+            ? "Failed to update the memorial. Please try again."
+            : "Failed to create memorial. Please try again."),
+      );
     } finally {
       clearTimeout(safetyTimer);
       setIsSubmitting(false);
     }
   };
 
+  const cropper = isCropping && originalPhoto ? (
+    <ProfilePhotoCropper
+      file={originalPhoto}
+      initialCrop={remembered.photoCrop}
+      onApply={handleCropApply}
+      onCancel={handleCropCancel}
+    />
+  ) : null;
+
+  if (isEdit) {
+    return (
+      <>
+        {cropper}
+        <form onSubmit={handleSubmit} className="flex w-full max-w-[886px] flex-col items-center gap-[50px]">
+          <div className="flex flex-col items-center gap-5">
+            <input
+              ref={fileInputRef}
+              id="photo-input"
+              type="file"
+              accept="image/*"
+              onChange={handlePhotoChange}
+              className="sr-only"
+              disabled={isSubmitting}
+            />
+            <div className="relative flex size-[240px] items-center justify-center overflow-hidden rounded-full border border-r-border bg-white sm:size-[314px]">
+              {remembered.photoPreview ? (
+                <Image
+                  src={remembered.photoPreview}
+                  alt={`Portrait of ${combineSubjectName(remembered.firstName, remembered.lastName)}`}
+                  fill
+                  unoptimized
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="font-family-display text-[64px] text-r-secondary" aria-hidden="true">
+                  {remembered.firstName.trim().charAt(0).toUpperCase() || "R"}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={triggerFileInput}
+              disabled={isSubmitting}
+              className="flex h-[58px] w-[206px] items-center justify-center rounded-full bg-r-btn font-family-body text-[20px] leading-[20px] text-r-btn-text transition hover:brightness-95 disabled:opacity-50"
+            >
+              Change photo
+            </button>
+            {fieldErrors.photo ? (
+              <p className="text-sm leading-5 text-r-danger">{fieldErrors.photo}</p>
+            ) : null}
+          </div>
+
+          <div className="grid w-full grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-[25px]">
+            <TextField
+              id="first-name"
+              label="First name"
+              name="firstName"
+              type="text"
+              value={remembered.firstName}
+              onChange={updateField}
+              placeholder="John"
+              disabled={isSubmitting}
+              required
+              showRequiredIndicator={false}
+              error={fieldErrors.firstName}
+              inputClassName={editFieldClassName}
+            />
+            <TextField
+              id="last-name"
+              label="Last name"
+              name="lastName"
+              type="text"
+              value={remembered.lastName}
+              onChange={updateField}
+              placeholder="Smith"
+              disabled={isSubmitting}
+              required
+              showRequiredIndicator={false}
+              error={fieldErrors.lastName}
+              inputClassName={editFieldClassName}
+            />
+          </div>
+
+          <MemorialDateFields
+            values={{
+              date_of_birth: remembered.date_of_birth,
+              date_of_passing: remembered.date_of_passing,
+            }}
+            errors={dateErrors}
+            onChange={handleDateChange}
+            variant="edit"
+          />
+
+          <div className="flex w-full flex-col gap-[10px]">
+            <label htmlFor="brief-biography" className={labelClassName}>
+              Memorial Description
+            </label>
+            <textarea
+              id="brief-biography"
+              name="briefBiography"
+              value={remembered.briefBiography}
+              onChange={updateField}
+              placeholder="Please share a few words about who they were, what they loved, and any other details you feel is important to preserve their memory. This will be visible to viewers of the contribution and memorial page."
+              className="min-h-[247px] w-full resize-none rounded-[13px] border border-r-muted bg-transparent px-5 py-4 font-family-body text-[16px] leading-[20px] text-r-secondary outline-none transition placeholder:text-r-secondary focus:border-r-text focus:ring-2 focus:ring-r-muted/25 disabled:opacity-50"
+              disabled={isSubmitting}
+              aria-invalid={Boolean(fieldErrors.briefBiography)}
+              aria-required="true"
+              aria-describedby={fieldErrors.briefBiography ? "brief-biography-error" : undefined}
+            />
+            {fieldErrors.briefBiography ? (
+              <p id="brief-biography-error" className="text-sm leading-5 text-r-danger">
+                {fieldErrors.briefBiography}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="flex w-full flex-col items-center gap-4 pt-3">
+            {error ? (
+              <div role="alert" className="w-full max-w-[434px] rounded-[10px] bg-red-50 p-4 text-center text-red-700">
+                {error}
+              </div>
+            ) : null}
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="flex h-[58px] w-full max-w-[434px] items-center justify-center rounded-full bg-r-btn px-10 font-family-body text-[20px] leading-[20px] text-r-btn-text transition hover:brightness-95 disabled:opacity-50"
+            >
+              {isSubmitting ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </form>
+      </>
+    );
+  }
+
   return (
     <>
-      {isCropping && originalPhoto ? (
-        <ProfilePhotoCropper
-          file={originalPhoto}
-          initialCrop={remembered.photoCrop}
-          onApply={handleCropApply}
-          onCancel={handleCropCancel}
-        />
-      ) : null}
+      {cropper}
 
       <form onSubmit={handleSubmit} className="flex w-full flex-col gap-[44px]">
         <div className="grid w-full grid-cols-1 gap-x-6 gap-y-8 lg:grid-cols-[1fr_1fr] lg:items-start">
@@ -317,9 +492,12 @@ export default function MemorialCreateForm() {
             {remembered.photoPreview ? (
               <div className="mt-[10px] flex w-full flex-col gap-3">
                 <div className="flex h-[343px] w-full flex-col items-center justify-center gap-5 rounded-[20px] border border-dashed border-r-border bg-[#F6EFE7] px-8">
-                  <img
+                  <Image
                     src={remembered.photoPreview}
                     alt="Profile photo preview"
+                    width={200}
+                    height={200}
+                    unoptimized
                     className="size-[200px] rounded-full object-cover"
                   />
                   <div className="flex flex-wrap items-center justify-center gap-3">

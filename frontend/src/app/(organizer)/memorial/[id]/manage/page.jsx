@@ -16,6 +16,7 @@ import ContributionsPanel from "@/components/organizer/ContributionsPanel.jsx";
 import ArchiveQaPanel from "@/components/organizer/ArchiveQaPanel.jsx";
 import ViewMemorialButton from "@/components/organizer/ViewMemorialButton.jsx";
 import { APPROVE_TAB, ARCHIVE_TAB, getManageTabs, isAwaitingReview, resolveManageTab } from "@/lib/organizer/contributionReview";
+import { canEditMemorialProfile } from "@/lib/memorialProfile.mjs";
 
 // ─── Generation constants ─────────────────────────────────────────────────────
 
@@ -176,11 +177,17 @@ function MemorialHeader({ memorial, generated, inviteToken, onShare, contributor
               <path d="M18 16.08c-.76 0-1.44.3-1.96.77l-7.13-4.16a3.27 3.27 0 000-1.38l7.12-4.15A2.99 2.99 0 0018 7.91a3 3 0 10-2.83-4 3 3 0 00.12 1.49L8.17 9.56a3 3 0 100 4.88l7.12 4.16c-.08.23-.12.47-.12.72a3 3 0 103-3.24z"/>
             </svg>
           </button>
-          <button type="button" className="flex size-[50px] items-center justify-center transition hover:opacity-70" aria-label="Memorial settings">
-            <svg width="46" height="46" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.6-.22l-2.39.96a7.03 7.03 0 00-1.63-.94l-.36-2.54a.49.49 0 00-.49-.42h-3.84a.49.49 0 00-.49.42l-.36 2.54c-.58.22-1.13.53-1.63.94l-2.39-.96a.5.5 0 00-.6.22L2.54 8.84a.5.5 0 00.12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32c.14.24.43.34.69.22l2.39-.96c.5.4 1.05.72 1.63.94l.36 2.54c.05.24.25.42.49.42h3.84c.24 0 .44-.18.49-.42l.36-2.54c.58-.22 1.13-.53 1.63-.94l2.39.96c.26.12.55.02.69-.22l1.92-3.32a.5.5 0 00-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1112 8a3.5 3.5 0 010 7.5z"/>
-            </svg>
-          </button>
+          {!generated && canEditMemorialProfile(memorial?.status) ? (
+            <Link
+              href={`/memorial/${memorial?.id}/manage/settings`}
+              className="flex size-[50px] items-center justify-center transition hover:opacity-70"
+              aria-label="Edit memorial details"
+            >
+              <svg width="46" height="46" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.6-.22l-2.39.96a7.03 7.03 0 00-1.63-.94l-.36-2.54a.49.49 0 00-.49-.42h-3.84a.49.49 0 00-.49.42l-.36 2.54c-.58.22-1.13.53-1.63.94l-2.39-.96a.5.5 0 00-.6.22L2.54 8.84a.5.5 0 00.12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32c.14.24.43.34.69.22l2.39-.96c.5.4 1.05.72 1.63.94l.36 2.54c.05.24.25.42.49.42h3.84c.24 0 .44-.18.49-.42l.36-2.54c.58-.22 1.13-.53 1.63-.94l2.39.96c.26.12.55.02.69-.22l1.92-3.32a.5.5 0 00-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1112 8a3.5 3.5 0 010 7.5z"/>
+              </svg>
+            </Link>
+          ) : null}
         </div>
       </div>
     </div>
