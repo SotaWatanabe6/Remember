@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import ConstellationGraph from '@/components/output/constellation';
 import StorySlideshow from '@/components/output/StorySlideshow';
 
 function FilterSelect({ value, onChange, children, className = "" }) {
@@ -71,33 +70,6 @@ export function ViewerStorySection({ output, memorial }) {
     <div className="mx-auto flex w-full max-w-[1281px] flex-col gap-8">
       <StoryMemorialSummary memorial={memorial} />
       <StorySlideshow output={output} story={output?.story} framed={false} />
-    </div>
-  );
-}
-
-// ─── Constellations (matches output page exactly) ────────────────────────────
-
-export function ViewerRelationshipsSection({ output, memorial, contributor }) {
-  if (!output?.constellation) {
-    return (
-      <div className="flex flex-col items-center justify-center py-32 text-center">
-        <p className="text-h3 text-r-text">Constellations</p>
-        <p className="mt-2 max-w-xs text-body-2 text-r-muted">
-          Constellation will appear here once the memorial has been generated.
-        </p>
-      </div>
-    );
-  }
-  return (
-    <div className="py-4">
-      <ConstellationGraph
-        ai_output={output}
-        memorial={memorial}
-        contributor={contributor}
-        relationships={output?.relationships ?? []}
-        width={1250}
-        height={800}
-      />
     </div>
   );
 }

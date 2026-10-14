@@ -7,8 +7,8 @@ import { normalizeViewerData } from '@/lib/viewer/memorialViewer.mjs';
 import MemorialViewer from '@/components/viewer/MemorialViewer';
 import ViewerSectionContent from '@/components/viewer/ViewerSectionContent';
 
-function renderSection(section, data) {
-  return <ViewerSectionContent section={section} data={data} />;
+function renderSection(section, data, controls) {
+  return <ViewerSectionContent section={section} data={data} onBack={controls.onBack} />;
 }
 
 export default function SharePage() {

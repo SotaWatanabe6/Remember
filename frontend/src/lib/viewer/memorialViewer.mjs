@@ -37,5 +37,6 @@ export function getMemorialYearRange(memorial) {
 
 export function resolveViewerScreen(requested, output) {
   if (requested === 'intro' || requested === 'navigation') return requested;
+  if (requested.startsWith('relationships/')) return 'relationships';
   return getViewerSections(output).some((section) => section.id === requested) ? requested : 'navigation';
 }
