@@ -93,8 +93,7 @@
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-r-muted) transparent;
+  scrollbar-width: none;
   scroll-snap-type: y proximity;
 }
 
@@ -144,27 +143,12 @@
   text-underline-offset: 8px;
 }
 
-.scrollControls {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  right: 0;
-  top: calc(50% - 48px);
-}
-
-.scrollControls button,
 .photoDialog button {
   display: grid;
   place-items: center;
   width: 44px;
   height: 44px;
   cursor: pointer;
-}
-
-.scrollControls button:disabled {
-  opacity: 0.3;
-  cursor: default;
 }
 
 .stage button:focus-visible,
@@ -198,8 +182,12 @@
   gap: 15px;
   overflow-y: auto;
   padding: 0 24px 24px 8px;
-  scrollbar-width: auto;
-  scrollbar-color: var(--color-r-muted) transparent;
+  scrollbar-width: none;
+}
+
+.listViewport::-webkit-scrollbar,
+.gallery::-webkit-scrollbar {
+  display: none;
 }
 
 .photoButton {

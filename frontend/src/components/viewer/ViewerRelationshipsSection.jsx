@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useParams } from 'next/navigation';
 import Image from 'next/image';
-import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ImageOff, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, ImageOff, X } from 'lucide-react';
 import { getContributorHighlights } from '@/lib/api';
 import {
   buildRelationshipGroups, getRelationshipPath, getRelationshipPhotos,
@@ -45,11 +45,6 @@ function RelationshipList({ items, label, onSelect, circleRef }) {
     }
   }
 
-  function scroll(direction) {
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    viewportRef.current.scrollBy({ top: direction * geometry.rowHeight, behavior: reducedMotion ? 'instant' : 'smooth' });
-  }
-
   return (
     <nav className={styles.list} aria-label={label}>
       <div ref={viewportRef} className={styles.listViewport} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)} onKeyDown={handleKeyDown}>
@@ -69,16 +64,6 @@ function RelationshipList({ items, label, onSelect, circleRef }) {
           );
         })}
       </div>
-      {items.length > 3 ? (
-        <div className={styles.scrollControls}>
-          <button type="button" title="Previous relationships" aria-label="Scroll to previous relationships" disabled={scrollTop <= 1} onClick={() => scroll(-1)}>
-            <ChevronUp size={24} aria-hidden="true" />
-          </button>
-          <button type="button" title="More relationships" aria-label="Scroll to more relationships" disabled={scrollTop >= items.length * geometry.rowHeight - geometry.viewportHeight - 1} onClick={() => scroll(1)}>
-            <ChevronDown size={24} aria-hidden="true" />
-          </button>
-        </div>
-      ) : null}
     </nav>
   );
 }
@@ -195,7 +180,7 @@ export default function ViewerRelationshipsSection({ output, memorial, contribut
   const requestedPath = useSyncExternalStore(subscribeToViewerNavigation, getViewerScreenSnapshot, () => 'relationships');
   const { groupId, personId } = parseRelationshipPath(requestedPath);
   const groups = useMemo(() => buildRelationshipGroups(contributors), [contributors]);
-  const group = groups.find((item) => item.id === groupId);
+  const group = groups.find((item) => item.id === groupId) || (groups.length === 1 ? groups[0] : undefined);
   const person = group?.people.find((item) => item.id === personId);
   const circleRef = useRef(null);
   const stageRef = useRef(null);
@@ -212,7 +197,7 @@ export default function ViewerRelationshipsSection({ output, memorial, contribut
 
   function back() {
     if (person) navigateViewerScreen(getRelationshipPath(group.id));
-    else if (group) navigateViewerScreen('relationships');
+    else if (group && groups.length > 1) navigateViewerScreen('relationships');
     else if (onBack) onBack();
     else navigateViewerScreen('navigation');
   }
@@ -220,7 +205,7 @@ export default function ViewerRelationshipsSection({ output, memorial, contribut
   return (
     <section ref={stageRef} className={styles.stage} data-relationship-step={person ? 'person' : group ? 'people' : 'categories'} style={{ '--relationship-color': group?.color || '#9E9384' }} aria-label="Relationships">
       <div ref={circleRef} className={styles.circle} aria-hidden="true" />
-      <button type="button" className={styles.back} onClick={back} aria-label={person ? `Back to ${group.label}` : group ? 'Back to relationship categories' : 'Back to memorial sections'}>
+      <button type="button" className={styles.back} onClick={back} aria-label={person ? `Back to ${group.label}` : group && groups.length > 1 ? 'Back to relationship categories' : 'Back to memorial sections'}>
         <ArrowLeft size={25} aria-hidden="true" />Back
       </button>
       {person ? (
