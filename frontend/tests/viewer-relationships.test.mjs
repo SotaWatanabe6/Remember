@@ -31,8 +31,20 @@ test('anonymous people remain distinct by ID and unsubmitted or flagged contribu
     { id: 'a', name: 'Duplicate', relationship_type: 'Family' },
   ]);
   assert.deepEqual(groups[0].people.map(({ id, name }) => [id, name]), [['a', 'Sibling'], ['b', 'Sibling']]);
-  assert.equal(groups[1].people.length, 0);
-  assert.deepEqual(buildRelationshipGroups().map(({ id }) => id), ['family', 'friends', 'colleagues']);
+  assert.deepEqual(groups.map(({ id }) => id), ['family']);
+  assert.deepEqual(buildRelationshipGroups(), []);
+});
+
+test('only populated relationship categories are shown', () => {
+  const groups = buildRelationshipGroups([
+    { id: 'friend', name: 'Sam', relationship_type: 'Friend', status: 'approved' },
+    { id: 'family-draft', name: 'Alex', relationship_type: 'Family', status: 'in_progress' },
+    { id: 'colleague-flagged', name: 'Morgan', relationship_type: 'Colleague', is_flagged: true },
+  ]);
+  assert.deepEqual(groups.map(({ id, people }) => [id, people.length]), [['friends', 1]]);
+  assert.deepEqual(buildRelationshipGroups([
+    { id: 'draft', relationship_type: 'Family', status: 'in_progress' },
+  ]), []);
 });
 
 test('a shared memory uses the selected contributor\'s own summary or quote', () => {

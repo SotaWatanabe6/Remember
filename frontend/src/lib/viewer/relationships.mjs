@@ -52,7 +52,7 @@ export function buildRelationshipGroups(contributors = []) {
     };
   });
   return GROUPS.map((group) => ({ ...group, people: normalized.filter((person) => person.group === group.id) }))
-    .filter((group, index) => index < 3 || group.people.length > 0);
+    .filter((group) => group.people.length > 0);
 }
 
 export function getRelationshipSummary(output, contributorId) {
