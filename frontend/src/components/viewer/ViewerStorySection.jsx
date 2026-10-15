@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Image from 'next/image';
-import { ArrowLeft, ChevronDown, ChevronUp, ImageOff, Menu, Pause, Play } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ImageOff, Menu, Pause, Play } from 'lucide-react';
 import { formatStoryDate } from '@/lib/storySlides.mjs';
 import { buildViewerStory, getStoryChapterTitle, getStoryPath, getStorySlideDuration, getStorySlideText, parseStoryPath } from '@/lib/viewer/story.mjs';
 import { getViewerScreenSnapshot, navigateViewerScreen, subscribeToViewerNavigation } from '@/lib/viewer/viewerNavigation.mjs';
@@ -159,7 +159,6 @@ function StoryPlayer({ slides, index, memorial, onChange, onChapters }) {
         </article>
       </div>
       {!playing ? <footer className={styles.slideControls}>
-        <button type="button" className={styles.iconButton} disabled={index === 0} onClick={() => move(-1)} title="Previous slide" aria-label="Previous slide"><ChevronUp size={30} aria-hidden="true" /></button>
         <span aria-live="polite">{index + 1} / {slides.length}</span>
         <button type="button" className={styles.iconButton} disabled={isLast} onClick={() => move(1)} title="Next slide" aria-label="Next slide"><ChevronDown size={30} aria-hidden="true" /></button>
       </footer> : null}
