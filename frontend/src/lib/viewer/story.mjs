@@ -23,7 +23,7 @@ export function buildViewerStory(output) {
     const key = slide.chapter || slide.chapterTitle || slide.themeLabel || 'story';
     if (key !== previousKey) {
       // Menu entries jump into the existing sequence; never regroup or reorder slides.
-      chapters.push({ id: `chapter-${index}`, label: getStoryChapterTitle(slide), startIndex: chapters.length ? index : 0 });
+      chapters.push({ id: `chapter-${index}`, label: getStoryChapterTitle(slide), startIndex: index });
       previousKey = key;
     }
   });

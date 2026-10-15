@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildViewerStory, getStoryChapterTitle, getStoryPath, getStorySlideDuration, getStorySlideText, parseStoryPath } from '../src/lib/viewer/story.mjs';
 
-test('chapter menu follows pipeline order and retains every slide and bookend', () => {
+test('chapter menu jumps directly to chapter content without dropping bookends', () => {
   const story = [
     { slide_type: 'opening', subject_name: 'Robin', order_index: 0 },
     { photo_id: 'a', photo_url: '/a.jpg', chapter: 'who_they_were', order_index: 1 },
@@ -13,7 +13,9 @@ test('chapter menu follows pipeline order and retains every slide and bookend', 
   ];
   const result = buildViewerStory({ story });
   assert.equal(result.slides.length, 6);
-  assert.deepEqual(result.chapters.map(({ label, startIndex }) => [label, startIndex]), [['Who They Were', 0], ['Their Garden', 3]]);
+  assert.deepEqual(result.chapters.map(({ label, startIndex }) => [label, startIndex]), [['Who They Were', 1], ['Their Garden', 3]]);
+  assert.deepEqual(result.chapters.map(({ startIndex }) => result.slides[startIndex].chapter), ['who_they_were', 'what_they_loved']);
+  assert.equal(result.slides[0].slideType, 'opening');
   assert.deepEqual(result.slides.map((slide) => slide.orderIndex), [0, 1, 2, 3, 4, 5]);
   assert.equal(result.slides[5].credits[0].name, 'Family member');
 });
