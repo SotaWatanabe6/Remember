@@ -69,13 +69,13 @@ function RelationshipList({ items, label, onSelect, circleRef }) {
 }
 
 function RelationshipPhoto({ photo, name, className }) {
-  const [failed, setFailed] = useState(false);
-  return failed ? (
+  const [failedUrl, setFailedUrl] = useState(null);
+  return failedUrl === photo.url ? (
     <span className={`${className} ${styles.unavailable}`}>
       <ImageOff size={28} aria-hidden="true" />
       <span>This photo is unavailable</span>
     </span>
-  ) : <Image src={photo.url} alt={photo.caption || `Photo shared by ${name}`} width={634} height={353} unoptimized className={className} onError={() => setFailed(true)} />;
+  ) : <Image src={photo.url} alt={photo.caption || `Photo shared by ${name}`} width={634} height={353} unoptimized className={className} onError={() => setFailedUrl(photo.url)} />;
 }
 
 function RelationshipPhotoDialog({ photos, initialIndex, name, onClose }) {
