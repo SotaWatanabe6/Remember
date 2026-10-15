@@ -107,6 +107,7 @@ function StoryPlayer({ slides, index, memorial, onChange, onChapters }) {
   useEffect(() => {
     function handleKey(event) {
       if (event.target.closest?.('input, textarea, select, audio, [contenteditable="true"]')) return;
+      if (['ArrowUp', 'ArrowDown'].includes(event.key) && event.target.closest?.('article')) return;
       if (event.key === 'Escape') { event.preventDefault(); onChapters(); }
       if (['ArrowRight', 'ArrowDown'].includes(event.key)) {
         event.preventDefault(); setPlaying(false); onChange(Math.min(slides.length - 1, index + 1));

@@ -24,6 +24,7 @@
 
 .back {
   position: absolute;
+  z-index: 2;
   top: 88px;
   left: 50px;
   display: inline-flex;
@@ -73,7 +74,7 @@
   scroll-snap-type: y proximity;
 }
 .chapterViewport::-webkit-scrollbar { display: none; }
-.chapterRow { display: flex; align-items: center; height: var(--row-height); scroll-snap-align: center; padding-left: 8px; padding-right: 8px; }
+.chapterRow { display: flex; align-items: center; height: var(--row-height); scroll-snap-align: center; padding-left: 8px; }
 .chapter {
   position: relative;
   right: calc(80px - var(--curve-inset));
@@ -88,6 +89,9 @@
   cursor: pointer;
 }
 .chapterLabel {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   min-width: 0;
   font-family: var(--font-family-display);
   font-size: 36px;
@@ -95,6 +99,7 @@
   font-weight: 500;
   line-height: 44px;
   overflow-wrap: anywhere;
+  overflow: hidden;
 }
 .chapter:hover .chapterLabel { text-decoration: underline; text-underline-offset: 8px; }
 .marker { display: grid; place-items: center; width: 50px; height: 50px; flex-shrink: 0; }
@@ -118,11 +123,12 @@
 .slide {
   position: absolute;
   top: 30.73%;
-  bottom: 22%;
+  bottom: max(22%, calc(8% + 148px));
   left: 3.68%;
   right: 3.47%;
   display: grid;
   grid-template-columns: minmax(0, 657fr) minmax(0, 580fr);
+  grid-template-rows: minmax(0, 1fr);
   align-items: start;
   gap: 6.94vw;
   animation: reveal 280ms ease-out;
@@ -148,7 +154,7 @@
 @media (max-height: 800px) and (min-width: 701px) {
   .stage { --row-height: 140px; }
   .back, .playerHeader { top: 40px; }
-  .slide { top: 26%; bottom: 23%; }
+  .slide { top: 26%; bottom: max(23%, calc(3% + 148px)); }
   .slideControls { bottom: 3%; }
 }
 
