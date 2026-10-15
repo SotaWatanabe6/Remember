@@ -63,19 +63,25 @@ test('legacy outputs resolve anonymous labels without altering subject names or 
   assert.equal(output.story[0].narration, 'Jane Doe told this story.')
 })
 
-function routerFixture(routeFile, { failContributors = false } = {}) {
+function routerFixture(routeFile, { failContributors = false, output = saved } = {}) {
   const db = {
     invite_links: [{ id: 'share', token: 'share-token', memorial_id: 'memorial', link_type: 'share', is_active: true }],
     memorials: [{ id: 'memorial', user_id: 'organizer', subject_name: 'Robin', status: 'complete' }],
     contributors: [...people.map((person) => ({ ...person, memorial_id: 'memorial' })),
       { id: 'draft', name: 'Unsubmitted', status: 'in_progress', memorial_id: 'memorial' }],
-    ai_outputs: [{ id: 'output', memorial_id: 'memorial', output_json: saved }],
+    ai_outputs: [{ id: 'output', memorial_id: 'memorial', output_json: output }],
     contributor_stories: [], media_assets: [], voice_recordings: [], questionnaire_responses: [],
   }
+  const signedPaths = []
   const supabase = createClient('https://privacy-fixture.invalid', 'fixture-key', {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     global: { fetch: async (input) => {
       const url = new URL(input)
+      if (url.pathname.startsWith('/storage/v1/object/sign/')) {
+        const objectPath = url.pathname.slice('/storage/v1/object/sign/'.length)
+        signedPaths.push(objectPath)
+        return Response.json({ signedURL: `/object/sign/${objectPath}?token=fresh` })
+      }
       const table = url.pathname.split('/').pop()
       if (table === 'contributors' && failContributors) return Response.json({ message: 'offline' }, { status: 500 })
       const rows = db[table].filter((row) => [...url.searchParams].every(([key, value]) => {
@@ -100,7 +106,7 @@ function routerFixture(routeFile, { failContributors = false } = {}) {
       return realRequire(name)
     },
   }, { filename })
-  return { db, async call(routePath, params) {
+  return { db, signedPaths, async call(routePath, params) {
     const route = module.exports.stack.find((layer) => layer.route?.path === routePath && layer.route.methods.get).route
     const res = { statusCode: 200, status(code) { this.statusCode = code; return this }, json(body) { this.body = body; return this } }
     await route.stack.at(-1).handle({ params, user: { sub: 'organizer' } }, res)
@@ -129,6 +135,31 @@ test('failed contributor lookup never returns unmasked saved output', async () =
     assert.ok(res.statusCode >= 400)
     assert.equal(res.body.story, undefined)
   }
+})
+
+test('both viewer endpoints renew saved photo URLs without rewriting output or anonymous attribution', async () => {
+  const expired = 'https://privacy-fixture.invalid/storage/v1/object/sign/memorial-assets/old.jpg?token=expired'
+  const output = { photos: { albums: [{ photos: [{ id: 'photo-1', contributor_id: 'anonymous-1', contributor_name: 'Jane Doe', url: expired }] }] } }
+  for (const [file, route, params] of [['share', '/:token', { token: 'share-token' }], ['memorials', '/:id/output', { id: 'memorial' }]]) {
+    const fixture = routerFixture(file, { output })
+    const before = JSON.stringify(fixture.db)
+    const res = await fixture.call(route, params)
+    assert.equal(res.statusCode, 200)
+    const photo = res.body.photos.albums[0].photos[0]
+    assert.match(photo.url, /token=fresh$/)
+    assert.equal(photo.contributor_name, 'Cousin')
+    assert.deepEqual(fixture.signedPaths, ['memorial-assets/old.jpg'])
+    assert.equal(JSON.stringify(fixture.db), before)
+  }
+})
+
+test('an inactive share link cannot renew or return photo URLs', async () => {
+  const fixture = routerFixture('share', { output: { photos: [{ photos: [{ url: 'private/photo.jpg' }] }] } })
+  fixture.db.invite_links[0].is_active = false
+  const res = await fixture.call('/:token', { token: 'share-token' })
+  assert.equal(res.statusCode, 410)
+  assert.deepEqual(fixture.signedPaths, [])
+  assert.equal(res.body.photos, undefined)
 })
 
 test('organizer contributor review still receives real names for anonymous contributions', async () => {

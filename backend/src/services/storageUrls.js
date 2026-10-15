@@ -5,12 +5,32 @@ function isHttpUrl(value) {
   return typeof value === 'string' && /^https?:\/\//i.test(value)
 }
 
+function getSignedStorageObject(supabase, value) {
+  try {
+    const projectUrl = supabase.supabaseUrl || process.env.SUPABASE_URL
+    const prefix = new URL(`${projectUrl.replace(/\/$/, '')}/storage/v1/object/sign/`)
+    const url = new URL(value)
+    if (url.origin !== prefix.origin || !url.pathname.startsWith(prefix.pathname)) return null
+    const [bucket, ...segments] = url.pathname.slice(prefix.pathname.length).split('/')
+    if (!bucket || !segments.join('/')) return null
+    return { bucket: decodeURIComponent(bucket), path: decodeURIComponent(segments.join('/')) }
+  } catch {
+    return null
+  }
+}
+
 /**
  * Turn a Supabase storage path into a signed URL the browser can load.
  */
 async function resolveStorageUrl(supabase, storagePath, bucket = DEFAULT_BUCKET, expiresIn = DEFAULT_EXPIRES_SECONDS) {
   if (!storagePath || typeof storagePath !== 'string') return null
-  if (isHttpUrl(storagePath)) return storagePath
+  if (isHttpUrl(storagePath)) {
+    // Older output contains signed URLs; renew only URLs belonging to this project.
+    const object = getSignedStorageObject(supabase, storagePath)
+    if (!object) return storagePath
+    storagePath = object.path
+    bucket = object.bucket
+  }
 
   const cleanPath = storagePath.replace(/^\//, '')
   const { data, error } = await supabase.storage.from(bucket || DEFAULT_BUCKET).createSignedUrl(cleanPath, expiresIn)
@@ -106,7 +126,7 @@ async function resolveOutputMediaUrls(supabase, output) {
     )
   }
 
-  if (resolved.voices) {
+  if (Array.isArray(resolved.voices)) {
     resolved.voices = await Promise.all(
       resolved.voices.map(async (voice) => {
         const audioUrl = await resolveStorageUrl(supabase, voice.audio_url || voice.storage_path)
@@ -137,8 +157,8 @@ async function resolveOutputMediaUrls(supabase, output) {
         const cover = await resolveStorageUrl(supabase, album.cover_photo_url)
         const photos = await Promise.all(
           (album.photos || []).map(async (photo) => {
-            const url = await resolveStorageUrl(supabase, photo.url || photo.storage_path)
-            return { ...photo, url }
+            const url = await resolveStorageUrl(supabase, photo.storage_path || photo.url || photo.photo_url, photo.storage_bucket)
+            return { ...photo, url, ...(Object.hasOwn(photo, 'photo_url') ? { photo_url: url } : {}) }
           }),
         )
         return {
@@ -160,7 +180,7 @@ async function resolveOutputMediaUrls(supabase, output) {
  */
 async function resolveMemorialCoverUrl(supabase, coverPhotoUrl) {
   if (!coverPhotoUrl || typeof coverPhotoUrl !== 'string') return null
-  if (isHttpUrl(coverPhotoUrl)) return coverPhotoUrl
+  if (isHttpUrl(coverPhotoUrl)) return resolveStorageUrl(supabase, coverPhotoUrl)
 
   const cleanPath = coverPhotoUrl.replace(/^\//, '')
   const buckets = [

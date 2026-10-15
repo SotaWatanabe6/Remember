@@ -10,7 +10,7 @@ const multer = require('multer')
 const upload = multer()
 
 // After the existing requires:
-const { enrichMemorialsForClient, enrichMemorialForClient } = require('../services/storageUrls')
+const { enrichMemorialsForClient, enrichMemorialForClient, resolveOutputMediaUrls } = require('../services/storageUrls')
 const { getContributorHighlights } = require('../services/contributorHighlights')
 const { withContributorDisplayNames, withOutputDisplayNames } = require('../services/contributorPrivacy')
 
@@ -1089,7 +1089,8 @@ router.get('/:id/output', authMiddleware, async (req, res) => {
       .eq('memorial_id', req.params.id)
     if (contributorsError) return res.status(500).json({ error: 'Could not resolve contributor display names.' })
     const visibleContributors = (contributors || []).filter((person) => ['submitted', 'approved'].includes(person.status))
-    res.json({ ...withOutputDisplayNames(output.output_json, contributors || []), contributor: withContributorDisplayNames(visibleContributors) })
+    const resolvedOutput = await resolveOutputMediaUrls(supabase, withOutputDisplayNames(output.output_json, contributors || []))
+    res.json({ ...resolvedOutput, contributor: withContributorDisplayNames(visibleContributors) })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
