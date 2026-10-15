@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Image from 'next/image';
-import { ArrowLeft, ChevronDown, ChevronUp, ImageOff, Menu, Pause, Play, RotateCcw } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronUp, ImageOff, Menu, Pause, Play } from 'lucide-react';
 import { formatStoryDate } from '@/lib/storySlides.mjs';
 import { buildViewerStory, getStoryChapterTitle, getStoryPath, getStorySlideDuration, getStorySlideText, parseStoryPath } from '@/lib/viewer/story.mjs';
 import { getViewerScreenSnapshot, navigateViewerScreen, subscribeToViewerNavigation } from '@/lib/viewer/viewerNavigation.mjs';
@@ -104,6 +104,13 @@ function StoryPlayer({ slides, index, memorial, onChange, onChapters }) {
     setPlaying((current) => !current);
   }
 
+  function handleScreenClick(event) {
+    if (playing || isLast) return;
+    if (event.target.closest('header, footer, button, a, input, textarea, select, audio, [contenteditable="true"]')) return;
+    if (!window.getSelection()?.isCollapsed) return;
+    move(1);
+  }
+
   useEffect(() => {
     function handleKey(event) {
       if (event.target.closest?.('input, textarea, select, audio, [contenteditable="true"]')) return;
@@ -126,17 +133,17 @@ function StoryPlayer({ slides, index, memorial, onChange, onChapters }) {
   }, [index, isLast, playing, slides.length, onChange, onChapters]);
 
   return (
-    <section className={styles.player} aria-label="Story slideshow" aria-roledescription="carousel" data-story-slide={index} data-story-playing={playing}>
+    <section className={styles.player} aria-label="Story slideshow" aria-roledescription="carousel" data-story-slide={index} data-story-playing={playing} onClick={handleScreenClick}>
       <header className={styles.playerHeader}>
         <button type="button" className={styles.iconButton} onClick={onChapters} title="Story chapters" aria-label="Story chapters"><Menu size={32} strokeWidth={1.5} aria-hidden="true" /></button>
         <button type="button" className={styles.playback} onClick={togglePlaying} title={playing ? 'Pause story' : isLast ? 'Replay story' : 'Play story'} aria-label={playing ? 'Pause story' : isLast ? 'Replay story' : 'Play story'}>
-          <span className={styles.playbackIcon}>{playing ? <Pause size={24} fill="currentColor" aria-hidden="true" /> : isLast ? <RotateCcw size={24} aria-hidden="true" /> : <Play size={24} fill="currentColor" aria-hidden="true" />}</span>
+          <span className={styles.playbackIcon}>{playing ? <Pause size={24} fill="currentColor" aria-hidden="true" /> : <Play size={24} fill="currentColor" aria-hidden="true" />}</span>
           <span>{playing ? 'Auto' : 'Play'}</span>
         </button>
       </header>
       <div className={`${styles.slide} ${!photoUrl ? styles.textOnly : ''}`} key={index} role="group" aria-roledescription="slide" aria-label={`${index + 1} of ${slides.length}`} aria-live={playing ? 'off' : 'polite'}>
         {photoUrl ? <StoryPhoto url={photoUrl} title={title} /> : null}
-        <article className={styles.narrative} tabIndex={0} aria-label={title} onWheel={() => setPlaying(false)} onTouchMove={() => setPlaying(false)} onFocus={(event) => { if (event.target !== headingRef.current) setPlaying(false); }}>
+        <article className={styles.narrative} tabIndex={0} aria-label={title} onWheel={() => setPlaying(false)} onTouchMove={() => setPlaying(false)} onFocus={(event) => { if (event.target !== headingRef.current && event.target.matches(':focus-visible')) setPlaying(false); }}>
           <h1 ref={headingRef} tabIndex={-1}>{title}</h1>
           {slide.slideType === 'opening' ? <p>{[formatStoryDate(slide.dateOfBirth || memorial.date_of_birth), formatStoryDate(slide.dateOfPassing || memorial.date_of_passing)].filter(Boolean).join(' - ')}</p>
             : slide.slideType === 'credits' ? <ul className={styles.credits}>{slide.credits.map((person, creditIndex) => <li key={`${person.contributorId || creditIndex}`}>
