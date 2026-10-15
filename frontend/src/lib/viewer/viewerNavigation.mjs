@@ -15,10 +15,10 @@ export function getViewerScreenSnapshot() {
   return window.location.hash.slice(1) || 'intro';
 }
 
-export function navigateViewerScreen(screen) {
+export function navigateViewerScreen(screen, { replace = false } = {}) {
   const url = new URL(window.location.href);
   url.hash = screen === 'intro' ? '' : screen;
   if (url.href === window.location.href) return;
-  window.history.pushState(null, '', url);
+  window.history[replace ? 'replaceState' : 'pushState'](null, '', url);
   window.dispatchEvent(new Event(NAVIGATION_EVENT));
 }
