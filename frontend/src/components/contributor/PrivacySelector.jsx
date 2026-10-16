@@ -32,6 +32,10 @@ const privacyErrorCopy = {
     title: "We could not find your contribution draft",
     body: "Please return to the invitation page and enter your name before choosing your privacy setting.",
   },
+  submitted: {
+    title: "You have already submitted your contribution",
+    body: "Thank you for sharing your memories. Your contribution can no longer be edited.",
+  },
 };
 
 function LoadingState() {
@@ -119,6 +123,12 @@ export default function PrivacySelector({ inviteToken }) {
 
       if (!isMounted) return;
 
+      if (privacyDraft?.session?.status === "submitted") {
+        setDraft({ status: "submitted" });
+        setIsLoading(false);
+        return;
+      }
+
       setDraft(privacyDraft);
       setSelection(
         typeof privacyDraft?.is_anonymous === "boolean" ? privacyDraft.is_anonymous : null,
@@ -144,7 +154,11 @@ export default function PrivacySelector({ inviteToken }) {
     } catch (err) {
       setSelection(previousSelection);
       setSubmitError(
-        err instanceof Error ? err.message : "We could not save your choice yet. Please try again.",
+        err?.status === 403
+          ? "You have already submitted your contribution, so your privacy choice can no longer be changed. Thank you for sharing your memories."
+          : err instanceof Error
+            ? err.message
+            : "We could not save your choice yet. Please try again.",
       );
       setIsSaving(false);
     }

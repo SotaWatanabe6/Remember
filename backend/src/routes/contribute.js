@@ -10,6 +10,7 @@ const { getQuestionSetForContributorRelationship } = require('../lib/questionnai
 const { formatPersonName } = require('../lib/formatName')
 const { getContributorDisplayName } = require('../services/contributorPrivacy')
 const { createContributorDraftRouter, getContributorForInvite } = require('./contributorDrafts')
+const { enrichMemorialForClient } = require('../services/storageUrls')
 
 router.use(createContributorDraftRouter(supabase))
 
@@ -164,15 +165,17 @@ router.get('/:token', async (req, res) => {
       memorial?.short_description ||
       ''
 
+    const signedMemorial = memorial ? await enrichMemorialForClient(supabase, memorial) : null
+
     res.json({
-      memorial: memorial
+      memorial: signedMemorial
         ? {
-          ...memorial,
+          ...signedMemorial,
           biography,
           bio: biography,
-          description: memorial.description || biography,
-          brief_biography: memorial.brief_biography || biography,
-          short_description: memorial.short_description || biography,
+          description: signedMemorial.description || biography,
+          brief_biography: signedMemorial.brief_biography || biography,
+          short_description: signedMemorial.short_description || biography,
         }
         : null,
       invite: {

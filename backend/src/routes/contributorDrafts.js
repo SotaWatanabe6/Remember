@@ -39,7 +39,10 @@ async function getContributorForInvite(
     return null
   }
   if (requireDraft && (contributor.status !== 'in_progress' || contributor.submitted_at)) {
-    res.status(403).json({ error: 'Memories cannot be changed after your contribution has been submitted.' })
+    res.status(403).json({
+      error: 'You have already submitted your contribution, so it can no longer be edited. Thank you for sharing your memories.',
+      code: 'contribution_submitted',
+    })
     return null
   }
   return contributor

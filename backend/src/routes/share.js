@@ -4,6 +4,7 @@ const router = express.Router()
 const supabase = require('../supabase')
 const { withContributorDisplayNames, withOutputDisplayNames } = require('../services/contributorPrivacy')
 const { getContributorHighlights } = require('../services/contributorHighlights')
+const { enrichMemorialForClient } = require('../services/storageUrls')
 
 // Viewer share links only; contributor invite links are rejected.
 async function findActiveShareLink(token) {
@@ -53,7 +54,8 @@ router.get('/:token', async (req, res) => {
     }
     // Viewers of a shared memorial never see the real name behind an anonymous contribution.
     const visibleContributors = contributor.filter((person) => ['submitted', 'approved'].includes(person.status))
-    res.json({ ...withOutputDisplayNames(output.output_json, contributor), memorial: memorial || null, contributor: withContributorDisplayNames(visibleContributors) })
+    const memorialForClient = await enrichMemorialForClient(supabase, memorial)
+    res.json({ ...withOutputDisplayNames(output.output_json, contributor), memorial: memorialForClient, contributor: withContributorDisplayNames(visibleContributors) })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

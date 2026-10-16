@@ -22,6 +22,8 @@ const { loadGenerationPhotos } = require('../services/generationPhotos')
 const { needsModeration, isPendingModeration, isEligible, persistModeration } = require('../services/moderationState')
 const CAN_USE_OPENAI = Boolean(process.env.OPENAI_API_KEY)
 
+const { fingerprintPhoto, findDuplicatePhotos } = require('../services/photoDedupe')   // add this line
+
 function serializeJob(job) {
   return {
     id: job.id,
@@ -75,6 +77,17 @@ function startPipeline(memorialId, jobId) {
       .eq('id', jobId)
     await supabase.from('memorials').update({ status: 'collecting' }).eq('id', memorialId)
   })
+}
+
+async function signedUrlWithRetry(bucket, path, attempts = 3) {
+  let lastError = null
+  for (let i = 0; i < attempts; i += 1) {
+    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 300)
+    if (!error && data?.signedUrl) return data.signedUrl
+    lastError = error || new Error('no signed URL returned')
+    await new Promise((resolve) => setTimeout(resolve, 500 * (i + 1)))
+  }
+  throw new Error(`Could not read photo ${path} for moderation: ${lastError?.message || 'unknown error'}`)
 }
 
 async function runPipelines(memorialId, jobId) {
@@ -145,10 +158,7 @@ async function runPipelines(memorialId, jobId) {
       if (!needsModeration(photo)) continue
       let signedUrl = null
       if (CAN_USE_OPENAI && photo.storage_path) {
-        const { data, error } = await supabase.storage.from(photo.storage_bucket || 'memorial-assets')
-          .createSignedUrl(photo.storage_path, 300)
-        if (error || !data?.signedUrl) throw new Error('Could not read photo for moderation')
-        signedUrl = data.signedUrl
+        signedUrl = await signedUrlWithRetry(photo.storage_bucket || 'memorial-assets', photo.storage_path)
       }
       const moderation = await moderatePhotoContent(signedUrl, memorial.subject_name, { biography: memorial.biography })
       await persistModeration(supabase, 'media_assets', photo, moderation, {
@@ -186,6 +196,17 @@ async function runPipelines(memorialId, jobId) {
     let analyzedPhotos = []
     for (const photo of eligiblePhotos) {
       try {
+        // Fingerprint the file bytes for duplicate detection.
+        let fingerprint = null
+        try {
+          const { data: blob } = await supabase.storage
+            .from(photo.storage_bucket || 'memorial-assets')
+            .download(photo.storage_path)
+          if (blob) fingerprint = await fingerprintPhoto(Buffer.from(await blob.arrayBuffer()))
+        } catch (hashErr) {
+          console.warn('[PhotoDedupe] fingerprint failed:', photo.id, hashErr.message)
+        }
+
         let signedUrl = null
         if (CAN_USE_OPENAI && photo.storage_path) {
           const { data: urlData } = await supabase.storage
@@ -200,11 +221,20 @@ async function runPipelines(memorialId, jobId) {
           deceasedPresent: null,
         })
 
-        analyzedPhotos.push({ ...photo, analysis, matched_theme_ids: [] })
+        analyzedPhotos.push({ ...photo, fingerprint, analysis, matched_theme_ids: [] })
       } catch (err) {
         console.error('[Vision] failed for photo:', photo.id, err.message)
         analyzedPhotos.push({ ...photo, analysis: null, matched_theme_ids: [] })
       }
+    }
+
+    const duplicateOf = findDuplicatePhotos(analyzedPhotos)
+    if (duplicateOf.size) {
+      console.log('[PhotoDedupe] duplicates excluded from generation:', duplicateOf.size)
+      // In-memory only: every generation function already skips is_flagged photos, so this needs no
+      // other code changes. The media_assets write-back reads photo.moderation, not photo.is_flagged,
+      // so the DB flag and the organizer's view are unaffected.
+      analyzedPhotos = analyzedPhotos.map((p) => (duplicateOf.has(p.id) ? { ...p, is_flagged: true, duplicate_of: duplicateOf.get(p.id) } : p))
     }
 
     await updateJob(jobId, 50, 'Matching photos to albums...')
