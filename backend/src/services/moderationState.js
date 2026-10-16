@@ -1,5 +1,6 @@
 function needsModeration(row) {
-  return !row.is_flagged && !row.moderation_resolution
+  if (row.is_flagged || row.moderation_resolution) return false
+  return !row.ai_labels?.moderation   // photos record their result here
 }
 
 function isPendingModeration(row) {

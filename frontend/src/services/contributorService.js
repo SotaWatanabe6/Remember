@@ -416,6 +416,15 @@ export async function saveContributorPrivacy(inviteToken, isAnonymous) {
       is_anonymous: isAnonymous,
     });
   } catch (error) {
+    // The contribution was already submitted; this is expected, not a failure.
+    if (error instanceof ApiRequestError && error.status === 403) {
+      const submittedError = new Error(
+        "You have already submitted your contribution, so your privacy choice can no longer be changed. Thank you for sharing your memories.",
+      );
+      submittedError.status = 403;
+      throw submittedError;
+    }
+
     console.error("Failed to save contributor privacy choice.", error);
 
     // Distinguish "the API never answered" from "the API rejected the save" —

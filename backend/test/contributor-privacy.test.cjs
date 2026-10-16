@@ -153,8 +153,28 @@ test('both viewer endpoints renew saved photo URLs without rewriting output or a
   }
 })
 
+test('share response resolves the memorial cover and renews saved media together without exposing private identity', async () => {
+  const expired = 'https://privacy-fixture.invalid/storage/v1/object/sign/memorial-assets/old.jpg?token=expired'
+  const output = { photos: { albums: [{ photos: [{ contributor_id: 'anonymous-1', contributor_name: 'Jane Doe', url: expired }] }] } }
+  for (const cover of ['covers/robin.jpg', 'https://privacy-fixture.invalid/storage/v1/object/sign/memorial-assets/covers/robin.jpg?token=expired']) {
+    const fixture = routerFixture('share', { output })
+    fixture.db.memorials[0].cover_photo_url = cover
+    const before = JSON.stringify(fixture.db)
+    const res = await fixture.call('/:token', { token: 'share-token' })
+    assert.equal(res.statusCode, 200)
+    assert.match(res.body.memorial.cover_photo_url, /\/covers\/robin\.jpg\?token=fresh$/)
+    assert.match(res.body.photos.albums[0].photos[0].url, /\/old\.jpg\?token=fresh$/)
+    assert.equal(res.body.photos.albums[0].photos[0].contributor_name, 'Cousin')
+    assert.equal(Object.hasOwn(res.body.memorial, 'user_id'), false)
+    assert.equal(JSON.stringify(res.body).includes('Jane Doe'), false)
+    assert.deepEqual(fixture.signedPaths, ['memorial-assets/old.jpg', 'memorial-assets/covers/robin.jpg'])
+    assert.equal(JSON.stringify(fixture.db), before)
+  }
+})
+
 test('an inactive share link cannot renew or return photo URLs', async () => {
   const fixture = routerFixture('share', { output: { photos: [{ photos: [{ url: 'private/photo.jpg' }] }] } })
+  fixture.db.memorials[0].cover_photo_url = 'private/cover.jpg'
   fixture.db.invite_links[0].is_active = false
   const res = await fixture.call('/:token', { token: 'share-token' })
   assert.equal(res.statusCode, 410)
