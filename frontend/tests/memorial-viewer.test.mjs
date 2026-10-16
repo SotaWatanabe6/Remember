@@ -33,5 +33,8 @@ test('a saved Voices selection falls back to navigation when recordings disappea
   assert.equal(resolveViewerScreen('voices', { voices: [{}] }), 'voices');
   assert.equal(resolveViewerScreen('intro', {}), 'intro');
   assert.equal(resolveViewerScreen('story', {}), 'story');
+  assert.equal(resolveViewerScreen('story/slide/2', {}), 'story');
   assert.equal(resolveViewerScreen('unknown', {}), 'navigation');
+  assert.equal(resolveViewerScreen('relationships/family/person-1', {}), 'relationships');
+  assert.equal(resolveViewerScreen('photos/unknown', {}), 'navigation');
 });

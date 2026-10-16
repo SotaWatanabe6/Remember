@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import ConstellationGraph from '@/components/output/constellation';
-import StorySlideshow from '@/components/output/StorySlideshow';
 
 function FilterSelect({ value, onChange, children, className = "" }) {
   return (
@@ -20,84 +18,6 @@ function FilterSelect({ value, onChange, children, className = "" }) {
           <path d="M15 30L2.00962 7.5L27.9904 7.5L15 30Z" fill="#423F39" />
         </svg>
       </span>
-    </div>
-  );
-}
-
-// ─── Bottom Nav ───────────────────────────────────────────────────────────────
-
-function formatMemorialDate(value) {
-  if (!value) return '';
-  const parts = String(value).split('T')[0].split('-');
-  if (parts.length < 3) return '';
-  const [year, month, day] = parts.map(Number);
-  if (!year || !month || !day) return '';
-  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
-    month: 'long', day: 'numeric', year: 'numeric',
-  });
-}
-
-function getMemorialYears(memorial) {
-  const birthDate = formatMemorialDate(memorial?.date_of_birth || memorial?.birth_date);
-  const passingDate = formatMemorialDate(memorial?.date_of_passing || memorial?.death_date);
-  if (birthDate && passingDate) return `${birthDate} - ${passingDate}`;
-  return birthDate || passingDate;
-}
-
-function StoryMemorialSummary({ memorial }) {
-  const name = memorial?.subject_name || memorial?.deceased_name || '';
-  const years = getMemorialYears(memorial);
-  if (!name && !years) return null;
-  return (
-    <header className="w-full text-center">
-      {name ? <h1 className="font-display text-[40px] font-bold leading-none text-r-text sm:text-[48px]">{name}</h1> : null}
-      {years ? <p className="mt-3 text-body-1 text-r-muted">{years}</p> : null}
-    </header>
-  );
-}
-
-// ─── Intro view (shown before Slideshow on first load) ────────────────────────
-
-export function ViewerStorySection({ output, memorial }) {
-  if (!output?.story || output.story.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-32 text-center">
-        <p className="text-h3 text-r-text">Slideshow</p>
-        <p className="mt-2 max-w-xs text-body-2 text-r-muted">The memorial slideshow will appear here once generated.</p>
-      </div>
-    );
-  }
-  return (
-    <div className="mx-auto flex w-full max-w-[1281px] flex-col gap-8">
-      <StoryMemorialSummary memorial={memorial} />
-      <StorySlideshow output={output} story={output?.story} framed={false} />
-    </div>
-  );
-}
-
-// ─── Constellations (matches output page exactly) ────────────────────────────
-
-export function ViewerRelationshipsSection({ output, memorial, contributor }) {
-  if (!output?.constellation) {
-    return (
-      <div className="flex flex-col items-center justify-center py-32 text-center">
-        <p className="text-h3 text-r-text">Constellations</p>
-        <p className="mt-2 max-w-xs text-body-2 text-r-muted">
-          Constellation will appear here once the memorial has been generated.
-        </p>
-      </div>
-    );
-  }
-  return (
-    <div className="py-4">
-      <ConstellationGraph
-        ai_output={output}
-        memorial={memorial}
-        contributor={contributor}
-        relationships={output?.relationships ?? []}
-        width={1250}
-        height={800}
-      />
     </div>
   );
 }

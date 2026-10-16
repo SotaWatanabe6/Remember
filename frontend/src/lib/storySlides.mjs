@@ -100,6 +100,8 @@ export function normalizeStorySlides(output, story) {
         id: slide.id || slide.photo_id || `${index}-${contributorName}`,
         orderIndex: Number.isFinite(Number(slide.order_index)) ? Number(slide.order_index) : index,
         slideType: slide.slide_type || 'photo',
+        chapter: slide.chapter || '',
+        chapterTitle: slide.chapter_title || '',
         subjectName: slide.subject_name || '',
         dateOfBirth: slide.date_of_birth || null,
         dateOfPassing: slide.date_of_passing || null,
