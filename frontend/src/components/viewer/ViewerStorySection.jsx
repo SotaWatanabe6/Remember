@@ -159,7 +159,6 @@ function StoryPlayer({ slides, index, memorial, onChange, onChapters }) {
         </article>
       </div>
       {!playing ? <footer className={styles.slideControls}>
-        <span aria-live="polite">{index + 1} / {slides.length}</span>
         <button type="button" className={styles.iconButton} disabled={isLast} onClick={() => move(1)} title="Next slide" aria-label="Next slide"><ChevronDown size={30} aria-hidden="true" /></button>
       </footer> : null}
     </section>

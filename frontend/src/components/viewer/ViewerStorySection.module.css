@@ -147,7 +147,6 @@
 .credits .relationship { margin-top: 4px; font-size: 16px; line-height: 24px; }
 .credits blockquote { margin-top: 12px; }
 .slideControls { position: absolute; bottom: 8%; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.slideControls span { font-size: 14px; line-height: 20px; }
 .iconButton:disabled { opacity: 0.3; cursor: default; }
 @keyframes reveal { from { opacity: 0; } to { opacity: 1; } }
 
