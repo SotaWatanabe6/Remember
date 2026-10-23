@@ -726,22 +726,24 @@ export async function getContributors(memorialId) {
  * GET /memorials/:id/contributors/:contributorId/highlights (organizer, protected)
  * Returns one contributor's photos and quote for the constellation node.
  */
-export async function getContributorHighlights({ contributorId, memorialId, shareToken }) {
+export async function getContributorHighlights({ contributorId, memorialId, shareToken, signal, throwOnError = false }) {
   const empty = { photos: [], quote: null };
   if (!contributorId) return empty;
 
   try {
     const contributorPath = `contributors/${encodeURIComponent(contributorId)}/highlights`;
     if (shareToken) {
-      return await requestJson(`/share/${encodeURIComponent(shareToken)}/${contributorPath}`);
+      return await requestJson(`/share/${encodeURIComponent(shareToken)}/${contributorPath}`, { signal });
     }
 
     const token = await getAuthToken();
     if (!token || !memorialId) return empty;
     return await requestJson(`/memorials/${encodeURIComponent(memorialId)}/${contributorPath}`, {
+      signal,
       headers: { Authorization: `Bearer ${token}` },
     });
-  } catch {
+  } catch (error) {
+    if (throwOnError) throw error;
     return empty;
   }
 }
