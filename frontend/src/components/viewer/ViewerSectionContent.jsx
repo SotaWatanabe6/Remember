@@ -1,9 +1,9 @@
 'use client';
 
-import VoicesTab from '@/components/output/VoicesTab';
-import { ViewerPhotosSection } from './ViewerSections';
 import ViewerRelationshipsSection from './ViewerRelationshipsSection';
 import ViewerStorySection from './ViewerStorySection';
+import ViewerVoicesSection from './ViewerVoicesSection';
+import ViewerPhotoArchive from './ViewerPhotoArchive';
 
 export default function ViewerSectionContent({ section, data, onBack }) {
   const { output, memorial, contributors } = data;
@@ -14,9 +14,9 @@ export default function ViewerSectionContent({ section, data, onBack }) {
     case 'story':
       return <ViewerStorySection output={output} memorial={memorial} onBack={onBack} />;
     case 'voices':
-      return <VoicesTab output={output} variant="viewer" />;
+      return <ViewerVoicesSection output={output} />;
     case 'photos':
-      return <ViewerPhotosSection output={output} contributors={contributors} />;
+      return <ViewerPhotoArchive output={output} contributors={contributors} />;
     default:
       return null;
   }
