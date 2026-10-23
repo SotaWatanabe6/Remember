@@ -375,10 +375,12 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
                     />
                     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/0 px-8 text-center opacity-0 transition-all duration-300 group-hover:bg-black/38 group-hover:opacity-100">
+                      {photo.caption ? (
                       <p className="text-[30px] leading-[34px] text-white" style={{ fontFamily: 'var(--font-family-display)' }}>
-                        {photo.caption || photo.file_name || 'Photo'}
+                        {photo.caption}
                       </p>
-                      <p className="mt-4 text-[16px] leading-[16px] text-white">
+                    ) : null}
+                      <p className={`${photo.caption ? 'mt-4 ' : ''}text-[16px] leading-[16px] text-white`}>
                         {photo.contributor_name ? `Submitted by ${photo.contributor_name}` : 'Submitted by contributor'}
                       </p>
                       <p className="mt-4 text-[16px] leading-[16px] text-white">
