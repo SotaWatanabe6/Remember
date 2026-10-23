@@ -1165,8 +1165,26 @@ function stripStorySlideDisplayFields(slide) {
   }
 }
 
+function dedupeSlidesByPhotoId(slides = []) {
+  const hasText = (slide) => Boolean((slide.photo_description || slide.narration || '').trim())
+  const byPhoto = new Map()
+  const withoutPhoto = []
+
+  for (const slide of slides) {
+    if (!slide?.photo_id) {
+      withoutPhoto.push(slide)
+      continue
+    }
+    const existing = byPhoto.get(slide.photo_id)
+    // Keep one slide per photo, preferring the one that has a written description.
+    if (!existing || (!hasText(existing) && hasText(slide))) byPhoto.set(slide.photo_id, slide)
+  }
+
+  return [...withoutPhoto, ...byPhoto.values()]
+}
+
 function finalizePhotoStorySlides(slides = []) {
-  return slides
+  return dedupeSlidesByPhotoId(slides)
     .filter((slide) => slide?.slide_type === 'photo' && slide?.photo_id && slide?.photo_url)
     .filter((slide) => (slide.photo_description || slide.narration || '').trim())
     .map((slide, index) => {

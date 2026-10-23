@@ -47,12 +47,16 @@ export default function MemorialViewer({ data, loading = false, error = null, on
     }
   }, [screen]);
 
+  const showHeader = loading || Boolean(error) || screen === 'intro' || screen === 'navigation';
+
   return (
-    <div className={styles.shell}>
+    <div className={`${styles.shell} overflow-x-clip`}>
+      {showHeader ? (
       <header className={styles.header}>
         <RememberLogo markSrc="/images/viewer/logo.png" />
         {!loading && !error && screen === 'intro' ? <Link className={styles.login} href="/login">Log In / Sign Up</Link> : null}
       </header>
+      ) : null}
       <div ref={contentRef}>
         {loading ? (
           <main className={styles.status} role="status" aria-label="Loading memorial">
