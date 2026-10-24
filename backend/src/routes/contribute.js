@@ -8,6 +8,7 @@ const { extractAudioDuration } = require('../services/duration')
 const { extractImageMetadata } = require('../services/exif')
 const { getQuestionSetForContributorRelationship } = require('../lib/questionnaireQuestions')
 const { formatPersonName } = require('../lib/formatName')
+const { detectImageType } = require('../lib/fileType')
 const { getContributorDisplayName } = require('../services/contributorPrivacy')
 const { createContributorDraftRouter, getContributorForInvite } = require('./contributorDrafts')
 const { enrichMemorialForClient } = require('../services/storageUrls')
@@ -588,8 +589,14 @@ router.post('/:token/photos', async (req, res) => {
     for (const file of validFiles) {
       const safeFileName = sanitizeFileName(file.name)
       const storagePath = `memorials/${contributor.memorial_id}/contributions/${contributor.id}/photos/${randomUUID()}-${safeFileName}`
-      const mimeType = getPhotoMimeType(file)
       const fileBuffer = Buffer.from(await file.arrayBuffer())
+      // Store with the type the bytes prove, never the browser-supplied one.
+      const detectedType = detectImageType(fileBuffer)
+      if (!detectedType) {
+        uploadErrors.push({ file_name: file.name || 'photo', error: 'Only JPG, PNG, WebP, HEIC, or HEIF photos can be uploaded.' })
+        continue
+      }
+      const mimeType = detectedType.mime
       const exifData = await extractImageMetadata(fileBuffer)
 
       const { error: uploadError } = await supabase.storage
