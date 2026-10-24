@@ -17,10 +17,8 @@ function getFileExtension(fileName = '') { return fileName.split('.').pop()?.toL
 
 function validateAudioFile(file) {
   if (!file) return 'Please choose an audio file.';
-  const extension = getFileExtension(file.name);
-  const hasAudioMime = file.type?.startsWith('audio/');
-  const hasAllowedExtension = ALLOWED_AUDIO_EXTENSIONS.includes(extension);
-  if (!hasAudioMime && !hasAllowedExtension) return FILE_TYPE_ERROR;
+  // Matches the API, which only accepts these extensions whatever the browser type.
+  if (!ALLOWED_AUDIO_EXTENSIONS.includes(getFileExtension(file.name))) return FILE_TYPE_ERROR;
   if (file.size > MAX_AUDIO_FILE_SIZE_BYTES) return FILE_SIZE_ERROR;
   return '';
 }
