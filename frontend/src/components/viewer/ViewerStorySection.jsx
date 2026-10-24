@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import Image from 'next/image';
 import { ArrowLeft, ChevronDown, ImageOff, Menu, Pause, Play } from 'lucide-react';
 import { formatStoryDate } from '@/lib/storySlides.mjs';
 import { buildViewerStory, getStoryChapterTitle, getStoryPath, getStorySlideDuration, getStorySlideText, parseStoryPath } from '@/lib/viewer/story.mjs';
-import { getViewerScreenSnapshot, navigateViewerScreen, subscribeToViewerNavigation } from '@/lib/viewer/viewerNavigation.mjs';
+import { navigateViewerScreen } from '@/lib/viewer/viewerNavigation.mjs';
+import ViewerTransition, { useViewerActive, useViewerPath } from './ViewerTransition';
 import styles from './ViewerStorySection.module.css';
 
 function StoryChapters({ chapters, onSelect, circleRef }) {
@@ -67,6 +69,7 @@ function StoryPhoto({ url, title }) {
 }
 
 function StoryPlayer({ slides, index, memorial, onChange, onChapters }) {
+  const active = useViewerActive();
   const [playing, setPlaying] = useState(() => typeof window !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const headingRef = useRef(null);
   const slide = slides[index];
@@ -76,10 +79,8 @@ function StoryPlayer({ slides, index, memorial, onChange, onChapters }) {
     : slide.slideType === 'farewell' ? 'In Loving Memory'
       : slide.slideType === 'credits' ? 'Shared by Loved Ones' : getStoryChapterTitle(slide);
 
-  useEffect(() => { headingRef.current?.focus({ preventScroll: true }); }, []);
-
   useEffect(() => {
-    if (!playing) return;
+    if (!playing || !active) return;
     let timer;
     function schedule() {
       window.clearTimeout(timer);
@@ -92,7 +93,7 @@ function StoryPlayer({ slides, index, memorial, onChange, onChapters }) {
     schedule();
     document.addEventListener('visibilitychange', schedule);
     return () => { window.clearTimeout(timer); document.removeEventListener('visibilitychange', schedule); };
-  }, [playing, index, slide, isLast, onChange]);
+  }, [active, playing, index, slide, isLast, onChange]);
 
   function move(direction) {
     setPlaying(false);
@@ -112,6 +113,7 @@ function StoryPlayer({ slides, index, memorial, onChange, onChapters }) {
   }
 
   useEffect(() => {
+    if (!active) return;
     function handleKey(event) {
       if (event.target.closest?.('input, textarea, select, audio, [contenteditable="true"]')) return;
       if (['ArrowUp', 'ArrowDown'].includes(event.key) && event.target.closest?.('article')) return;
@@ -130,7 +132,7 @@ function StoryPlayer({ slides, index, memorial, onChange, onChapters }) {
     }
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [index, isLast, playing, slides.length, onChange, onChapters]);
+  }, [active, index, isLast, playing, slides.length, onChange, onChapters]);
 
   return (
     <section className={styles.player} aria-label="Story slideshow" aria-roledescription="carousel" data-story-slide={index} data-story-playing={playing} onClick={handleScreenClick}>
@@ -141,9 +143,9 @@ function StoryPlayer({ slides, index, memorial, onChange, onChapters }) {
           <span>{playing ? 'Auto' : 'Play'}</span>
         </button>
       </header>
-      <div className={`${styles.slide} ${!photoUrl ? styles.textOnly : ''}`} key={index} role="group" aria-roledescription="slide" aria-label={`${index + 1} of ${slides.length}`} aria-live={playing ? 'off' : 'polite'}>
+      <ViewerTransition motionKey={index} path={`story/slide/${index}`} className={`${styles.slide} ${!photoUrl ? styles.textOnly : ''}`} focusOnEnter={!playing} name="slide">
         {photoUrl ? <StoryPhoto url={photoUrl} title={title} /> : null}
-        <article className={styles.narrative} tabIndex={0} aria-label={title} onWheel={() => setPlaying(false)} onTouchMove={() => setPlaying(false)} onFocus={(event) => { if (event.target !== headingRef.current && event.target.matches(':focus-visible')) setPlaying(false); }}>
+        <article className={styles.narrative} tabIndex={0} aria-label={`${title}, ${index + 1} of ${slides.length}`} aria-live={playing ? 'off' : 'polite'} onWheel={() => setPlaying(false)} onTouchMove={() => setPlaying(false)} onFocus={(event) => { if (event.target !== headingRef.current && event.target.matches(':focus-visible')) setPlaying(false); }}>
           <h1 ref={headingRef} tabIndex={-1}>{title}</h1>
           {slide.slideType === 'opening' ? <p>{[formatStoryDate(slide.dateOfBirth || memorial.date_of_birth), formatStoryDate(slide.dateOfPassing || memorial.date_of_passing)].filter(Boolean).join(' - ')}</p>
             : slide.slideType === 'credits' ? <ul className={styles.credits}>{slide.credits.map((person, creditIndex) => <li key={`${person.contributorId || creditIndex}`}>
@@ -157,7 +159,7 @@ function StoryPlayer({ slides, index, memorial, onChange, onChapters }) {
                 {slide.slideType === 'farewell' && slide.contributorId ? <p className={styles.attribution}>{[slide.contributorName, slide.relationshipLabel].filter(Boolean).join(', ')}</p> : null}
               </>}
         </article>
-      </div>
+      </ViewerTransition>
       {!playing ? <footer className={styles.slideControls}>
         <button type="button" className={styles.iconButton} disabled={isLast} onClick={() => move(1)} title="Next slide" aria-label="Next slide"><ChevronDown size={30} aria-hidden="true" /></button>
       </footer> : null}
@@ -170,25 +172,25 @@ function openChapters() { navigateViewerScreen('story'); }
 
 export default function ViewerStorySection({ output, memorial, onBack }) {
   const { slides, chapters } = useMemo(() => buildViewerStory(output), [output]);
-  const path = useSyncExternalStore(subscribeToViewerNavigation, getViewerScreenSnapshot, () => 'story');
+  const path = useViewerPath();
+  const reduced = useReducedMotion();
   const index = parseStoryPath(path, slides.length);
   const circleRef = useRef(null);
-  const headingRef = useRef(null);
-
-  useEffect(() => { if (index === null) headingRef.current?.focus({ preventScroll: true }); }, [index]);
-
-  if (index !== null) return <StoryPlayer slides={slides} index={index} memorial={memorial} onChange={changeSlide} onChapters={openChapters} />;
 
   return (
+    <ViewerTransition motionKey={index === null ? 'chapters' : 'player'} path={path} name="story">
+    {index !== null ? <StoryPlayer slides={slides} index={index} memorial={memorial} onChange={changeSlide} onChapters={openChapters} /> : (
     <section className={styles.stage} aria-label="Story">
-      <div ref={circleRef} className={styles.circle} aria-hidden="true" />
+      <motion.div ref={circleRef} className={styles.circle} aria-hidden="true" initial={{ x: reduced ? 0 : 32 }} animate={{ x: 0 }} transition={{ duration: reduced ? 0 : 0.4 }} />
       <button type="button" className={styles.back} onClick={onBack}><ArrowLeft size={25} aria-hidden="true" />Back</button>
       <div className={styles.summary}>
-        <h1 ref={headingRef} tabIndex={-1}>Story</h1>
+        <h1 tabIndex={-1}>Story</h1>
         <p>Moments of {memorial.subject_name ? `${memorial.subject_name}'s` : 'a'} life, shared by loved ones.</p>
       </div>
       {chapters.length ? <StoryChapters chapters={chapters} circleRef={circleRef} onSelect={(start) => navigateViewerScreen(getStoryPath(start))} />
         : <p className={styles.empty}>No story moments are available yet.</p>}
     </section>
+    )}
+    </ViewerTransition>
   );
 }

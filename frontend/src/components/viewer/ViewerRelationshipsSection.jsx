@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useParams } from 'next/navigation';
 import Image from 'next/image';
 import { ArrowLeft, ChevronLeft, ChevronRight, ImageOff, X } from 'lucide-react';
@@ -9,7 +10,9 @@ import {
   buildRelationshipGroups, getRelationshipPath, getRelationshipPhotos,
   getRelationshipSummary, parseRelationshipPath,
 } from '@/lib/viewer/relationships.mjs';
-import { getViewerScreenSnapshot, navigateViewerScreen, subscribeToViewerNavigation } from '@/lib/viewer/viewerNavigation.mjs';
+import { navigateViewerScreen } from '@/lib/viewer/viewerNavigation.mjs';
+import ViewerTransition, { useViewerActive, useViewerPath } from './ViewerTransition';
+import ViewerDialog from './ViewerDialog';
 import styles from './ViewerRelationshipsSection.module.css';
 
 function RelationshipList({ items, label, onSelect, circleRef }) {
@@ -79,34 +82,22 @@ function RelationshipPhoto({ photo, name, className }) {
 }
 
 function RelationshipPhotoDialog({ photos, initialIndex, name, onClose }) {
-  const dialogRef = useRef(null);
   const [index, setIndex] = useState(initialIndex);
   const photo = photos[index];
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    const opener = document.activeElement;
-    const previousOverflow = document.body.style.overflow;
-    dialog.showModal();
-    document.body.style.overflow = 'hidden';
-    return () => {
-      dialog.close();
-      document.body.style.overflow = previousOverflow;
-      if (opener?.isConnected) opener.focus({ preventScroll: true });
-    };
-  }, []);
 
   function move(direction) {
     setIndex((current) => (current + direction + photos.length) % photos.length);
   }
 
   return (
-    <dialog ref={dialogRef} className={styles.photoDialog} aria-label={`Photos shared by ${name}`} onCancel={(event) => { event.preventDefault(); onClose(); }} onKeyDown={(event) => {
+    <ViewerDialog className={styles.photoDialog} label={`Photos shared by ${name}`} onClose={onClose} onKeyDown={(event) => {
       if (event.key === 'ArrowLeft') { event.preventDefault(); move(-1); }
       if (event.key === 'ArrowRight') { event.preventDefault(); move(1); }
     }}>
       <button type="button" className={styles.closePhoto} title="Close photo" aria-label="Close photo" onClick={onClose}><X size={28} aria-hidden="true" /></button>
-      <RelationshipPhoto key={photo.id} photo={photo} name={name} className={styles.fullPhoto} />
+      <ViewerTransition motionKey={photo.id} path={`photo/${index}`} className={styles.fullPhoto} focusOnEnter={false} name="photo">
+        <RelationshipPhoto key={photo.id} photo={photo} name={name} className={styles.fullPhoto} />
+      </ViewerTransition>
       <div className={styles.photoCaption} aria-live="polite">
         {photo.caption ? <p>{photo.caption}</p> : null}
         <p>{name}</p>
@@ -118,11 +109,12 @@ function RelationshipPhotoDialog({ photos, initialIndex, name, onClose }) {
           <button type="button" className={styles.nextPhoto} title="Next photo" aria-label="Next photo" onClick={() => move(1)}><ChevronRight size={28} aria-hidden="true" /></button>
         </>
       ) : null}
-    </dialog>
+    </ViewerDialog>
   );
 }
 
 function PersonDetails({ person, output, memorialId, shareToken, subjectName }) {
+  const active = useViewerActive();
   const [result, setResult] = useState({ data: null, loading: true, error: false });
   const [requestVersion, setRequestVersion] = useState(0);
   const [photoSelection, setPhotoSelection] = useState(null);
@@ -130,6 +122,7 @@ function PersonDetails({ person, output, memorialId, shareToken, subjectName }) 
   const summary = getRelationshipSummary(output, person.id) || result.data?.quote || '';
 
   useEffect(() => {
+    if (!active) return;
     const controller = new AbortController();
     getContributorHighlights({ contributorId: person.id, memorialId, shareToken, signal: controller.signal, throwOnError: true })
       .then((data) => {
@@ -138,7 +131,7 @@ function PersonDetails({ person, output, memorialId, shareToken, subjectName }) 
         if (!controller.signal.aborted) setResult({ data: null, loading: false, error: true });
       });
     return () => controller.abort();
-  }, [person.id, memorialId, shareToken, requestVersion]);
+  }, [active, person.id, memorialId, shareToken, requestVersion]);
 
   return (
     <>
@@ -170,30 +163,22 @@ function PersonDetails({ person, output, memorialId, shareToken, subjectName }) 
           </div>
         ) : !photos.length ? <p className={styles.photoStatus}>No photos were shared by this person.</p> : null}
       </section>
-      {photoSelection ? <RelationshipPhotoDialog photos={photoSelection.photos} initialIndex={photoSelection.index} name={person.name} onClose={() => setPhotoSelection(null)} /> : null}
+      <AnimatePresence>{photoSelection && active ? <RelationshipPhotoDialog photos={photoSelection.photos} initialIndex={photoSelection.index} name={person.name} onClose={() => setPhotoSelection(null)} /> : null}</AnimatePresence>
     </>
   );
 }
 
 export default function ViewerRelationshipsSection({ output, memorial, contributors = [], onBack }) {
   const params = useParams();
-  const requestedPath = useSyncExternalStore(subscribeToViewerNavigation, getViewerScreenSnapshot, () => 'relationships');
+  const requestedPath = useViewerPath();
+  const reduced = useReducedMotion();
   const { groupId, personId } = parseRelationshipPath(requestedPath);
   const groups = useMemo(() => buildRelationshipGroups(contributors), [contributors]);
   const group = groups.find((item) => item.id === groupId) || (groups.length === 1 ? groups[0] : undefined);
   const person = group?.people.find((item) => item.id === personId);
   const circleRef = useRef(null);
-  const stageRef = useRef(null);
-  const previousPath = useRef(requestedPath);
   const subjectName = memorial?.subject_name || memorial?.deceased_name || 'your loved one';
   const hasPeople = groups.some((item) => item.people.length > 0);
-
-  useEffect(() => {
-    if (previousPath.current !== requestedPath) {
-      stageRef.current.querySelector('h1')?.focus();
-      previousPath.current = requestedPath;
-    }
-  }, [requestedPath]);
 
   function back() {
     if (person) navigateViewerScreen(getRelationshipPath(group.id));
@@ -203,11 +188,12 @@ export default function ViewerRelationshipsSection({ output, memorial, contribut
   }
 
   return (
-    <section ref={stageRef} className={styles.stage} data-relationship-step={person ? 'person' : group ? 'people' : 'categories'} style={{ '--relationship-color': group?.color || '#9E9384' }} aria-label="Relationships">
-      <div ref={circleRef} className={styles.circle} aria-hidden="true" />
+    <section className={styles.stage} data-relationship-step={person ? 'person' : group ? 'people' : 'categories'} style={{ '--relationship-color': group?.color || '#9E9384' }} aria-label="Relationships">
+      <motion.div ref={circleRef} className={styles.circle} aria-hidden="true" initial={{ x: reduced ? 0 : -32 }} animate={{ x: 0 }} transition={{ duration: reduced ? 0 : 0.4 }} />
       <button type="button" className={styles.back} onClick={back} aria-label={person ? `Back to ${group.label}` : group && groups.length > 1 ? 'Back to relationship categories' : 'Back to memorial sections'}>
         <ArrowLeft size={25} aria-hidden="true" />Back
       </button>
+      <ViewerTransition motionKey={person ? `person/${person.id}` : group?.id || 'categories'} path={requestedPath} className={styles.content} name="relationships">
       {person ? (
         <PersonDetails key={person.id} person={person} output={output} memorialId={memorial?.id} shareToken={params?.shareToken} subjectName={subjectName} />
       ) : (
@@ -221,6 +207,7 @@ export default function ViewerRelationshipsSection({ output, memorial, contribut
           ) : <p className={styles.empty}>{group ? `No ${group.label.toLowerCase()} have contributed to this memorial yet.` : 'No relationships have been shared yet.'}</p>}
         </>
       )}
+      </ViewerTransition>
     </section>
   );
 }

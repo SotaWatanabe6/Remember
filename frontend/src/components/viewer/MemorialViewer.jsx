@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import RememberLogo from '@/components/brand/RememberLogo';
@@ -8,41 +8,34 @@ import { resolveViewerScreen } from '@/lib/viewer/memorialViewer.mjs';
 import { getViewerScreenSnapshot, navigateViewerScreen, subscribeToViewerNavigation } from '@/lib/viewer/viewerNavigation.mjs';
 import ViewerLanding from './ViewerLanding';
 import ViewerNavigation from './ViewerNavigation';
+import ViewerTransition from './ViewerTransition';
 import styles from './MemorialViewer.module.css';
 
 export default function MemorialViewer({ data, loading = false, error = null, onRetry, renderSection }) {
   const requestedScreen = useSyncExternalStore(subscribeToViewerNavigation, getViewerScreenSnapshot, () => 'intro');
   const screen = resolveViewerScreen(requestedScreen, data?.output);
   const fullScreen = screen === 'relationships' || screen === 'story';
-  const contentRef = useRef(null);
-  const previousScreen = useRef(screen);
-
-  useEffect(() => {
-    if (screen !== previousScreen.current) {
-      contentRef.current?.querySelector('main, nav')?.focus();
-      window.scrollTo({ top: 0, behavior: 'instant' });
-      previousScreen.current = screen;
-    }
-  }, [screen]);
+  useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [screen]);
 
   const showHeader = loading || Boolean(error) || screen === 'intro' || screen === 'navigation';
 
   return (
     <div className={`${styles.shell} overflow-x-clip`}>
+      <ViewerTransition motionKey={loading ? 'loading' : error ? 'error' : screen} path={requestedScreen} className={styles.screenFrame}>
       {showHeader ? (
         <header className={styles.header}>
           <RememberLogo markSrc="/images/viewer/logo.png" />
           {!loading && !error && screen === 'intro' ? <Link className={styles.login} href="/login">Log In / Sign Up</Link> : null}
         </header>
       ) : null}
-      <div ref={contentRef}>
+      <div>
         {loading ? (
           <main className={styles.status} role="status" aria-label="Loading memorial">
             <span className="h-8 w-8 animate-spin rounded-full border-2 border-r-border border-t-r-text motion-reduce:animate-none" aria-hidden="true" />
             <p>Loading memorial...</p>
           </main>
         ) : error ? (
-          <main className={styles.status}>
+          <main className={styles.status} tabIndex={-1}>
             <h1>This memorial is unavailable</h1>
             <p role="alert">{error}</p>
             {onRetry ? <button type="button" className={styles.start} onClick={onRetry}>Try again</button> : null}
@@ -61,6 +54,7 @@ export default function MemorialViewer({ data, loading = false, error = null, on
           </main>
         )}
       </div>
+      </ViewerTransition>
     </div>
   );
 }

@@ -23,6 +23,8 @@
   transition: background-color 240ms ease;
 }
 
+.content { position: absolute; inset: 0; }
+
 .back {
   position: absolute;
   z-index: 2;
@@ -245,7 +247,7 @@
   cursor: pointer;
 }
 
-.photoDialog {
+.photoDialog.photoDialog {
   position: fixed;
   width: calc(100% - 48px);
   height: calc(100svh - 48px);
@@ -323,6 +325,7 @@
   .circle {
     display: none;
   }
+  .content { position: relative; }
   .back { top: 24px; left: 24px; }
   .summary, .personSummary {
     position: relative;

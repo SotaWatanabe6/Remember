@@ -1,0 +1,25 @@
+.dialog {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100svh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  color: var(--color-r-text);
+  background: var(--color-r-bg);
+  overflow-y: auto;
+}
+
+.dialog::backdrop { background: rgb(0 0 0 / 65%); }
+.dialog button:focus-visible, .dialog input:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 5px;
+}
+
+.dialog:not([open]) { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog *, .dialog *::before, .dialog *::after { transition-duration: 0s !important; }
+}

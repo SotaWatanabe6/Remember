@@ -5,8 +5,12 @@
 // The organizer's VoicesTab / VoiceRecordingCard are untouched.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ChevronsUp, Pause, Play, SkipBack, SkipForward, X } from 'lucide-react';
 import { normalizeVoiceRecording } from '@/components/output/VoicesTab';
+import { useViewerActive } from './ViewerTransition';
+import ViewerDialog from './ViewerDialog';
+import styles from './ViewerVoicesSection.module.css';
 
 function getRecordings(output) {
   const source = output?.voices;
@@ -63,16 +67,8 @@ function getTranscriptLine(recording, segments, currentTime) {
 }
 
 function VoicesListOverlay({ recordings, activeIndex, onSelect, onClose }) {
-  useEffect(() => {
-    function handleKey(event) {
-      if (event.key === 'Escape') onClose();
-    }
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [onClose]);
-
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-r-panel" role="dialog" aria-modal="true" aria-label="Voices">
+    <ViewerDialog label="Voices" background="panel" onClose={onClose}>
       <button
         type="button"
         onClick={onClose}
@@ -104,11 +100,13 @@ function VoicesListOverlay({ recordings, activeIndex, onSelect, onClose }) {
           );
         })}
       </ul>
-    </div>
+    </ViewerDialog>
   );
 }
 
 export default function ViewerVoicesSection({ output }) {
+  const active = useViewerActive();
+  const reduced = useReducedMotion();
   const recordings = useMemo(() => getRecordings(output), [output]);
   const [index, setIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -118,6 +116,15 @@ export default function ViewerVoicesSection({ output }) {
   const [audioError, setAudioError] = useState(false);
   const audioRef = useRef(null);
   const wantsPlayRef = useRef(false);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!active) {
+      wantsPlayRef.current = false;
+      audio?.pause();
+    }
+    return () => { audio?.pause(); };
+  }, [active, index]);
 
   const recording = recordings[index] ?? null;
   const segments = useMemo(
@@ -161,6 +168,7 @@ export default function ViewerVoicesSection({ output }) {
   }
 
   function handleEnded() {
+    if (!active) return;
     setIsPlaying(false);
     if (index < recordings.length - 1) {
       selectTrack(index + 1, { autoplay: true });
@@ -170,7 +178,7 @@ export default function ViewerVoicesSection({ output }) {
   }
 
   return (
-    <section aria-label="Voice recordings" className="relative flex min-h-[calc(100vh-240px)] w-full flex-col items-center pt-[14vh]">
+    <section aria-label="Voice recordings" className={styles.section}>
       <audio
         key={recording.id}
         ref={audioRef}
@@ -179,7 +187,7 @@ export default function ViewerVoicesSection({ output }) {
         onLoadedMetadata={(event) => {
           const audio = event.currentTarget;
           setDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
-          if (wantsPlayRef.current) audio.play().catch(() => setAudioError(true));
+          if (active && wantsPlayRef.current) audio.play().catch(() => setAudioError(true));
         }}
         onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
         onPlay={() => setIsPlaying(true)}
@@ -196,7 +204,7 @@ export default function ViewerVoicesSection({ output }) {
         <p className="mt-8 text-body-2 text-r-muted" role="alert">This recording could not be played right now.</p>
       ) : null}
 
-      <div className="fixed inset-x-0 bottom-0 z-10 h-[320px] overflow-hidden">
+      <motion.div className={styles.controls} initial={{ y: reduced ? 0 : 32 }} animate={{ y: 0 }} transition={{ duration: reduced ? 0 : 0.4 }}>
         <div className="absolute left-1/2 top-0 h-[1520px] w-[1520px] -translate-x-1/2 rounded-full bg-r-panel" aria-hidden="true" />
 
         <h2 className="absolute inset-x-0 top-[104px] px-6 text-center font-display text-[32px] font-medium italic leading-[40px] text-r-modal">
@@ -217,8 +225,9 @@ export default function ViewerVoicesSection({ output }) {
           <button
             type="button"
             onClick={togglePlay}
+            disabled={!recording.audioUrl || audioError}
             aria-label={isPlaying ? 'Pause' : 'Play'}
-            className="flex size-[52px] shrink-0 items-center justify-center rounded-full bg-r-modal text-r-panel transition-opacity hover:opacity-90"
+            className="flex size-[52px] shrink-0 items-center justify-center rounded-full bg-r-modal text-r-panel transition-opacity hover:opacity-90 disabled:opacity-40"
           >
             {isPlaying
               ? <Pause size={22} fill="currentColor" aria-hidden="true" />
@@ -259,9 +268,9 @@ export default function ViewerVoicesSection({ output }) {
         >
           <ChevronsUp size={34} strokeWidth={2} aria-hidden="true" />
         </button>
-      </div>
+      </motion.div>
 
-      {listOpen ? (
+      <AnimatePresence>{listOpen && active ? (
         <VoicesListOverlay
           recordings={recordings}
           activeIndex={index}
@@ -271,7 +280,7 @@ export default function ViewerVoicesSection({ output }) {
           }}
           onClose={() => setListOpen(false)}
         />
-      ) : null}
+      ) : null}</AnimatePresence>
     </section>
   );
 }
