@@ -58,6 +58,13 @@ const uploadLimiter = rateLimit({
   message: { error: "Too many uploads. Please wait and try again." }
 })
 
+// Each start creates a contributor row, so cap how fast one IP can create them.
+const contributorStartLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { error: "Too many attempts. Please wait and try again." }
+})
+
 // ── Body parsing ──────────────────────────────────────────────────────────────
 app.use(express.json())
 
@@ -68,6 +75,7 @@ app.get('/health', (req, res) => {
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/memorials', memorialRoutes)
+app.post('/contribute/:token/start', contributorStartLimiter)
 app.use('/contribute/:token/photos', uploadLimiter)
 app.use('/contribute/:token/voice', uploadLimiter)
 app.use('/contribute', contributeRoutes)

@@ -209,6 +209,14 @@ router.post('/:token/start', async (req, res) => {
       return res.status(410).json({ error: 'This link is no longer active.' })
     }
 
+    if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
+      return res.status(410).json({ error: 'This link has expired.' })
+    }
+
+    if (invite.max_uses && invite.use_count >= invite.max_uses) {
+      return res.status(410).json({ error: 'This link has reached its maximum uses.' })
+    }
+
     // Each start gets a fresh secret session. Returning visitors resume from
     // the session stored in their browser; matching by name would let anyone
     // with the invite link take over another contributor's draft.
