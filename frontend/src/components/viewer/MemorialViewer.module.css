@@ -6,6 +6,8 @@
   color: var(--color-r-text);
 }
 
+.screenFrame { min-height: 100svh; }
+
 .header {
   display: flex;
   align-items: center;
@@ -210,6 +212,8 @@
 }
 
 .back {
+  position: relative;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -286,4 +290,12 @@
   .left .marker, .right .marker { width: 24px; }
   .left { right: calc(100% - 12px); }
   .right { left: calc(100% - 12px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell *, .shell *::before, .shell *::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+    scroll-behavior: auto !important;
+  }
 }

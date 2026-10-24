@@ -1,0 +1,32 @@
+.section {
+  position: relative;
+  display: flex;
+  min-height: calc(100svh - 240px);
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 14svh;
+  padding-bottom: 360px;
+}
+
+.controls {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 10;
+  height: 320px;
+  overflow: hidden;
+}
+
+@media (max-width: 639px) { .section { padding-top: 8svh; } }
+
+@media (max-height: 740px) {
+  .section { min-height: 0; padding-top: 24px; padding-bottom: 0; }
+  .controls {
+    position: relative;
+    inset: auto;
+    flex-shrink: 0;
+    width: 100vw;
+    margin-top: 48px;
+  }
+}

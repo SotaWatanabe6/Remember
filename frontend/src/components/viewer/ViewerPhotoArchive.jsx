@@ -4,8 +4,11 @@
 // Viewer-facing Photos tab (Figma: Photo Archive with All Photos / Albums /
 // Contributors, album detail, and the white photo lightbox).
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { ArrowLeft, ChevronLeft, ChevronRight, ImageOff, X } from 'lucide-react';
+import ViewerDialog from './ViewerDialog';
+import ViewerTransition, { useViewerActive } from './ViewerTransition';
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -95,7 +98,7 @@ function PhotoTile({ photo, onOpen }) {
           alt={photo.caption || ''}
           loading="lazy"
           onError={() => setFailed(true)}
-          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transform-none"
         />
       ) : null}
     </button>
@@ -122,13 +125,19 @@ function EmptyState({ title, body }) {
 }
 
 function ArcHeader() {
+  const reduced = useReducedMotion();
   const anchorRef = useRef(null);
   const [offset, setOffset] = useState(0);
 
   useEffect(() => {
     function measure() {
       const el = anchorRef.current;
-      if (el) setOffset(Math.max(0, el.getBoundingClientRect().top + window.scrollY));
+      if (el) {
+        let top = 0;
+        // Layout offsets exclude the screen's temporary entrance transform.
+        for (let node = el; node; node = node.offsetParent) top += node.offsetTop;
+        setOffset(Math.max(0, top));
+      }
     }
     measure();
     window.addEventListener('resize', measure);
@@ -138,7 +147,7 @@ function ArcHeader() {
   return (
     <div ref={anchorRef} className="relative left-1/2 -ml-[50vw] w-screen" style={{ height: Math.max(0, 320 - offset) }}>
       <div className="pointer-events-none absolute inset-x-0 overflow-hidden" style={{ top: -offset, height: 320 }}>
-        <div className="absolute left-1/2 top-[-1200px] h-[1520px] w-[1520px] -translate-x-1/2 rounded-full bg-r-panel" aria-hidden="true" />
+        <motion.div className="absolute left-1/2 top-[-1200px] h-[1520px] w-[1520px] rounded-full bg-r-panel" style={{ x: '-50%' }} initial={{ y: reduced ? 0 : -32 }} animate={{ y: 0 }} transition={{ duration: reduced ? 0 : 0.4 }} aria-hidden="true" />
         <h1 className="absolute inset-x-0 top-[104px] text-center font-display text-[40px] font-bold leading-[48px] text-r-modal">Photo Archive</h1>
       </div>
     </div>
@@ -149,20 +158,13 @@ function Lightbox({ photos, index, onClose, onChange }) {
   const photo = photos[index];
   const hasMany = photos.length > 1;
 
-  useEffect(() => {
-    function handleKey(event) {
-      if (event.key === 'Escape') onClose();
-      if (event.key === 'ArrowLeft' && hasMany) onChange((index - 1 + photos.length) % photos.length);
-      if (event.key === 'ArrowRight' && hasMany) onChange((index + 1) % photos.length);
-    }
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [index, photos.length, hasMany, onClose, onChange]);
-
   if (!photo) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-r-modal px-6" role="dialog" aria-modal="true" aria-label="Photo">
+    <ViewerDialog label="Photo" background="modal" className="flex flex-col items-center justify-center px-6" onClose={onClose} onKeyDown={(event) => {
+      if (event.key === 'ArrowLeft' && hasMany) { event.preventDefault(); onChange((index - 1 + photos.length) % photos.length); }
+      if (event.key === 'ArrowRight' && hasMany) { event.preventDefault(); onChange((index + 1) % photos.length); }
+    }}>
       <button
         type="button"
         onClick={onClose}
@@ -194,17 +196,24 @@ function Lightbox({ photos, index, onClose, onChange }) {
         </>
       ) : null}
 
-      <div className="w-full max-w-[886px]">
-        {photo.url ? (
-          <img src={photo.url} alt={photo.caption || ''} className="mx-auto max-h-[62vh] w-auto max-w-full object-contain" />
-        ) : (
-          <div className="aspect-[886/560] w-full bg-r-card" />
-        )}
+      <ViewerTransition motionKey={photo.id} path={`photo/${index}`} className="w-full max-w-[886px] px-8 sm:px-16" focusOnEnter={false} name="photo">
+        <EnlargedPhoto key={photo.id} photo={photo} />
         <div className="mt-5 flex flex-col gap-1">
           {photo.caption ? <p className="text-body-2 text-r-text">{photo.caption}</p> : null}
           {photo.contributorName ? <p className="text-body-2 text-r-muted">Submitted by {photo.contributorName}</p> : null}
         </div>
-      </div>
+      </ViewerTransition>
+    </ViewerDialog>
+  );
+}
+
+function EnlargedPhoto({ photo }) {
+  const [failed, setFailed] = useState(false);
+  return photo.url && !failed ? (
+    <img src={photo.url} alt={photo.caption || ''} onError={() => setFailed(true)} className="mx-auto max-h-[62svh] w-auto max-w-full object-contain" />
+  ) : (
+    <div className="flex min-h-48 flex-col items-center justify-center gap-4 bg-r-card p-6 text-center">
+      <ImageOff size={32} aria-hidden="true" /><p>This photo is unavailable</p>
     </div>
   );
 }
@@ -225,7 +234,7 @@ function AlbumsView({ albums, openAlbumId, onOpenAlbum, onCloseAlbum, sort, onSo
           <button type="button" onClick={onCloseAlbum} aria-label="Back to albums" className="text-r-text transition-opacity hover:opacity-70">
             <ArrowLeft size={36} aria-hidden="true" />
           </button>
-          <h2 className="min-w-0 flex-1 truncate font-display text-[36px] font-medium italic leading-[44px] text-r-secondary">{openAlbum.name}</h2>
+          <h2 tabIndex={-1} data-viewer-focus className="min-w-0 flex-1 break-words font-display text-[28px] font-medium italic leading-[36px] text-r-secondary sm:text-[36px] sm:leading-[44px]">{openAlbum.name}</h2>
           <SortSelect value={sort} onChange={onSortChange} />
         </div>
         <PhotoGrid photos={sortPhotos(openAlbum.photos, sort)} onOpen={onOpenPhoto} />
@@ -294,7 +303,9 @@ function ContributorsView({ contributors, photosByName, onOpenPhoto }) {
           );
         })}
       </ul>
-      <PhotoGrid photos={selected.photos} columns={2} onOpen={onOpenPhoto} />
+      <ViewerTransition motionKey={selected.contributor.id} path={`photos/contributor/${selected.contributor.id}`} focusOnEnter={false} name="contributor-photos">
+        <PhotoGrid photos={selected.photos} columns={2} onOpen={onOpenPhoto} />
+      </ViewerTransition>
     </div>
   );
 }
@@ -308,6 +319,8 @@ const TABS = [
 ];
 
 export default function ViewerPhotoArchive({ output, contributors = [] }) {
+  const active = useViewerActive();
+  const tabId = useId();
   const [view, setView] = useState('all');
   const [sort, setSort] = useState('');
   const [openAlbumId, setOpenAlbumId] = useState(null);
@@ -340,7 +353,17 @@ export default function ViewerPhotoArchive({ output, contributors = [] }) {
       <ArcHeader />
 
       <div className="mt-[60px] flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap gap-5" role="tablist" aria-label="Photo archive views">
+        <div className="grid w-full grid-cols-2 gap-3 sm:flex sm:w-auto sm:flex-wrap sm:gap-5" role="tablist" aria-label="Photo archive views" onKeyDown={(event) => {
+          const index = TABS.findIndex((tab) => tab.id === view);
+          const next = event.key === 'ArrowRight' ? (index + 1) % TABS.length
+            : event.key === 'ArrowLeft' ? (index + TABS.length - 1) % TABS.length
+              : event.key === 'Home' ? 0 : event.key === 'End' ? TABS.length - 1 : null;
+          if (next !== null) {
+            event.preventDefault();
+            changeView(TABS[next].id);
+            document.getElementById(`${tabId}-${TABS[next].id}`)?.focus();
+          }
+        }}>
           {TABS.map((tab) => {
             const isActive = view === tab.id;
             return (
@@ -348,9 +371,12 @@ export default function ViewerPhotoArchive({ output, contributors = [] }) {
                 key={tab.id}
                 type="button"
                 role="tab"
+                id={`${tabId}-${tab.id}`}
+                aria-controls={`${tabId}-panel`}
                 aria-selected={isActive}
+                tabIndex={isActive ? 0 : -1}
                 onClick={() => changeView(tab.id)}
-                className={`h-[50px] min-w-[207px] rounded-full px-8 font-display text-[24px] font-medium transition max-sm:min-w-0 max-sm:flex-1 max-sm:px-4 max-sm:text-[18px] ${
+                className={`h-[50px] min-w-[207px] rounded-full px-8 font-display text-[24px] font-medium transition max-sm:min-w-0 max-sm:px-4 max-sm:text-[18px] max-sm:last:col-span-2 ${
                   isActive ? 'bg-r-panel text-r-modal' : 'border border-r-muted text-r-muted hover:bg-r-card/50'
                 }`}
               >
@@ -362,7 +388,8 @@ export default function ViewerPhotoArchive({ output, contributors = [] }) {
         {showSort ? <SortSelect value={sort} onChange={setSort} /> : null}
       </div>
 
-      <div className="mt-8 pb-16">
+      <ViewerTransition motionKey={`${view}/${openAlbumId || ''}`} path={`photos/${view}${openAlbumId ? `/${openAlbumId}` : ''}`} className="mt-8 pb-16" focusOnEnter={Boolean(openAlbumId)} name="archive">
+      <section role="tabpanel" id={`${tabId}-panel`} aria-labelledby={`${tabId}-${view}`} tabIndex={0}>
         {view === 'all' ? (
           allPhotos.length ? (
             <PhotoGrid photos={sortPhotos(allPhotos, sort)} onOpen={openPhoto} />
@@ -386,16 +413,17 @@ export default function ViewerPhotoArchive({ output, contributors = [] }) {
         {view === 'contributors' ? (
           <ContributorsView contributors={contributors} photosByName={photosByName} onOpenPhoto={openPhoto} />
         ) : null}
-      </div>
+      </section>
+      </ViewerTransition>
 
-      {lightbox ? (
+      <AnimatePresence>{lightbox && active ? (
         <Lightbox
           photos={lightbox.photos}
           index={lightbox.index}
           onClose={() => setLightbox(null)}
           onChange={(index) => setLightbox((current) => ({ ...current, index }))}
         />
-      ) : null}
+      ) : null}</AnimatePresence>
     </div>
   );
 }
