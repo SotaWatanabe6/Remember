@@ -113,3 +113,27 @@ test('one disguised file does not block the genuine photos in the same batch', a
   assert.equal(response.body.errors.length, 1)
   assert.equal(response.body.errors[0].file_name, 'two.png')
 })
+
+const AUDIO = kb([...Buffer.from('ID3'), 3, 0])
+
+test('a voice recording is stored with the type of its allowed extension, not the browser type', async () => {
+  const f = fixture()
+  const response = await f.upload('voice', [['contributor_title', 'Birthday'], ['file', [new Blob([AUDIO], { type: 'text/html' }), 'birthday.mp3']]])
+  assert.equal(response.statusCode, 201)
+  assert.equal(f.stored[0].contentType, 'audio/mpeg')
+  assert.equal(f.db.voice_recordings[0].file_type, 'audio/mpeg')
+})
+
+for (const [name, fileName, type] of [
+  ['an HTML page labelled as audio', 'page.html', 'audio/mpeg'],
+  ['an SVG labelled as audio', 'image.svg', 'audio/wav'],
+  ['an unsupported audio extension', 'memo.aac', 'audio/aac'],
+]) {
+  test(`voice upload rejects ${name}`, async () => {
+    const f = fixture()
+    const response = await f.upload('voice', [['contributor_title', 'Memo'], ['file', [new Blob([AUDIO], { type }), fileName]]])
+    assert.equal(response.statusCode, 400)
+    assert.equal(f.stored.length, 0)
+    assert.equal(f.db.voice_recordings.length, 0)
+  })
+}

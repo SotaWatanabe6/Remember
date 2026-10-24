@@ -67,10 +67,10 @@ function getPhotoMimeType(file) {
   return PHOTO_MIME_BY_EXTENSION[extension] || ''
 }
 
+// Derived from the extension only: the browser-supplied type is attacker
+// controlled and would be served back as the stored file's Content-Type.
 function getAudioMimeType(file) {
-  const extension = getFileExtension(file.name)
-  if (file.type?.startsWith('audio/')) return file.type
-  return AUDIO_MIME_BY_EXTENSION[extension] || ''
+  return AUDIO_MIME_BY_EXTENSION[getFileExtension(file.name)] || ''
 }
 
 function validatePhotoFile(file) {
@@ -92,7 +92,7 @@ function validateVoiceFile(file) {
   const extension = getFileExtension(file.name)
   const mimeType = getAudioMimeType(file)
 
-  if (!mimeType && !ALLOWED_AUDIO_EXTENSIONS.has(extension)) {
+  if (!mimeType || !ALLOWED_AUDIO_EXTENSIONS.has(extension)) {
     return 'This file type is not supported. Please upload an M4A, MP3, or WAV file.'
   }
 
