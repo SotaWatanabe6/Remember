@@ -26,6 +26,15 @@ const configuredAllowedOrigins = [
 const allowedOrigins = [...new Set([...DEFAULT_ALLOWED_ORIGINS, ...configuredAllowedOrigins])]
 
 // ── Security ──────────────────────────────────────────────────────────────────
+// Behind a reverse proxy (e.g. Render's load balancer) every request arrives
+// from the proxy, so rate limits would lump all clients together. TRUST_PROXY
+// is the number of proxy hops to trust in X-Forwarded-For. Leave it unset when
+// clients connect directly: trusting the header then lets them spoof their IP.
+if (process.env.TRUST_PROXY) {
+  const hops = Number(process.env.TRUST_PROXY)
+  app.set('trust proxy', Number.isInteger(hops) ? hops : process.env.TRUST_PROXY)
+}
+
 app.use(helmet())
 
 app.use(cors({
