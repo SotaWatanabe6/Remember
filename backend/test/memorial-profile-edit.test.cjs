@@ -123,3 +123,14 @@ test('another organizer cannot edit the memorial profile', async () => {
   assert.equal(response.statusCode, 403)
   assert.equal(f.memorials[0].subject_name, 'John Smith')
 })
+
+test('status cannot be changed through a profile edit', async () => {
+  const f = fixture('generating')
+  const statusOnly = await f.update({ status: 'collecting' })
+  assert.equal(statusOnly.statusCode, 400)
+
+  const mixed = await f.update({ subject_name: 'Jane Smith', status: 'complete' })
+  assert.equal(mixed.statusCode, 200)
+  assert.equal(f.memorials[0].status, 'generating')
+  assert.equal(f.memorials[0].subject_name, 'Jane Smith')
+})

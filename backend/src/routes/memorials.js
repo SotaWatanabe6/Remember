@@ -294,7 +294,6 @@ router.patch('/:id', authMiddleware, async (req, res) => {
       'date_of_passing',
       'biography',
       'cover_photo_url',
-      'status',
     ]
 
     const updates = {}
