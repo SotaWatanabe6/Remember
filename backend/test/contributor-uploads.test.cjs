@@ -74,12 +74,16 @@ function fixture() {
     const encoded = new Request('http://fixture.invalid', { method: 'POST', body: form })
     const req = Readable.from([Buffer.from(await encoded.arrayBuffer())])
     Object.assign(req, { method: 'POST', params: { token: 'invite-token' }, headers: { 'content-type': encoded.headers.get('content-type') } })
+    return handle(kind, req)
+  }
+
+  async function handle(kind, req) {
     const route = module.exports.stack.find((layer) => layer.route?.path === `/:token/${kind}` && layer.route.methods.post).route
     const response = { statusCode: 200, body: null, status(code) { this.statusCode = code; return this }, json(payload) { this.body = payload; return this } }
     await route.stack[0].handle(req, response)
     return response
   }
-  return { db, stored, upload }
+  return { db, stored, upload, handle }
 }
 
 const kb = (bytes) => Buffer.concat([Buffer.from(bytes), Buffer.alloc(2048)])
@@ -137,3 +141,31 @@ for (const [name, fileName, type] of [
     assert.equal(f.db.voice_recordings.length, 0)
   })
 }
+
+const MB = 1024 * 1024
+function multipartRequest(chunks, headers = {}) {
+  const req = Readable.from(chunks)
+  Object.assign(req, { method: 'POST', params: { token: 'invite-token' }, headers: { 'content-type': 'multipart/form-data; boundary=probe', ...headers } })
+  return req
+}
+
+test('a request declaring a body over the cap is refused before it is read', async () => {
+  const f = fixture()
+  const req = multipartRequest([Buffer.alloc(16)], { 'content-length': String(500 * MB) })
+  const response = await f.handle('photos', req)
+  assert.equal(response.statusCode, 413)
+  assert.equal(req.readableDidRead, false)
+  assert.equal(f.stored.length, 0)
+})
+
+test('a streamed body that grows past the voice cap is cut off with 413', async () => {
+  const f = fixture()
+  let sentBytes = 0
+  async function* oversized() {
+    for (let i = 0; i < 60; i += 1) { sentBytes += MB; yield Buffer.alloc(MB) }
+  }
+  const response = await f.handle('voice', multipartRequest(oversized()))
+  assert.equal(response.statusCode, 413)
+  assert.ok(sentBytes < 60 * MB, 'stopped reading before the whole body arrived')
+  assert.equal(f.stored.length, 0)
+})

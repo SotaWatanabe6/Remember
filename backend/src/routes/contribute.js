@@ -2,6 +2,7 @@ require('dotenv').config()
 const express = require('express')
 const { randomBytes, randomUUID } = require('crypto')
 const { Readable } = require('stream')
+const { TransformStream } = require('stream/web')
 const router = express.Router()
 const supabase = require('../supabase')
 const { extractAudioDuration } = require('../services/duration')
@@ -29,6 +30,11 @@ const MAX_PHOTO_BYTES = 50 * 1024 * 1024
 const MAX_AUDIO_BYTES = 50 * 1024 * 1024
 const MAX_CONTRIBUTOR_PHOTOS = 500
 const MAX_PHOTO_UPLOAD_BATCH_SIZE = 20
+// Per-request body caps, including room for multipart boundaries and fields.
+// The frontend splits photo batches so they stay under the photo cap.
+const MULTIPART_OVERHEAD_BYTES = 1024 * 1024
+const MAX_PHOTO_REQUEST_BYTES = 200 * 1024 * 1024
+const MAX_VOICE_REQUEST_BYTES = MAX_AUDIO_BYTES + MULTIPART_OVERHEAD_BYTES
 const ALLOWED_PHOTO_EXTENSIONS = new Set(['heic', 'heif', 'jpg', 'jpeg', 'png', 'webp'])
 const ALLOWED_AUDIO_EXTENSIONS = new Set(['m4a', 'mp3', 'wav', 'webm'])
 const RELATIONSHIP_TYPES_REQUIRING_LABEL = new Set(['Family', 'Other'])
@@ -107,7 +113,15 @@ function isFormDataFile(value) {
   return value && typeof value.name === 'string' && typeof value.arrayBuffer === 'function'
 }
 
-async function parseMultipartFormData(req) {
+function payloadTooLarge() {
+  const error = new Error('This upload is too large. Please upload fewer or smaller files at a time.')
+  error.status = 413
+  return error
+}
+
+// formData() buffers the whole body in memory, so count bytes as they stream
+// in and stop reading once a request exceeds what a valid upload could need.
+async function parseMultipartFormData(req, maxBytes) {
   const contentType = req.headers['content-type'] || ''
 
   if (!contentType.includes('multipart/form-data')) {
@@ -116,14 +130,30 @@ async function parseMultipartFormData(req) {
     throw error
   }
 
+  if (Number(req.headers['content-length']) > maxBytes) throw payloadTooLarge()
+
+  let receivedBytes = 0
+  const body = Readable.toWeb(req).pipeThrough(new TransformStream({
+    transform(chunk, controller) {
+      receivedBytes += chunk.byteLength
+      if (receivedBytes > maxBytes) controller.error(payloadTooLarge())
+      else controller.enqueue(chunk)
+    },
+  }))
+
   const request = new Request('http://remember.local/upload', {
     method: req.method,
     headers: req.headers,
-    body: Readable.toWeb(req),
+    body,
     duplex: 'half'
   })
 
-  return request.formData()
+  try {
+    return await request.formData()
+  } catch (error) {
+    if (receivedBytes > maxBytes) throw payloadTooLarge()
+    throw error
+  }
 }
 
 // GET /contribute/:token — validate invite token
@@ -521,7 +551,7 @@ router.get('/:token/photos', async (req, res) => {
 // POST /contribute/:token/photos
 router.post('/:token/photos', async (req, res) => {
   try {
-    const formData = await parseMultipartFormData(req)
+    const formData = await parseMultipartFormData(req, MAX_PHOTO_REQUEST_BYTES)
     const contributor_token = formData.get('contributor_token')
     const submittedFiles = [
       ...formData.getAll('files[]'),
@@ -735,7 +765,7 @@ router.delete('/:token/photos/:assetId', async (req, res) => {
 // POST /contribute/:token/voice
 router.post('/:token/voice', async (req, res) => {
   try {
-    const formData = await parseMultipartFormData(req)
+    const formData = await parseMultipartFormData(req, MAX_VOICE_REQUEST_BYTES)
     const contributor_token = formData.get('contributor_token')
     const contributor_title = String(formData.get('contributor_title') || '').trim()
     const submittedFile = [
