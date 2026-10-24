@@ -7,7 +7,10 @@ const { registerModerationReview, getModerationItems } = require('../services/mo
 const { isPendingModeration } = require('../services/moderationState')
 const crypto = require('crypto')
 const multer = require('multer')
-const upload = multer()
+const { detectImageType } = require('../lib/fileType')
+
+const MAX_COVER_PHOTO_BYTES = 15 * 1024 * 1024
+const upload = multer({ limits: { fileSize: MAX_COVER_PHOTO_BYTES, files: 1 } })
 
 // After the existing requires:
 const { enrichMemorialsForClient, enrichMemorialForClient, resolveOutputMediaUrls } = require('../services/storageUrls')
@@ -97,17 +100,26 @@ router.post('/cover-photo', authMiddleware, async (req, res) => {
   try {
 
     upload.single('file')(req, res, async (err) => {
+      if (err?.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ error: 'Cover photos must be smaller than 15 MB.' })
+      }
       if (err) return res.status(400).json({ error: err.message })
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
 
+      // Name and type the object from its bytes; the uploaded file name and
+      // MIME type are client-controlled.
+      const detectedType = detectImageType(req.file.buffer)
+      if (!detectedType) {
+        return res.status(400).json({ error: 'Cover photos must be JPG, PNG, WebP, HEIC, or HEIF images.' })
+      }
+
       const userId = req.user?.id ?? req.user?.sub
-      const ext = req.file.originalname.split('.').pop()?.toLowerCase() || 'jpg'
-      const storagePath = `covers/${userId}/${Date.now()}.${ext}`
+      const storagePath = `covers/${userId}/${Date.now()}.${detectedType.extension}`
 
       const { error: uploadError } = await supabase.storage
         .from('memorial-assets')
         .upload(storagePath, req.file.buffer, {
-          contentType: req.file.mimetype,
+          contentType: detectedType.mime,
           upsert: false,
         })
 
