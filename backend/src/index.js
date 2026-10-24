@@ -6,7 +6,6 @@ const dotenv = require('dotenv')
 
 dotenv.config()
 
-const authRoutes = require('./routes/auth')
 const memorialRoutes = require('./routes/memorials')
 const contributeRoutes = require('./routes/contribute')
 const aiRoutes = require('./routes/ai')
@@ -59,7 +58,6 @@ app.get('/health', (req, res) => {
 })
 
 // ── Routes ────────────────────────────────────────────────────────────────────
-app.use('/auth', authRoutes)
 app.use('/memorials', memorialRoutes)
 app.use('/contribute/:token/photos', uploadLimiter)
 app.use('/contribute/:token/voice', uploadLimiter)
