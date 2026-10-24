@@ -131,7 +131,8 @@
   align-items: start;
   gap: 6.94vw;
 }
-.photo { position: relative; width: 100%; aspect-ratio: 657 / 406; max-height: 100%; background: var(--color-r-btn); }
+.photo { position: relative; width: 100%; aspect-ratio: 657 / 406; max-height: 100%; }
+.portraitPhoto { aspect-ratio: 4 / 3; max-height: calc(100% + 64px); margin-top: -32px; }
 .photoImage { object-fit: contain; }
 .unavailable { display: flex; height: 100%; align-items: center; justify-content: center; flex-direction: column; gap: 16px; padding: 24px; color: var(--color-r-text); text-align: center; }
 .narrative { min-width: 0; max-height: 100%; overflow-y: auto; padding: 0 8px 12px 0; overflow-wrap: anywhere; scrollbar-width: thin; }
@@ -180,6 +181,7 @@
   .playback { gap: 12px; }
   .slide { position: static; display: flex; flex-direction: column; gap: 32px; }
   .photo { flex-shrink: 0; max-height: none; }
+  .portraitPhoto { margin-top: 0; }
   .narrative { width: 100%; overflow: visible; max-height: none; padding: 0; }
   .narrative h1 { margin-bottom: 20px; }
   .narrative p, .narrative blockquote { font-size: 18px; line-height: 28px; }

@@ -60,10 +60,11 @@ function StoryChapters({ chapters, onSelect, circleRef }) {
 
 function StoryPhoto({ url, title }) {
   const [failedUrl, setFailedUrl] = useState(null);
+  const [portraitUrl, setPortraitUrl] = useState(null);
   return (
-    <div className={styles.photo}>
+    <div className={`${styles.photo} ${portraitUrl === url ? styles.portraitPhoto : ''}`}>
       {failedUrl === url ? <div className={styles.unavailable}><ImageOff size={32} aria-hidden="true" /><p>This photo is unavailable</p></div>
-        : <Image src={url} alt={`Photo from ${title}`} fill sizes="(max-width: 700px) calc(100vw - 48px), 46vw" unoptimized className={styles.photoImage} onError={() => setFailedUrl(url)} />}
+        : <Image src={url} alt={`Photo from ${title}`} fill sizes="(max-width: 700px) calc(100vw - 48px), 46vw" unoptimized className={styles.photoImage} onLoad={(event) => setPortraitUrl(event.currentTarget.naturalHeight > event.currentTarget.naturalWidth ? url : null)} onError={() => setFailedUrl(url)} />}
     </div>
   );
 }
