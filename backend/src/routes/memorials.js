@@ -8,8 +8,13 @@ const { isPendingModeration } = require('../services/moderationState')
 const crypto = require('crypto')
 const multer = require('multer')
 const { detectImageType } = require('../lib/fileType')
+const { isOwnCoverPhoto, isSameCoverPhoto } = require('../services/coverPhoto')
 
 const MAX_COVER_PHOTO_BYTES = 15 * 1024 * 1024
+const INVALID_COVER_PHOTO = {
+  error: 'Please upload the cover photo again.',
+  code: 'invalid_cover_photo',
+}
 const upload = multer({ limits: { fileSize: MAX_COVER_PHOTO_BYTES, files: 1 } })
 
 // After the existing requires:
@@ -170,6 +175,10 @@ router.post('/', authMiddleware, async (req, res) => {
       })
     }
 
+    if (!isOwnCoverPhoto(supabase, coverPhotoUrl, req.user.sub)) {
+      return res.status(400).json(INVALID_COVER_PHOTO)
+    }
+
     const memorialPayload = {
       user_id: req.user.sub,
       subject_name: subjectName,
@@ -271,7 +280,7 @@ router.patch('/:id', authMiddleware, async (req, res) => {
   try {
     const { data: memorial, error: memError } = await supabase
       .from('memorials')
-      .select('id, status')
+      .select('id, status, cover_photo_url')
       .eq('id', req.params.id)
       .eq('user_id', req.user.sub)
       .single()
@@ -303,6 +312,14 @@ router.patch('/:id', authMiddleware, async (req, res) => {
 
     if (!Object.keys(updates).length) {
       return res.status(400).json({ error: 'No valid fields to update' })
+    }
+
+    if (
+      updates.cover_photo_url &&
+      !isSameCoverPhoto(supabase, memorial.cover_photo_url, updates.cover_photo_url) &&
+      !isOwnCoverPhoto(supabase, updates.cover_photo_url, req.user.sub)
+    ) {
+      return res.status(400).json(INVALID_COVER_PHOTO)
     }
 
     updates.updated_at = new Date().toISOString()
