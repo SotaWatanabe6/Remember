@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict')
 const { test } = require('node:test')
-const { UNTRUSTED_DATA_RULE, untrusted, withUntrustedDataRule } = require('../src/lib/untrustedPrompt')
+const { untrusted } = require('../src/lib/untrustedPrompt')
 
 test('wraps text in a single source_data block', () => {
   const block = untrusted('She loved gardening.')
@@ -23,11 +23,4 @@ test('objects are serialised as JSON inside the block', () => {
 
 test('missing values become an empty block', () => {
   assert.equal(untrusted(undefined), '<source_data>\n\n</source_data>')
-})
-
-test('the rule is prepended as a system message without touching the others', () => {
-  const messages = [{ role: 'user', content: 'task' }]
-  const result = withUntrustedDataRule(messages)
-  assert.deepEqual(result, [{ role: 'system', content: UNTRUSTED_DATA_RULE }, { role: 'user', content: 'task' }])
-  assert.equal(messages.length, 1)
 })

@@ -14,8 +14,4 @@ function untrusted(value) {
   return `<source_data>\n${fenced}\n</source_data>`
 }
 
-function withUntrustedDataRule(messages) {
-  return [{ role: 'system', content: UNTRUSTED_DATA_RULE }, ...messages]
-}
-
-module.exports = { UNTRUSTED_DATA_RULE, untrusted, withUntrustedDataRule }
+module.exports = { UNTRUSTED_DATA_RULE, untrusted }
