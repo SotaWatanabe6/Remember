@@ -8,6 +8,7 @@ const { isPendingModeration } = require('../services/moderationState')
 const crypto = require('crypto')
 const multer = require('multer')
 const { detectImageType } = require('../lib/fileType')
+const { sendInternalError } = require('../lib/httpErrors')
 const { isOwnCoverPhoto, isSameCoverPhoto } = require('../services/coverPhoto')
 
 const MAX_COVER_PHOTO_BYTES = 15 * 1024 * 1024
@@ -108,7 +109,7 @@ router.post('/cover-photo', authMiddleware, async (req, res) => {
       if (err?.code === 'LIMIT_FILE_SIZE') {
         return res.status(413).json({ error: 'Cover photos must be smaller than 15 MB.' })
       }
-      if (err) return res.status(400).json({ error: err.message })
+      if (err) return sendInternalError(res, err, 400)
       if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
 
       // Name and type the object from its bytes; the uploaded file name and
@@ -128,7 +129,7 @@ router.post('/cover-photo', authMiddleware, async (req, res) => {
           upsert: false,
         })
 
-      if (uploadError) return res.status(400).json({ error: uploadError.message })
+      if (uploadError) return sendInternalError(res, uploadError, 400)
 
       const { data: urlData } = await supabase.storage
         .from('memorial-assets')
@@ -140,7 +141,7 @@ router.post('/cover-photo', authMiddleware, async (req, res) => {
       })
     })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -197,10 +198,10 @@ router.post('/', authMiddleware, async (req, res) => {
       .select()
       .single()
 
-    if (error) return res.status(400).json({ error: error.message })
+    if (error) return sendInternalError(res, error, 400)
     res.status(201).json({ memorial: data })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -213,7 +214,7 @@ router.get('/', authMiddleware, async (req, res) => {
       .eq('user_id', req.user.sub)
       .order('created_at', { ascending: false })
 
-    if (error) return res.status(400).json({ error: error.message })
+    if (error) return sendInternalError(res, error, 400)
 
     const memorialIds = (data || []).map((m) => m.id)
 
@@ -238,7 +239,7 @@ router.get('/', authMiddleware, async (req, res) => {
 
     res.json({ memorials: withCounts })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -271,7 +272,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
     const enriched = await enrichMemorialForClient(supabase, data)
     res.json({ memorial: { ...enriched, generated_at: generatedAt } })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -331,11 +332,11 @@ router.patch('/:id', authMiddleware, async (req, res) => {
       .select()
       .single()
 
-    if (error) return res.status(400).json({ error: error.message })
+    if (error) return sendInternalError(res, error, 400)
     const enriched = await enrichMemorialForClient(supabase, data)
     res.json({ memorial: enriched })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -391,7 +392,7 @@ router.post('/:id/invite-link', authMiddleware, async (req, res) => {
       .select()
       .single()
 
-    if (error) return res.status(400).json({ error: error.message })
+    if (error) return sendInternalError(res, error, 400)
 
     res.status(201).json({
       invite_link: {
@@ -400,7 +401,7 @@ router.post('/:id/invite-link', authMiddleware, async (req, res) => {
       }
     })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -423,10 +424,10 @@ router.patch('/:id/invite-link', authMiddleware, async (req, res) => {
       .select()
       .single()
 
-    if (error) return res.status(400).json({ error: error.message })
+    if (error) return sendInternalError(res, error, 400)
     res.json({ invite_link: data })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -447,7 +448,7 @@ router.get('/:id/archive', authMiddleware, async (req, res) => {
       .or('moderation_resolution.is.null,moderation_resolution.neq.excluded')
       .order('submitted_at', { ascending: false })
 
-    if (contributorsError) return res.status(400).json({ error: contributorsError.message })
+    if (contributorsError) return sendInternalError(res, contributorsError, 400)
 
     const reviewedIds = (contributors || []).map((contributor) => contributor.id)
 
@@ -495,7 +496,7 @@ router.get('/:id/archive', authMiddleware, async (req, res) => {
     ])
 
     const archiveError = responsesError || storiesError || photosError || voicesError
-    if (archiveError) return res.status(400).json({ error: archiveError.message })
+    if (archiveError) return sendInternalError(res, archiveError, 400)
 
     // A contributor only belongs in the archive once something of theirs is approved.
     const withApproved = new Set([...(photos || []), ...(voices || []), ...(stories || []), ...(responses || [])]
@@ -522,7 +523,7 @@ router.get('/:id/archive', authMiddleware, async (req, res) => {
       })),
     })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -538,7 +539,7 @@ router.get('/:id/contributors', authMiddleware, async (req, res) => {
       .eq('memorial_id', req.params.id)
       .order('created_at', { ascending: false })
 
-    if (error) return res.status(400).json({ error: error.message })
+    if (error) return sendInternalError(res, error, 400)
 
     const contributorIds = (contributors || []).map((contributor) => contributor.id)
 
@@ -559,14 +560,14 @@ router.get('/:id/contributors', authMiddleware, async (req, res) => {
     ])
 
     const countError = storiesError || photosError || voicesError || responsesError
-    if (countError) return res.status(400).json({ error: countError.message })
+    if (countError) return sendInternalError(res, countError, 400)
 
     const pending = countByContributor([...(photos || []), ...(voices || []), ...(responses || [])].filter(isPendingModeration))
     res.json({ contributors: enrichContributors(contributors, stories, photos, voices).map(c => ({
       ...c, moderation_pending: c.moderation_resolution === 'excluded' ? 0 : (pending[c.id] || 0) + Number(isPendingModeration(c)),
     })) })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -581,7 +582,7 @@ router.get('/:id/contributors/:contributorId/highlights', authMiddleware, async 
     if (!highlights) return res.status(404).json({ error: 'Contributor not found' })
     res.json(highlights)
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -633,7 +634,7 @@ router.get('/:id/contributors/:contributorId/submission', authMiddleware, async 
     ])
 
     const detailError = responsesError || storiesError || photosError || voicesError
-    if (detailError) return res.status(400).json({ error: detailError.message })
+    if (detailError) return sendInternalError(res, detailError, 400)
 
     const photosWithUrls = await createSignedAssetUrls(photos, 'photo_url')
     const voicesWithUrls = await createSignedAssetUrls(voices, 'audio_url')
@@ -650,7 +651,7 @@ router.get('/:id/contributors/:contributorId/submission', authMiddleware, async 
       voices: voicesWithUrls,
     })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -744,7 +745,7 @@ router.patch('/:id/contributors/:contributorId/submission/approve', authMiddlewa
       .eq('memorial_id', req.params.id)
       .is('approved_at', null), table)
 
-    if (awaitingError) return res.status(400).json({ error: awaitingError.message })
+    if (awaitingError) return sendInternalError(res, awaitingError, 400)
 
     // Only items still awaiting approval are in play, so a stale selection
     // can neither re-stamp nor delete anything already approved.
@@ -764,7 +765,7 @@ router.patch('/:id/contributors/:contributorId/submission/approve', authMiddlewa
         .in('id', toApprove.map((item) => item.id))
         .is('approved_at', null)
 
-      if (approveError) return res.status(400).json({ error: approveError.message })
+      if (approveError) return sendInternalError(res, approveError, 400)
     }
 
     if (toDelete.length) {
@@ -781,7 +782,7 @@ router.patch('/:id/contributors/:contributorId/submission/approve', authMiddlewa
           supabase.storage.from(bucket).remove(paths)
         )))
         const storageError = removed.find((result) => result.error)?.error
-        if (storageError) return res.status(400).json({ error: storageError.message })
+        if (storageError) return sendInternalError(res, storageError, 400)
       }
 
       const { error: deleteError } = await supabase
@@ -792,11 +793,11 @@ router.patch('/:id/contributors/:contributorId/submission/approve', authMiddlewa
         .in('id', toDelete.map((item) => item.id))
         .is('approved_at', null)
 
-      if (deleteError) return res.status(400).json({ error: deleteError.message })
+      if (deleteError) return sendInternalError(res, deleteError, 400)
     }
 
     const pending = await countPendingApproval(req.params.id, contributor.id)
-    if (pending.error) return res.status(400).json({ error: pending.error.message })
+    if (pending.error) return sendInternalError(res, pending.error, 400)
 
     let updatedContributor = contributor
     if (!pending.count && contributor.status !== 'approved') {
@@ -808,7 +809,7 @@ router.patch('/:id/contributors/:contributorId/submission/approve', authMiddlewa
         .select('id, name, is_anonymous, is_flagged, flagged_reason, moderation_resolution, moderation_reviewed_at, relationship_type, relationship_label, status, questionnaire_done, photos_done, voice_done, submitted_at, created_at, updated_at')
         .single()
 
-      if (error || !data) return res.status(400).json({ error: error?.message || 'Failed to approve contributor' })
+      if (error || !data) return error ? sendInternalError(res, error, 400) : res.status(400).json({ error: 'Failed to approve contributor' })
       updatedContributor = data
     }
 
@@ -821,7 +822,7 @@ router.patch('/:id/contributors/:contributorId/submission/approve', authMiddlewa
       contributor: updatedContributor,
     })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -857,7 +858,7 @@ router.patch('/:id/contributors/:contributorId/status', authMiddleware, async (r
     let reviewedAt = null
     if (REVIEWED_ON_STATUSES.has(status)) {
       const reviewed = await markSubmissionReviewed(req.params.id, data.id, Object.keys(REVIEWABLE_SUBMISSION_TABLES))
-      if (reviewed.error) return res.status(400).json({ error: reviewed.error.message })
+      if (reviewed.error) return sendInternalError(res, reviewed.error, 400)
       reviewedAt = reviewed.reviewed_at
 
       // Approving the contributor outright approves whatever is left of theirs.
@@ -871,13 +872,13 @@ router.patch('/:id/contributors/:contributorId/status', authMiddleware, async (r
           .select('id'), table)))
 
         const approveError = approved.find((result) => result.error)
-        if (approveError) return res.status(400).json({ error: approveError.error.message })
+        if (approveError) return sendInternalError(res, approveError.error, 400)
       }
     }
 
     res.json({ contributor: data, reviewed_at: reviewedAt })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -936,7 +937,7 @@ router.delete('/:id/contributors/:contributorId', authMiddleware, async (req, re
     ])
 
     const deleteError = responseDeleteError || storyDeleteError || photoDeleteError || voiceDeleteError
-    if (deleteError) return res.status(400).json({ error: deleteError.message })
+    if (deleteError) return sendInternalError(res, deleteError, 400)
 
     const { error } = await supabase
       .from('contributors')
@@ -944,10 +945,10 @@ router.delete('/:id/contributors/:contributorId', authMiddleware, async (req, re
       .eq('id', contributor.id)
       .eq('memorial_id', req.params.id)
 
-    if (error) return res.status(400).json({ error: error.message })
+    if (error) return sendInternalError(res, error, 400)
     res.json({ deleted: true })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -971,22 +972,22 @@ router.delete('/:id/contributors/:contributorId/photos/:assetId', authMiddleware
       .from(asset.storage_bucket || 'memorial-assets')
       .remove([asset.storage_path])
 
-    if (storageError) return res.status(400).json({ error: storageError.message })
+    if (storageError) return sendInternalError(res, storageError, 400)
 
     const { error: deleteError } = await supabase
       .from('media_assets')
       .delete()
       .eq('id', asset.id)
 
-    if (deleteError) return res.status(400).json({ error: deleteError.message })
+    if (deleteError) return sendInternalError(res, deleteError, 400)
 
     // Curating this type counts as the organizer's first pass over it.
     const reviewed = await markSubmissionReviewed(req.params.id, req.params.contributorId, ['photos'])
-    if (reviewed.error) return res.status(400).json({ error: reviewed.error.message })
+    if (reviewed.error) return sendInternalError(res, reviewed.error, 400)
 
     res.json({ deleted: true, reviewed_at: reviewed.reviewed_at })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -1010,22 +1011,22 @@ router.delete('/:id/contributors/:contributorId/voices/:recordingId', authMiddle
       .from(recording.storage_bucket || 'memorial-assets')
       .remove([recording.storage_path])
 
-    if (storageError) return res.status(400).json({ error: storageError.message })
+    if (storageError) return sendInternalError(res, storageError, 400)
 
     const { error: deleteError } = await supabase
       .from('voice_recordings')
       .delete()
       .eq('id', recording.id)
 
-    if (deleteError) return res.status(400).json({ error: deleteError.message })
+    if (deleteError) return sendInternalError(res, deleteError, 400)
 
     // Curating this type counts as the organizer's first pass over it.
     const reviewed = await markSubmissionReviewed(req.params.id, req.params.contributorId, ['voices'])
-    if (reviewed.error) return res.status(400).json({ error: reviewed.error.message })
+    if (reviewed.error) return sendInternalError(res, reviewed.error, 400)
 
     res.json({ deleted: true, reviewed_at: reviewed.reviewed_at })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -1050,15 +1051,15 @@ router.delete('/:id/contributors/:contributorId/responses/:responseId', authMidd
       .delete()
       .eq('id', response.id)
 
-    if (deleteError) return res.status(400).json({ error: deleteError.message })
+    if (deleteError) return sendInternalError(res, deleteError, 400)
 
     // Curating this type counts as the organizer's first pass over it.
     const reviewed = await markSubmissionReviewed(req.params.id, req.params.contributorId, ['responses'])
-    if (reviewed.error) return res.status(400).json({ error: reviewed.error.message })
+    if (reviewed.error) return sendInternalError(res, reviewed.error, 400)
 
     res.json({ deleted: true, reviewed_at: reviewed.reviewed_at })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -1083,15 +1084,15 @@ router.delete('/:id/contributors/:contributorId/stories/:storyId', authMiddlewar
       .delete()
       .eq('id', story.id)
 
-    if (deleteError) return res.status(400).json({ error: deleteError.message })
+    if (deleteError) return sendInternalError(res, deleteError, 400)
 
     // Curating this type counts as the organizer's first pass over it.
     const reviewed = await markSubmissionReviewed(req.params.id, req.params.contributorId, ['stories'])
-    if (reviewed.error) return res.status(400).json({ error: reviewed.error.message })
+    if (reviewed.error) return sendInternalError(res, reviewed.error, 400)
 
     res.json({ deleted: true, reviewed_at: reviewed.reviewed_at })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -1120,7 +1121,7 @@ router.get('/:id/output', authMiddleware, async (req, res) => {
     const resolvedOutput = await resolveOutputMediaUrls(supabase, withOutputDisplayNames(output.output_json, contributors || []))
     res.json({ ...resolvedOutput, contributor: withContributorDisplayNames(visibleContributors) })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -1149,10 +1150,10 @@ router.post('/:id/share', authMiddleware, async (req, res) => {
       .from('invite_links')
       .insert({ memorial_id: req.params.id, token, created_by: req.user.sub, is_active: true, link_type: 'share' })
       .select().single()
-    if (error) return res.status(400).json({ error: error.message })
+    if (error) return sendInternalError(res, error, 400)
     res.status(201).json({ share_link: { token: data.token, url: `${process.env.NEXT_PUBLIC_APP_URL}/share/${data.token}` } })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
