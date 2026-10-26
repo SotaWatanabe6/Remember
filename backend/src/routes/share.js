@@ -2,6 +2,7 @@ require('dotenv').config()
 const express = require('express')
 const router = express.Router()
 const supabase = require('../supabase')
+const { sendInternalError } = require('../lib/httpErrors')
 const { withContributorDisplayNames, withOutputDisplayNames } = require('../services/contributorPrivacy')
 const { getContributorHighlights } = require('../services/contributorHighlights')
 const { resolveOutputMediaUrls, enrichMemorialForClient } = require('../services/storageUrls')
@@ -58,7 +59,7 @@ router.get('/:token', async (req, res) => {
     const memorialForClient = await enrichMemorialForClient(supabase, memorial)
     res.json({ ...resolvedOutput, memorial: memorialForClient, contributor: withContributorDisplayNames(visibleContributors) })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -75,7 +76,7 @@ router.get('/:token/contributors/:contributorId/highlights', async (req, res) =>
     if (!highlights) return res.status(404).json({ error: 'Contributor not found' })
     res.json(highlights)
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 

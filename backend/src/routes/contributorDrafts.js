@@ -1,4 +1,5 @@
 const express = require('express')
+const { sendInternalError } = require('../lib/httpErrors')
 
 // Match the contributor session used by the invitation flow and NS-2. Never
 // authorize an item by its ID alone, or allow a previously submitted draft.
@@ -60,10 +61,10 @@ function createContributorDraftRouter(supabase) {
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', contributor.memorial_id)
         .order('created_at', { ascending: true })
-      if (error) return res.status(400).json({ error: error.message })
+      if (error) return sendInternalError(res, error, 400)
       res.json({ contributor, stories: data || [] })
     } catch (error) {
-      res.status(500).json({ error: error.message })
+      sendInternalError(res, error)
     }
   })
 
@@ -97,11 +98,11 @@ function createContributorDraftRouter(supabase) {
         .eq('memorial_id', contributor.memorial_id)
         .select('id, client_story_id, title, body, created_at, updated_at')
         .maybeSingle()
-      if (error) return res.status(400).json({ error: error.message })
+      if (error) return sendInternalError(res, error, 400)
       if (!data) return res.status(404).json({ error: 'Story not found' })
       res.json({ story: data })
     } catch (error) {
-      res.status(500).json({ error: error.message })
+      sendInternalError(res, error)
     }
   })
 
@@ -115,11 +116,11 @@ function createContributorDraftRouter(supabase) {
         .eq('memorial_id', contributor.memorial_id)
         .select('id')
         .maybeSingle()
-      if (error) return res.status(400).json({ error: error.message })
+      if (error) return sendInternalError(res, error, 400)
       if (!data) return res.status(404).json({ error: 'Story not found' })
       res.json({ deleted: true })
     } catch (error) {
-      res.status(500).json({ error: error.message })
+      sendInternalError(res, error)
     }
   })
 
@@ -132,7 +133,7 @@ function createContributorDraftRouter(supabase) {
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', contributor.memorial_id)
         .order('created_at', { ascending: true })
-      if (error) return res.status(400).json({ error: error.message })
+      if (error) return sendInternalError(res, error, 400)
       const voice = await Promise.all((data || []).map(async (recording) => {
         const { data: signed } = await supabase.storage.from(recording.storage_bucket)
           .createSignedUrl(recording.storage_path, 60 * 60)
@@ -140,7 +141,7 @@ function createContributorDraftRouter(supabase) {
       }))
       res.json({ contributor, voice })
     } catch (error) {
-      res.status(500).json({ error: error.message })
+      sendInternalError(res, error)
     }
   })
 
@@ -159,11 +160,11 @@ function createContributorDraftRouter(supabase) {
         .eq('memorial_id', contributor.memorial_id)
         .select('id, contributor_title')
         .maybeSingle()
-      if (error) return res.status(400).json({ error: error.message })
+      if (error) return sendInternalError(res, error, 400)
       if (!data) return res.status(404).json({ error: 'Recording not found' })
       res.json({ recording: data })
     } catch (error) {
-      res.status(500).json({ error: error.message })
+      sendInternalError(res, error)
     }
   })
 
@@ -181,26 +182,26 @@ function createContributorDraftRouter(supabase) {
 
       const { error: storageError } = await supabase.storage.from(recording.storage_bucket)
         .remove([recording.storage_path])
-      if (storageError) return res.status(400).json({ error: storageError.message })
+      if (storageError) return sendInternalError(res, storageError, 400)
 
       const { error: deleteError } = await supabase.from('voice_recordings').delete()
         .eq('id', recording.id)
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', contributor.memorial_id)
-      if (deleteError) return res.status(400).json({ error: deleteError.message })
+      if (deleteError) return sendInternalError(res, deleteError, 400)
 
       const { count, error: countError } = await supabase.from('voice_recordings')
         .select('id', { count: 'exact', head: true })
         .eq('contributor_id', contributor.id)
         .eq('memorial_id', contributor.memorial_id)
-      if (countError) return res.status(400).json({ error: countError.message })
+      if (countError) return sendInternalError(res, countError, 400)
       const { error: progressError } = await supabase.from('contributors')
         .update({ voice_done: count > 0, updated_at: new Date().toISOString() })
         .eq('id', contributor.id)
-      if (progressError) return res.status(400).json({ error: progressError.message })
+      if (progressError) return sendInternalError(res, progressError, 400)
       res.json({ deleted: true })
     } catch (error) {
-      res.status(500).json({ error: error.message })
+      sendInternalError(res, error)
     }
   })
 

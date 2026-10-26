@@ -2,7 +2,9 @@ require('dotenv').config()
 const express = require('express')
 const router = express.Router()
 const supabase = require('../supabase')
+const rateLimit = require('express-rate-limit')
 const authMiddleware = require('../middleware/auth')
+const { sendInternalError } = require('../lib/httpErrors')
 const { resolveOutputMediaUrls } = require('../services/storageUrls')
 const {
   buildMemoryCorpus,
@@ -24,13 +26,17 @@ const CAN_USE_OPENAI = Boolean(process.env.OPENAI_API_KEY)
 
 const { fingerprintPhoto, findDuplicatePhotos } = require('../services/photoDedupe')   // add this line
 
+// Raw pipeline errors stay in ai_jobs for debugging; organizers get a generic
+// message, since OpenAI/Supabase errors describe internal infrastructure.
+const GENERATION_FAILED_MESSAGE = 'Generation failed. Please try again.'
+
 function serializeJob(job) {
   return {
     id: job.id,
     status: job.status,
     progress: job.progress,
     current_step: job.current_step,
-    error_message: job.error_message ?? null,
+    error_message: job.error_message ? GENERATION_FAILED_MESSAGE : null,
   }
 }
 
@@ -421,7 +427,16 @@ async function runPipelines(memorialId, jobId) {
 }
 
 // POST /ai/memorials/:id/generate — trigger AI generation
-router.post('/memorials/:id/generate', authMiddleware, async (req, res) => {
+// Every run makes many OpenAI calls, so cap how often one organizer can start
+// generation. Keyed by account rather than IP, after authentication.
+const generateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  keyGenerator: (req) => req.user.sub,
+  message: { error: 'Too many generation requests. Please wait and try again later.' },
+})
+
+router.post('/memorials/:id/generate', authMiddleware, generateLimiter, async (req, res) => {
   try {
     // verify organizer owns this memorial
     const { data: memorial, error: memError } = await supabase
@@ -476,7 +491,7 @@ router.post('/memorials/:id/generate', authMiddleware, async (req, res) => {
       .select()
       .single()
 
-    if (jobError) return res.status(400).json({ error: jobError.message })
+    if (jobError) return sendInternalError(res, jobError, 400)
 
     // update memorial status to generating
     await supabase
@@ -489,7 +504,7 @@ router.post('/memorials/:id/generate', authMiddleware, async (req, res) => {
 
     res.status(201).json({ job: serializeJob(job) })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -516,10 +531,9 @@ router.get('/jobs/:id/status', authMiddleware, async (req, res) => {
     // Same response as a missing job so job ids of other memorials are not confirmed.
     if (!memorial) return res.status(404).json({ error: 'Job not found' })
 
-    const { memorial_id: _memorialId, ...jobStatus } = job
-    res.json({ job: jobStatus })
+    res.json({ job: serializeJob(job) })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 

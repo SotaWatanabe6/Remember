@@ -31,6 +31,8 @@ export const MAX_PHOTO_FILE_SIZE_MB = 50;
 export const MAX_PHOTO_FILE_SIZE_BYTES = MAX_PHOTO_FILE_SIZE_MB * 1024 * 1024;
 export const MAX_CONTRIBUTOR_PHOTOS = 500;
 export const PHOTO_UPLOAD_BATCH_SIZE = 20;
+// Stays below the API's 200 MB per-request cap, leaving room for multipart overhead.
+const PHOTO_UPLOAD_BATCH_MAX_BYTES = 190 * 1024 * 1024;
 const ALLOWED_PHOTO_EXTENSIONS = ['heic', 'heif', 'jpg', 'jpeg', 'png', 'webp'];
 export const ALLOWED_AUDIO_EXTENSIONS = ['m4a', 'mp3', 'wav', 'webm'];
 const AUDIO_MIME_BY_EXTENSION = {
@@ -411,11 +413,22 @@ function validatePhotoFile(file) {
   return null;
 }
 
-function chunkFiles(files, size) {
+// Split by count and by total size so no request exceeds the API's body cap.
+function chunkFiles(files, size, maxBytes = Infinity) {
   const chunks = [];
-  for (let index = 0; index < files.length; index += size) {
-    chunks.push(files.slice(index, index + size));
+  let current = [];
+  let currentBytes = 0;
+  for (const file of files) {
+    const fileBytes = file?.size || 0;
+    if (current.length && (current.length >= size || currentBytes + fileBytes > maxBytes)) {
+      chunks.push(current);
+      current = [];
+      currentBytes = 0;
+    }
+    current.push(file);
+    currentBytes += fileBytes;
   }
+  if (current.length) chunks.push(current);
   return chunks;
 }
 
@@ -1258,7 +1271,7 @@ export async function uploadPhotos(token, files, { onProgress } = {}) {
   }
 
   // ── Real backend path ──────────────────────────────────────────────────────
-  const batches = chunkFiles(fileList, PHOTO_UPLOAD_BATCH_SIZE);
+  const batches = chunkFiles(fileList, PHOTO_UPLOAD_BATCH_SIZE, PHOTO_UPLOAD_BATCH_MAX_BYTES);
   const finalAssets = [];
   const allErrors = [];
 

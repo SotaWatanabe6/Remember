@@ -217,4 +217,5 @@ module.exports = {
   resolveMediaRecord,
   resolveOutputMediaUrls,
   isHttpUrl,
+  getSignedStorageObject,
 }

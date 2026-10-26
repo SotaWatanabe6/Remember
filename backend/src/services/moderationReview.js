@@ -1,3 +1,4 @@
+const { sendInternalError } = require('../lib/httpErrors')
 const { isPendingModeration } = require('./moderationState')
 
 const TABLES = { contribution: 'contributors', photos: 'media_assets', responses: 'questionnaire_responses', voices: 'voice_recordings' }
@@ -41,10 +42,10 @@ function registerModerationReview(router, supabase, authMiddleware, getOwnedMemo
       let query = supabase.from(table).update(patch).eq('memorial_id', req.params.id).eq('id', item_id)
       if (type !== 'contribution') query = query.eq('contributor_id', req.params.contributorId)
       const { data, error } = await query.eq('is_flagged', true).is('moderation_resolution', null).select('*').single()
-      if (error || !data) return res.status(409).json({ error: error?.message || 'The review changed. Please refresh.' })
+      if (error || !data) return error ? sendInternalError(res, error, 409) : res.status(409).json({ error: 'The review changed. Please refresh.' })
       res.json({ item: data })
     } catch (error) {
-      res.status(500).json({ error: error.message })
+      sendInternalError(res, error)
     }
   })
 }

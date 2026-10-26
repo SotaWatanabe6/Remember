@@ -123,3 +123,29 @@ test('another organizer cannot edit the memorial profile', async () => {
   assert.equal(response.statusCode, 403)
   assert.equal(f.memorials[0].subject_name, 'John Smith')
 })
+
+test('status cannot be changed through a profile edit', async () => {
+  const f = fixture('generating')
+  const statusOnly = await f.update({ status: 'collecting' })
+  assert.equal(statusOnly.statusCode, 400)
+
+  const mixed = await f.update({ subject_name: 'Jane Smith', status: 'complete' })
+  assert.equal(mixed.statusCode, 200)
+  assert.equal(f.memorials[0].status, 'generating')
+  assert.equal(f.memorials[0].subject_name, 'Jane Smith')
+})
+
+test("a profile edit cannot point the cover at someone else's file", async () => {
+  const f = fixture('collecting')
+  const response = await f.update({ cover_photo_url: 'memorials/other/contributions/c/photos/private.jpg' })
+  assert.equal(response.statusCode, 400)
+  assert.equal(response.body.code, 'invalid_cover_photo')
+  assert.equal(f.memorials[0].cover_photo_url, undefined)
+})
+
+test('a profile edit can switch to a newly uploaded cover of their own', async () => {
+  const f = fixture('collecting')
+  const response = await f.update({ cover_photo_url: 'covers/organizer/1700000000000.png' })
+  assert.equal(response.statusCode, 200)
+  assert.equal(f.memorials[0].cover_photo_url, 'covers/organizer/1700000000000.png')
+})

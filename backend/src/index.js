@@ -6,7 +6,6 @@ const dotenv = require('dotenv')
 
 dotenv.config()
 
-const authRoutes = require('./routes/auth')
 const memorialRoutes = require('./routes/memorials')
 const contributeRoutes = require('./routes/contribute')
 const aiRoutes = require('./routes/ai')
@@ -27,6 +26,15 @@ const configuredAllowedOrigins = [
 const allowedOrigins = [...new Set([...DEFAULT_ALLOWED_ORIGINS, ...configuredAllowedOrigins])]
 
 // ── Security ──────────────────────────────────────────────────────────────────
+// Behind a reverse proxy (e.g. Render's load balancer) every request arrives
+// from the proxy, so rate limits would lump all clients together. TRUST_PROXY
+// is the number of proxy hops to trust in X-Forwarded-For. Leave it unset when
+// clients connect directly: trusting the header then lets them spoof their IP.
+if (process.env.TRUST_PROXY) {
+  const hops = Number(process.env.TRUST_PROXY)
+  app.set('trust proxy', Number.isInteger(hops) ? hops : process.env.TRUST_PROXY)
+}
+
 app.use(helmet())
 
 app.use(cors({
@@ -50,6 +58,13 @@ const uploadLimiter = rateLimit({
   message: { error: "Too many uploads. Please wait and try again." }
 })
 
+// Each start creates a contributor row, so cap how fast one IP can create them.
+const contributorStartLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { error: "Too many attempts. Please wait and try again." }
+})
+
 // ── Body parsing ──────────────────────────────────────────────────────────────
 app.use(express.json())
 
@@ -59,8 +74,8 @@ app.get('/health', (req, res) => {
 })
 
 // ── Routes ────────────────────────────────────────────────────────────────────
-app.use('/auth', authRoutes)
 app.use('/memorials', memorialRoutes)
+app.post('/contribute/:token/start', contributorStartLimiter)
 app.use('/contribute/:token/photos', uploadLimiter)
 app.use('/contribute/:token/voice', uploadLimiter)
 app.use('/contribute', contributeRoutes)
