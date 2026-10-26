@@ -2,6 +2,7 @@ require('dotenv').config()
 const express = require('express')
 const router = express.Router()
 const supabase = require('../supabase')
+const rateLimit = require('express-rate-limit')
 const authMiddleware = require('../middleware/auth')
 const { sendInternalError } = require('../lib/httpErrors')
 const { resolveOutputMediaUrls } = require('../services/storageUrls')
@@ -426,7 +427,16 @@ async function runPipelines(memorialId, jobId) {
 }
 
 // POST /ai/memorials/:id/generate — trigger AI generation
-router.post('/memorials/:id/generate', authMiddleware, async (req, res) => {
+// Every run makes many OpenAI calls, so cap how often one organizer can start
+// generation. Keyed by account rather than IP, after authentication.
+const generateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  keyGenerator: (req) => req.user.sub,
+  message: { error: 'Too many generation requests. Please wait and try again later.' },
+})
+
+router.post('/memorials/:id/generate', authMiddleware, generateLimiter, async (req, res) => {
   try {
     // verify organizer owns this memorial
     const { data: memorial, error: memError } = await supabase
