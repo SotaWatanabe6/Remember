@@ -10,7 +10,7 @@ const { createClient } = require('@supabase/supabase-js')
 // Uploaded files must be stored with a content type derived on the server,
 // never the browser-supplied one, so nothing can be served as SVG or HTML.
 // Runs the real route against an in-memory fixture; no live storage is used.
-function fixture() {
+function fixture({ storageError = null } = {}) {
   const db = {
     invite_links: [{ id: 'invite', token: 'invite-token', link_type: 'contribute', memorial_id: 'memorial', is_active: true, expires_at: null }],
     contributors: [{ id: 'owner', session_token: 'owner-session', memorial_id: 'memorial', status: 'in_progress', submitted_at: null }],
@@ -26,6 +26,7 @@ function fixture() {
       const method = options.method || 'GET'
       if (url.pathname.startsWith('/storage/v1/object/')) {
         if (method === 'POST') {
+          if (storageError) return json({ statusCode: '404', error: 'Bucket not found', message: storageError }, 400)
           const headers = new Headers(options.headers)
           stored.push({ path: url.pathname, contentType: headers.get('content-type') })
           return json({ Key: url.pathname })
@@ -168,4 +169,19 @@ test('a streamed body that grows past the voice cap is cut off with 413', async 
   assert.equal(response.statusCode, 413)
   assert.ok(sentBytes < 60 * MB, 'stopped reading before the whole body arrived')
   assert.equal(f.stored.length, 0)
+})
+
+test('storage failures are reported without the storage error text', async () => {
+  const f = fixture({ storageError: 'Bucket not found: memorial-assets-private' })
+  const errors = []
+  const original = console.error
+  console.error = (...args) => errors.push(args.join(' '))
+  try {
+    const response = await f.upload('photos', [['files', [new Blob([JPEG], { type: 'image/jpeg' }), 'one.jpg']]])
+    assert.equal(response.statusCode, 400)
+    assert.doesNotMatch(JSON.stringify(response.body), /memorial-assets-private|Bucket/)
+    assert.ok(errors.some((line) => line.includes('memorial-assets-private')), 'logged on the server')
+  } finally {
+    console.error = original
+  }
 })

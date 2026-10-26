@@ -10,6 +10,7 @@ const { extractImageMetadata } = require('../services/exif')
 const { getQuestionSetForContributorRelationship } = require('../lib/questionnaireQuestions')
 const { formatPersonName } = require('../lib/formatName')
 const { detectImageType } = require('../lib/fileType')
+const { publicError, sendCaughtError, sendInternalError } = require('../lib/httpErrors')
 const { getContributorDisplayName } = require('../services/contributorPrivacy')
 const { createContributorDraftRouter, getContributorForInvite } = require('./contributorDrafts')
 const { enrichMemorialForClient } = require('../services/storageUrls')
@@ -30,6 +31,7 @@ const MAX_PHOTO_BYTES = 50 * 1024 * 1024
 const MAX_AUDIO_BYTES = 50 * 1024 * 1024
 const MAX_CONTRIBUTOR_PHOTOS = 500
 const MAX_PHOTO_UPLOAD_BATCH_SIZE = 20
+const PHOTO_SAVE_FAILED = 'This photo could not be saved. Please try again.'
 // Per-request body caps, including room for multipart boundaries and fields.
 // The frontend splits photo batches so they stay under the photo cap.
 const MULTIPART_OVERHEAD_BYTES = 1024 * 1024
@@ -114,9 +116,7 @@ function isFormDataFile(value) {
 }
 
 function payloadTooLarge() {
-  const error = new Error('This upload is too large. Please upload fewer or smaller files at a time.')
-  error.status = 413
-  return error
+  return publicError(413, 'This upload is too large. Please upload fewer or smaller files at a time.')
 }
 
 // formData() buffers the whole body in memory, so count bytes as they stream
@@ -125,9 +125,7 @@ async function parseMultipartFormData(req, maxBytes) {
   const contentType = req.headers['content-type'] || ''
 
   if (!contentType.includes('multipart/form-data')) {
-    const error = new Error('Photo upload must use multipart/form-data.')
-    error.status = 415
-    throw error
+    throw publicError(415, 'Photo upload must use multipart/form-data.')
   }
 
   if (Number(req.headers['content-length']) > maxBytes) throw payloadTooLarge()
@@ -216,7 +214,7 @@ router.get('/:token', async (req, res) => {
       }
     })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -266,7 +264,7 @@ router.post('/:token/start', async (req, res) => {
       .select('id, memorial_id, name, status')
       .single()
 
-    if (contribError) return res.status(400).json({ error: contribError.message })
+    if (contribError) return sendInternalError(res, contribError, 400)
 
     await supabase
       .from('invite_links')
@@ -283,7 +281,7 @@ router.post('/:token/start', async (req, res) => {
       contributor_token: sessionToken
     })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -294,7 +292,7 @@ router.get('/:token/privacy', async (req, res) => {
     if (!contributor) return
     res.json({ contributor: { ...contributor, display_name: getContributorDisplayName(contributor) } })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -316,10 +314,10 @@ router.post('/:token/privacy', async (req, res) => {
       .select('id, name, is_anonymous, relationship_type, relationship_label')
       .single()
 
-    if (error) return res.status(400).json({ error: error.message })
+    if (error) return sendInternalError(res, error, 400)
     res.json({ contributor: { ...data, display_name: getContributorDisplayName(data) } })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -350,10 +348,10 @@ router.post('/:token/relationship', async (req, res) => {
       .select('id, name, is_anonymous, relationship_type, relationship_label')
       .single()
 
-    if (error) return res.status(400).json({ error: error.message })
+    if (error) return sendInternalError(res, error, 400)
     res.json({ contributor: { ...data, display_name: getContributorDisplayName(data) } })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -389,13 +387,13 @@ router.post('/:token/responses', async (req, res) => {
         .eq('contributor_id', contributor.id)
         .in('order_index', orderIndexes)
 
-      if (deleteError) return res.status(400).json({ error: deleteError.message })
+      if (deleteError) return sendInternalError(res, deleteError, 400)
     }
 
     const { error } = await supabase
       .from('questionnaire_responses')
       .insert(rows)
-    if (error) return res.status(400).json({ error: error.message })
+    if (error) return sendInternalError(res, error, 400)
 
     await supabase
       .from('contributors')
@@ -404,7 +402,7 @@ router.post('/:token/responses', async (req, res) => {
 
     res.json({ saved: true })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -430,7 +428,7 @@ router.post('/:token/submit', async (req, res) => {
       .select('order_index, question_text, response_text')
       .eq('contributor_id', contributor.id)
 
-    if (responsesError) return res.status(400).json({ error: responsesError.message })
+    if (responsesError) return sendInternalError(res, responsesError, 400)
 
     const answeredIndexes = new Set(
       (responses || [])
@@ -461,10 +459,10 @@ router.post('/:token/submit', async (req, res) => {
       .select()
       .single()
 
-    if (error) return res.status(400).json({ error: error.message })
+    if (error) return sendInternalError(res, error, 400)
     res.json({ contributor: { id: data.id, status: data.status, submitted_at: data.submitted_at } })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -502,10 +500,10 @@ router.post('/:token/stories', async (req, res) => {
       .select('id, client_story_id, title, body, created_at, updated_at')
       .single()
 
-    if (error) return res.status(400).json({ error: error.message })
+    if (error) return sendInternalError(res, error, 400)
     res.status(201).json({ story: data })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -522,7 +520,7 @@ router.get('/:token/photos', async (req, res) => {
       .eq('memorial_id', contributor.memorial_id)
       .order('created_at', { ascending: true })
 
-    if (error) return res.status(400).json({ error: error.message })
+    if (error) return sendInternalError(res, error, 400)
 
     const photosWithUrls = await Promise.all((photos || []).map(async (photo) => {
       const { data } = await supabase.storage
@@ -544,7 +542,7 @@ router.get('/:token/photos', async (req, res) => {
       remaining: Math.max(MAX_CONTRIBUTOR_PHOTOS - photosWithUrls.length, 0)
     })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -599,7 +597,7 @@ router.post('/:token/photos', async (req, res) => {
       .eq('contributor_id', contributor.id)
       .eq('memorial_id', contributor.memorial_id)
 
-    if (countError) return res.status(400).json({ error: countError.message })
+    if (countError) return sendInternalError(res, countError, 400)
 
     const savedPhotoCount = existingPhotoCount || 0
     const remainingPhotoSlots = Math.max(MAX_CONTRIBUTOR_PHOTOS - savedPhotoCount, 0)
@@ -637,7 +635,8 @@ router.post('/:token/photos', async (req, res) => {
         })
 
       if (uploadError) {
-        uploadErrors.push({ file_name: file.name || 'photo', error: uploadError.message })
+        console.error('[photo upload]', uploadError.message)
+        uploadErrors.push({ file_name: file.name || 'photo', error: PHOTO_SAVE_FAILED })
         continue
       }
 
@@ -659,7 +658,8 @@ router.post('/:token/photos', async (req, res) => {
 
       if (mediaError) {
         await supabase.storage.from(PHOTO_STORAGE_BUCKET).remove([storagePath])
-        uploadErrors.push({ file_name: file.name || 'photo', error: mediaError.message })
+        console.error('[photo upload]', mediaError.message)
+        uploadErrors.push({ file_name: file.name || 'photo', error: PHOTO_SAVE_FAILED })
         continue
       }
 
@@ -686,7 +686,7 @@ router.post('/:token/photos', async (req, res) => {
       errors: uploadErrors
     })
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message })
+    sendCaughtError(res, err)
   }
 })
 
@@ -706,11 +706,11 @@ router.patch('/:token/photos/:assetId', async (req, res) => {
       .select('id, caption')
       .maybeSingle()
 
-    if (error) return res.status(400).json({ error: error.message })
+    if (error) return sendInternalError(res, error, 400)
     if (!data) return res.status(404).json({ error: 'Photo not found' })
     res.json({ asset: data })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -734,14 +734,14 @@ router.delete('/:token/photos/:assetId', async (req, res) => {
       .from(asset.storage_bucket || PHOTO_STORAGE_BUCKET)
       .remove([asset.storage_path])
 
-    if (storageError) return res.status(400).json({ error: storageError.message })
+    if (storageError) return sendInternalError(res, storageError, 400)
 
     const { error: deleteError } = await supabase
       .from('media_assets')
       .delete()
       .eq('id', asset.id)
 
-    if (deleteError) return res.status(400).json({ error: deleteError.message })
+    if (deleteError) return sendInternalError(res, deleteError, 400)
 
     const { count } = await supabase
       .from('media_assets')
@@ -757,7 +757,7 @@ router.delete('/:token/photos/:assetId', async (req, res) => {
 
     res.json({ deleted: true })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    sendInternalError(res, err)
   }
 })
 
@@ -797,7 +797,7 @@ router.post('/:token/voice', async (req, res) => {
         upsert: false
       })
 
-    if (uploadError) return res.status(400).json({ error: uploadError.message })
+    if (uploadError) return sendInternalError(res, uploadError, 400)
 
     const { data: recording, error: recordingError } = await supabase
       .from('voice_recordings')
@@ -817,7 +817,7 @@ router.post('/:token/voice', async (req, res) => {
 
     if (recordingError) {
       await supabase.storage.from(VOICE_STORAGE_BUCKET).remove([storagePath])
-      return res.status(400).json({ error: recordingError.message })
+      return sendInternalError(res, recordingError, 400)
     }
 
     await supabase
@@ -829,7 +829,7 @@ router.post('/:token/voice', async (req, res) => {
       recording
     })
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message })
+    sendCaughtError(res, err)
   }
 })
 
