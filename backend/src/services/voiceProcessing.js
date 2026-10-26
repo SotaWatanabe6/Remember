@@ -1,5 +1,6 @@
 require('dotenv').config()
 const OpenAI = require('openai')
+const { UNTRUSTED_DATA_RULE, untrusted } = require('../lib/untrustedPrompt')
 const { buildTranscriptSegments } = require('./transcriptSegments')
 
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null
@@ -160,12 +161,12 @@ async function processVoiceRecording({ fileBuffer, mimeType, fileName, subjectNa
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       max_tokens: 500,
-      messages: [{
+      messages: [{ role: 'system', content: UNTRUSTED_DATA_RULE }, {
         role: 'user',
         content: `You are editing a memorial documentary about ${subjectName}.
 A contributor named ${contributorName || 'someone'} recorded this voice memo:
 
-"${transcriptText}"
+${untrusted(transcriptText)}
 
 Return JSON only:
 {
