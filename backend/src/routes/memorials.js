@@ -374,7 +374,9 @@ router.post('/:id/invite-link', authMiddleware, async (req, res) => {
     }
 
     // generate new token
-    const token = crypto.randomBytes(8).toString('hex')
+    // 128 bits: anyone holding the link can add to the memorial. Existing
+    // shorter links keep working.
+    const token = crypto.randomBytes(16).toString('hex')
     const { expires_at, max_uses } = req.body
 
     const { data, error } = await supabase
