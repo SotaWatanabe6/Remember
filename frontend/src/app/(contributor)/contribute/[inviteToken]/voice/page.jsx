@@ -5,13 +5,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ALLOWED_AUDIO_EXTENSIONS, MAX_AUDIO_FILE_SIZE_BYTES, deleteVoice, getContributorSummary, uploadVoice } from '@/lib/api';
+import { ALLOWED_AUDIO_EXTENSIONS, MAX_AUDIO_FILE_SIZE_BYTES, MAX_VOICE_RECORDINGS, deleteVoice, getContributorSummary, uploadVoice } from '@/lib/api';
 
 const AUDIO_ACCEPT = 'audio/*,.m4a,.mp3,.wav,.webm';
 const FILE_TYPE_ERROR = 'This file type is not supported. Please upload an M4A, MP3, or WAV file.';
 const FILE_SIZE_ERROR = 'This file is too large. Please choose a smaller audio file.';
 const GENERIC_UPLOAD_ERROR = 'Upload failed. Please try again.';
-const INLINE_UPLOAD_ERROR_CODES = new Set(['voice_title_required','voice_file_required','unsupported_audio_type','audio_too_large']);
+const INLINE_UPLOAD_ERROR_CODES = new Set(['voice_title_required','voice_file_required','unsupported_audio_type','audio_too_large','voice_limit_exceeded']);
+const VOICE_LIMIT_MESSAGE = `You've added the maximum of ${MAX_VOICE_RECORDINGS} recordings. Delete one to add another.`;
 
 function getFileExtension(fileName = '') { return fileName.split('.').pop()?.toLowerCase() || ''; }
 
@@ -215,7 +216,8 @@ export default function VoicePage() {
       setRecordings((prev) => [...prev, playableRecording]);
       setFailedUpload(null); setUploadSuccess('Voice recording uploaded');
     } catch (err) {
-      setFailedUpload({ file, title });
+      // Retrying cannot succeed once the limit is reached.
+      setFailedUpload(err?.code === 'voice_limit_exceeded' ? null : { file, title });
       setUploadError(INLINE_UPLOAD_ERROR_CODES.has(err?.code) ? err.message : GENERIC_UPLOAD_ERROR);
     } finally { setUploading(false); }
   }
@@ -255,6 +257,9 @@ export default function VoicePage() {
     return () => { previewUrls.forEach((url) => URL.revokeObjectURL(url)); previewUrls.clear(); };
   }, []);
 
+  const limitReached = recordings.length >= MAX_VOICE_RECORDINGS;
+  const uploadDisabled = uploading || limitReached;
+
   return (
     <main className="min-h-screen bg-r-bg text-r-text flex flex-col">
       <ContributorNav backHref={`/contribute/${inviteToken}/photos`} />
@@ -271,13 +276,13 @@ export default function VoicePage() {
 
           <div>
             <input id="voice-recording-file" ref={fileInputRef} type="file" accept={AUDIO_ACCEPT}
-              className="sr-only" disabled={uploading}
+              className="sr-only" disabled={uploadDisabled}
               aria-describedby="voice-upload-guidance voice-upload-status"
               onChange={handleFileChange} />
-            <label htmlFor="voice-recording-file" aria-disabled={uploading}
+            <label htmlFor="voice-recording-file" aria-disabled={uploadDisabled}
               className="flex min-h-[168px] cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl px-5 py-12 text-center transition-colors"
-              style={{ border: '1.5px dashed var(--color-r-border)', backgroundColor: 'transparent', opacity: uploading ? 0.55 : 1 }}
-              onMouseEnter={(e) => { if (!uploading) e.currentTarget.style.backgroundColor = 'var(--color-r-card)'; }}
+              style={{ border: '1.5px dashed var(--color-r-border)', backgroundColor: 'transparent', opacity: uploadDisabled ? 0.55 : 1 }}
+              onMouseEnter={(e) => { if (!uploadDisabled) e.currentTarget.style.backgroundColor = 'var(--color-r-card)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}>
               {uploading ? (
                 <svg className="animate-spin" width="28" height="28" fill="none" stroke="var(--color-r-secondary)" strokeWidth="1.6" viewBox="0 0 24 24">
@@ -288,8 +293,8 @@ export default function VoicePage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 10l-4-4m0 0L8 10m4-4v12" />
                 </svg>
               )}
-              <span className="text-body-2 text-r-muted">{uploading ? 'Uploading...' : 'Click to upload or drag and drop audio of their voice'}</span>
-              <span id="voice-upload-guidance" className="text-caption text-r-muted">M4A, MP3, WAV, or WebM up to 50 MB</span>
+              <span className="text-body-2 text-r-muted">{uploading ? 'Uploading...' : limitReached ? VOICE_LIMIT_MESSAGE : 'Click to upload or drag and drop audio of their voice'}</span>
+              <span id="voice-upload-guidance" className="text-caption text-r-muted">M4A, MP3, WAV, or WebM up to 50 MB · up to {MAX_VOICE_RECORDINGS} recordings</span>
             </label>
             <div id="voice-upload-status" className="mt-3 min-h-6" aria-live="polite">
               {uploadError && (

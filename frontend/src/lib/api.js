@@ -27,6 +27,8 @@ const LOCAL_BACKEND_API_URL = 'http://localhost:3001';
 
 export const MAX_AUDIO_FILE_SIZE_MB = 50;
 export const MAX_AUDIO_FILE_SIZE_BYTES = MAX_AUDIO_FILE_SIZE_MB * 1024 * 1024;
+// Matches the API's per-contribution limit.
+export const MAX_VOICE_RECORDINGS = 10;
 export const MAX_PHOTO_FILE_SIZE_MB = 25;
 export const MAX_PHOTO_FILE_SIZE_BYTES = MAX_PHOTO_FILE_SIZE_MB * 1024 * 1024;
 export const MAX_CONTRIBUTOR_PHOTOS = 500;
@@ -1431,7 +1433,7 @@ export async function uploadVoice(token, file, contributorTitle) {
       : null;
     throw new ApiRequestError(data?.error || 'Upload failed. Please try again.', {
       status: response.status,
-      code: "voice_upload_failed",
+      code: data?.code || "voice_upload_failed",
       data,
     });
   } catch (error) {
