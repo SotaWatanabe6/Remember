@@ -201,3 +201,34 @@ test('a photo just under 25 MB is accepted', async () => {
   const response = await f.upload('photos', [['files', [new Blob([almost], { type: 'image/jpeg' }), 'large.jpg']]])
   assert.equal(response.statusCode, 201)
 })
+
+function withSavedRecordings(f, count) {
+  for (let i = 0; i < count; i += 1) {
+    f.db.voice_recordings.push({ id: `saved-${i}`, contributor_id: 'owner', memorial_id: 'memorial' })
+  }
+}
+
+test('a contribution can hold up to 10 voice recordings', async () => {
+  const f = fixture()
+  withSavedRecordings(f, 9)
+  const response = await f.upload('voice', [['contributor_title', 'Tenth'], ['file', [new Blob([AUDIO], { type: 'audio/mpeg' }), 'tenth.mp3']]])
+  assert.equal(response.statusCode, 201)
+  assert.equal(f.db.voice_recordings.length, 10)
+})
+
+test('an eleventh voice recording is refused and never stored', async () => {
+  const f = fixture()
+  withSavedRecordings(f, 10)
+  const response = await f.upload('voice', [['contributor_title', 'Eleventh'], ['file', [new Blob([AUDIO], { type: 'audio/mpeg' }), 'eleventh.mp3']]])
+  assert.equal(response.statusCode, 409)
+  assert.equal(response.body.code, 'voice_limit_exceeded')
+  assert.equal(f.stored.length, 0)
+  assert.equal(f.db.voice_recordings.length, 10)
+})
+
+test("other contributors' recordings do not count toward the limit", async () => {
+  const f = fixture()
+  for (let i = 0; i < 10; i += 1) f.db.voice_recordings.push({ id: `other-${i}`, contributor_id: 'someone-else', memorial_id: 'memorial' })
+  const response = await f.upload('voice', [['contributor_title', 'Mine'], ['file', [new Blob([AUDIO], { type: 'audio/mpeg' }), 'mine.mp3']]])
+  assert.equal(response.statusCode, 201)
+})

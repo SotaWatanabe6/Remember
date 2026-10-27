@@ -30,6 +30,7 @@ const VOICE_STORAGE_BUCKET =
 const MAX_PHOTO_BYTES = 25 * 1024 * 1024
 const MAX_AUDIO_BYTES = 50 * 1024 * 1024
 const MAX_CONTRIBUTOR_PHOTOS = 500
+const MAX_CONTRIBUTOR_VOICE_RECORDINGS = 10
 const MAX_PHOTO_UPLOAD_BATCH_SIZE = 20
 const PHOTO_SAVE_FAILED = 'This photo could not be saved. Please try again.'
 // Per-request body caps, including room for multipart boundaries and fields.
@@ -783,6 +784,21 @@ router.post('/:token/voice', async (req, res) => {
 
     const contributor = await getContributorForInvite(supabase, req, res, true, contributor_token)
     if (!contributor) return
+
+    const { count: savedRecordingCount, error: countError } = await supabase
+      .from('voice_recordings')
+      .select('id', { count: 'exact', head: true })
+      .eq('contributor_id', contributor.id)
+      .eq('memorial_id', contributor.memorial_id)
+
+    if (countError) return sendInternalError(res, countError, 400)
+    if ((savedRecordingCount || 0) >= MAX_CONTRIBUTOR_VOICE_RECORDINGS) {
+      return res.status(409).json({
+        error: `This contribution can include up to ${MAX_CONTRIBUTOR_VOICE_RECORDINGS} voice recordings.`,
+        code: 'voice_limit_exceeded',
+        max_recordings: MAX_CONTRIBUTOR_VOICE_RECORDINGS
+      })
+    }
 
     const safeFileName = sanitizeFileName(submittedFile.name || 'voice-recording')
     const storagePath = `memorials/${contributor.memorial_id}/contributions/${contributor.id}/voice/${randomUUID()}-${safeFileName}`
