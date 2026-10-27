@@ -185,3 +185,19 @@ test('storage failures are reported without the storage error text', async () =>
     console.error = original
   }
 })
+
+test('a photo over 25 MB is rejected and never stored', async () => {
+  const f = fixture()
+  const oversized = Buffer.concat([JPEG, Buffer.alloc(25 * MB)])
+  const response = await f.upload('photos', [['files', [new Blob([oversized], { type: 'image/jpeg' }), 'large.jpg']]])
+  assert.equal(response.statusCode, 400)
+  assert.match(response.body.errors[0].error, /25 MB/)
+  assert.equal(f.stored.length, 0)
+})
+
+test('a photo just under 25 MB is accepted', async () => {
+  const f = fixture()
+  const almost = Buffer.concat([JPEG, Buffer.alloc(25 * MB - JPEG.length - 1)])
+  const response = await f.upload('photos', [['files', [new Blob([almost], { type: 'image/jpeg' }), 'large.jpg']]])
+  assert.equal(response.statusCode, 201)
+})

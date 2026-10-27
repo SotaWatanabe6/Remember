@@ -27,7 +27,7 @@ const VOICE_STORAGE_BUCKET =
   process.env.MEMORIAL_ASSETS_BUCKET ||
   process.env.STORAGE_BUCKET ||
   'memorial-assets'
-const MAX_PHOTO_BYTES = 50 * 1024 * 1024
+const MAX_PHOTO_BYTES = 25 * 1024 * 1024
 const MAX_AUDIO_BYTES = 50 * 1024 * 1024
 const MAX_CONTRIBUTOR_PHOTOS = 500
 const MAX_PHOTO_UPLOAD_BATCH_SIZE = 20
@@ -90,7 +90,7 @@ function validatePhotoFile(file) {
   }
 
   if (file.size > MAX_PHOTO_BYTES) {
-    return 'Photos must be smaller than 50 MB.'
+    return 'Photos must be smaller than 25 MB.'
   }
 
   return null
