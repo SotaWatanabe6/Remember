@@ -10,12 +10,13 @@ import {
   deletePhoto,
   getContributorSummary,
   MAX_CONTRIBUTOR_PHOTOS,
+  MAX_PHOTO_FILE_SIZE_BYTES,
+  MAX_PHOTO_FILE_SIZE_MB,
   PHOTO_UPLOAD_BATCH_SIZE,
   uploadPhotos,
 } from '@/lib/api';
 
 const PHOTO_ACCEPT = 'image/*,.heic,.heif,.jpg,.jpeg,.png,.webp';
-const MAX_PHOTO_BYTES = 50 * 1024 * 1024;
 const ALLOWED_EXTENSIONS = new Set(['heic', 'heif', 'jpg', 'jpeg', 'png', 'webp']);
 
 function getFileExtension(fileName) {
@@ -224,7 +225,7 @@ export default function PhotosPage() {
 
     files.slice(0, remainingSlots).forEach((file) => {
       if (!isAcceptedPhotoFile(file)) { rejectedPhotos.push(file.name || 'A selected file'); return; }
-      if (file.size > MAX_PHOTO_BYTES) { rejectedPhotos.push(file.name || 'A selected file'); return; }
+      if (file.size > MAX_PHOTO_FILE_SIZE_BYTES) { rejectedPhotos.push(file.name || 'A selected file'); return; }
       validPhotos.push(file);
     });
 
@@ -236,7 +237,7 @@ export default function PhotosPage() {
     }
 
     if (rejectedPhotos.length && files.length <= remainingSlots) {
-      setErrorMessage(`${formatCount(rejectedPhotos.length, 'file')} could not be added. Please choose image files under 50 MB.`);
+      setErrorMessage(`${formatCount(rejectedPhotos.length, 'file')} could not be added. Please choose image files under ${MAX_PHOTO_FILE_SIZE_MB} MB.`);
     }
 
     if (!validPhotos.length) return;
