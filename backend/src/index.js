@@ -50,13 +50,19 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"]
 }))
 
-// Rate limiter — max 20 upload requests per 15 minutes per IP
-const uploadLimiter = rateLimit({
+// Upload rate limits, per IP. Sized so a full contribution never hits them,
+// even when several contributors share one network:
+// - photos: 500 photos at the 25 MB maximum go up 7 per request (the frontend
+//   keeps each request under 190 MB), so ~72 requests; 150 allows two.
+// - voice: 10 recordings per contribution; 30 allows three.
+const uploadLimit = (max) => rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max,
   skip: (req) => req.method !== 'POST',
   message: { error: "Too many uploads. Please wait and try again." }
 })
+const photoUploadLimiter = uploadLimit(150)
+const voiceUploadLimiter = uploadLimit(30)
 
 // Each start creates a contributor row, so cap how fast one IP can create them.
 const contributorStartLimiter = rateLimit({
@@ -76,8 +82,8 @@ app.get('/health', (req, res) => {
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/memorials', memorialRoutes)
 app.post('/contribute/:token/start', contributorStartLimiter)
-app.use('/contribute/:token/photos', uploadLimiter)
-app.use('/contribute/:token/voice', uploadLimiter)
+app.use('/contribute/:token/photos', photoUploadLimiter)
+app.use('/contribute/:token/voice', voiceUploadLimiter)
 app.use('/contribute', contributeRoutes)
 app.use('/ai', aiRoutes)
 app.use('/share', shareRoutes)
