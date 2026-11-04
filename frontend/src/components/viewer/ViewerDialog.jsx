@@ -7,7 +7,7 @@ import { VIEWER_MOTION } from '@/lib/viewer/viewerMotion.mjs';
 import { useViewerActive } from './ViewerTransition';
 import styles from './ViewerDialog.module.css';
 
-export default function ViewerDialog({ label, background = 'bg', className = '', children, onClose, onKeyDown }) {
+export default function ViewerDialog({ label, background = 'bg', variant = 'screen', className = '', children, onClose, onKeyDown }) {
   const dialogRef = useRef(null);
   const active = useViewerActive();
   const present = useIsPresent();
@@ -32,7 +32,7 @@ export default function ViewerDialog({ label, background = 'bg', className = '',
   return createPortal(
     <motion.dialog
       ref={dialogRef}
-      className={`${styles.dialog} ${className}`}
+      className={`${styles.dialog} ${variant === 'popup' ? styles.popup : ''} ${className}`}
       style={{ background: `var(--color-r-${background})` }}
       aria-label={label}
       aria-modal="true"
@@ -43,7 +43,11 @@ export default function ViewerDialog({ label, background = 'bg', className = '',
       transition={{ duration: reduced ? 0 : VIEWER_MOTION.exitDuration, ease: VIEWER_MOTION.ease }}
       onCancel={(event) => { event.preventDefault(); if (present && active) onClose(); }}
       onKeyDown={(event) => { if (present && active) onKeyDown?.(event); }}
-      onClick={(event) => { if (event.target === event.currentTarget && present && active) onClose(); }}
+      onClick={(event) => {
+        const bounds = event.currentTarget.getBoundingClientRect();
+        const outside = event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom;
+        if (event.target === event.currentTarget && (variant !== 'popup' || outside) && present && active) onClose();
+      }}
     >
       {children}
     </motion.dialog>,

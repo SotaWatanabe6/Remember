@@ -100,7 +100,6 @@
   overflow-wrap: anywhere;
   overflow: hidden;
 }
-.chapter:hover .chapterLabel { text-decoration: underline; text-underline-offset: 8px; }
 .marker { display: grid; place-items: center; width: 50px; height: 50px; flex-shrink: 0; }
 .empty { position: absolute; top: 50%; left: 10%; max-width: 32%; font-size: 20px; line-height: 30px; }
 
@@ -186,4 +185,21 @@
   .narrative h1 { margin-bottom: 20px; }
   .narrative p, .narrative blockquote { font-size: 18px; line-height: 28px; }
   .slideControls { position: static; transform: none; flex-direction: row; justify-content: center; margin-top: 40px; gap: 16px; }
+}
+
+/* Slide timing is reflected around the Auto control. */
+.playbackIcon { position: relative; transition: background-color 300ms ease, color 300ms ease; }
+.playbackProgress { position: absolute; inset: -7px; width: 64px; height: 64px; overflow: visible; transform: rotate(-90deg); pointer-events: none; fill: none; stroke: var(--color-r-modal); stroke-width: 2; }
+.progressTrack { opacity: 0.25; }
+.progressFill { stroke-dasharray: 1; stroke-dashoffset: 1; stroke-linecap: round; }
+.iconButton, .back { border-radius: 50px; transition: background-color 300ms ease; }
+.player .iconButton:hover:not(:disabled), .player .iconButton:focus-visible { background: rgb(251 249 246 / 18%); }
+.playback:is(:hover, :focus-visible) .playbackIcon { background: var(--color-r-text); color: var(--color-r-modal); }
+
+.chapterLabel { position: relative; padding-bottom: 8px; }
+.chapterLabel::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: currentColor; transform: scaleX(0); transform-origin: right center; transition: transform 600ms cubic-bezier(0.45, 0, 0.2, 1); }
+.chapter:is(:hover, :focus-visible) .chapterLabel::after { transform: scaleX(1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .playbackIcon, .iconButton, .back, .chapterLabel::after { transition-duration: 0s; }
 }

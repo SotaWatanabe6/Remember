@@ -2,11 +2,11 @@
 
 // frontend/src/components/viewer/ViewerPhotoArchive.jsx
 // Viewer-facing Photos tab (Figma: Photo Archive with All Photos / Albums /
-// Contributors, album detail, and the white photo lightbox).
+// Contributors, album detail, and the photo popup).
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { ArrowLeft, ChevronLeft, ChevronRight, ImageOff, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, ImageOff } from 'lucide-react';
 import ViewerDialog from './ViewerDialog';
 import ViewerTransition, { useViewerActive } from './ViewerTransition';
 
@@ -161,7 +161,7 @@ function Lightbox({ photos, index, onClose, onChange }) {
   if (!photo) return null;
 
   return (
-    <ViewerDialog label="Photo" background="modal" className="flex flex-col items-center justify-center px-6" onClose={onClose} onKeyDown={(event) => {
+    <ViewerDialog label="Photo" background="text" variant="popup" className="flex flex-col items-center justify-center" onClose={onClose} onKeyDown={(event) => {
       if (event.key === 'ArrowLeft' && hasMany) { event.preventDefault(); onChange((index - 1 + photos.length) % photos.length); }
       if (event.key === 'ArrowRight' && hasMany) { event.preventDefault(); onChange((index + 1) % photos.length); }
     }}>
@@ -170,9 +170,9 @@ function Lightbox({ photos, index, onClose, onChange }) {
         onClick={onClose}
         autoFocus
         aria-label="Close photo"
-        className="absolute left-[60px] top-[96px] text-r-muted transition-opacity hover:opacity-70 max-sm:left-5 max-sm:top-6"
+        className="absolute left-5 top-5 rounded-full p-2 text-r-modal transition-colors hover:bg-r-modal/20"
       >
-        <X size={32} strokeWidth={1.5} aria-hidden="true" />
+        <img src="/icons/design/close-photo.svg" width={50} height={50} alt="" aria-hidden="true" />
       </button>
 
       {hasMany ? (
@@ -181,7 +181,7 @@ function Lightbox({ photos, index, onClose, onChange }) {
             type="button"
             onClick={() => onChange((index - 1 + photos.length) % photos.length)}
             aria-label="Previous photo"
-            className="absolute left-4 top-1/2 -translate-y-1/2 p-2 text-r-muted transition-opacity hover:opacity-70 sm:left-[60px]"
+            className="absolute left-1 top-1/2 -translate-y-1/2 rounded-full p-2 text-r-modal transition-colors hover:bg-r-modal/20 sm:left-4"
           >
             <ChevronLeft size={36} aria-hidden="true" />
           </button>
@@ -189,18 +189,19 @@ function Lightbox({ photos, index, onClose, onChange }) {
             type="button"
             onClick={() => onChange((index + 1) % photos.length)}
             aria-label="Next photo"
-            className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-r-muted transition-opacity hover:opacity-70 sm:right-[60px]"
+            className="absolute right-1 top-1/2 -translate-y-1/2 rounded-full p-2 text-r-modal transition-colors hover:bg-r-modal/20 sm:right-4"
           >
             <ChevronRight size={36} aria-hidden="true" />
           </button>
         </>
       ) : null}
 
-      <ViewerTransition motionKey={photo.id} path={`photo/${index}`} className="w-full max-w-[886px] px-8 sm:px-16" focusOnEnter={false} name="photo">
+      <ViewerTransition motionKey={photo.id} path={`photo/${index}`} className="w-full max-w-[886px]" focusOnEnter={false} name="photo">
         <EnlargedPhoto key={photo.id} photo={photo} />
         <div className="mt-5 flex flex-col gap-1">
-          {photo.caption ? <p className="text-body-2 text-r-text">{photo.caption}</p> : null}
-          {photo.contributorName ? <p className="text-body-2 text-r-muted">Submitted by {photo.contributorName}</p> : null}
+          {photo.caption ? <p className="text-body-2 text-r-modal">{photo.caption}</p> : null}
+          {photo.contributorName ? <p className="text-body-2 text-r-modal/80">Submitted by {photo.contributorName}</p> : null}
+          <p className="mt-2 text-sm text-r-modal/80" aria-live="polite">{index + 1} / {photos.length}</p>
         </div>
       </ViewerTransition>
     </ViewerDialog>
@@ -210,7 +211,7 @@ function Lightbox({ photos, index, onClose, onChange }) {
 function EnlargedPhoto({ photo }) {
   const [failed, setFailed] = useState(false);
   return photo.url && !failed ? (
-    <img src={photo.url} alt={photo.caption || ''} onError={() => setFailed(true)} className="mx-auto max-h-[62svh] w-auto max-w-full object-contain" />
+    <img src={photo.url} alt={photo.caption || ''} onError={() => setFailed(true)} className="mx-auto max-h-[min(62svh,max(100px,calc(100svh-260px)))] w-auto max-w-full object-contain" />
   ) : (
     <div className="flex min-h-48 flex-col items-center justify-center gap-4 bg-r-card p-6 text-center">
       <ImageOff size={32} aria-hidden="true" /><p>This photo is unavailable</p>

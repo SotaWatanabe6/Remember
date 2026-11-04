@@ -87,6 +87,7 @@
   /* Buttons */
   --color-r-btn:      #D0BFAA;
   --color-r-btn-text: #5F5A52;
+  --color-r-btn-hover: #B9A58C;
 
   /* Accents and status */
   --color-r-accent:  #4A7FA5;
@@ -429,4 +430,41 @@
     flex-direction: column;
     gap:            var(--page-section-gap);
   }
+}
+
+/* Shared interaction feedback, including fields outside the reusable forms. */
+:where(input:not([type]), input[type="text"], input[type="email"], input[type="password"], input[type="search"], input[type="tel"], input[type="url"], input[type="number"], input[type="date"], textarea) {
+  transition: background-color 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+}
+
+:where(input, textarea)::placeholder {
+  opacity: 0.65;
+  transition: opacity 220ms ease;
+}
+
+@media (hover: hover) {
+  :where(input:not([type]), input[type="text"], input[type="email"], input[type="password"], input[type="search"], input[type="tel"], input[type="url"], input[type="number"], input[type="date"], textarea):not(:disabled):not([readonly]):hover:not(:focus) {
+    background-color: color-mix(in srgb, var(--color-r-modal) 65%, var(--color-r-bg));
+    box-shadow: inset 0 0 0 1px var(--color-r-border-focus);
+  }
+
+  :where(input, textarea):not(:disabled):not([readonly]):hover::placeholder { opacity: 0.85; }
+}
+
+/* All primary actions share a visible color change instead of a faint fade. */
+.bg-r-btn {
+  transition-property: background-color, color, box-shadow;
+  transition-duration: 220ms;
+  transition-timing-function: ease;
+}
+
+.bg-r-btn:where(:hover, :focus-visible):not(:disabled):not([aria-disabled="true"]) {
+  background-color: var(--color-r-btn-hover);
+  color: var(--color-r-text);
+  opacity: 1;
+  filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(input, textarea, .bg-r-btn) { transition-duration: 0s; }
 }

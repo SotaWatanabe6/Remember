@@ -46,7 +46,7 @@ export default function AccountBoardPage() {
 
   return (
     <div className="p-(--page-pad-x)">
-      <Header2 />
+      <Header2 signOut />
 
       <main className="mx-auto flex w-full max-w-[1340px] flex-col px-6 pb-16 pt-[70px] sm:px-[50px] sm:pb-24 sm:pt-[86px]">
         <section className="relative flex min-h-[320px] flex-col items-center justify-center px-4 text-center sm:min-h-[360px]">
@@ -65,7 +65,7 @@ export default function AccountBoardPage() {
         >
           <Link
             href="/memorial/create"
-            className="flex min-h-[420px] flex-col items-center justify-center rounded-[28px] border border-r-border bg-[#F2EAE2] px-8 text-center transition hover:border-r-border-focus focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-r-border-focus"
+            className="flex min-h-[420px] flex-col items-center justify-center rounded-[28px] border border-r-border bg-[#F2EAE2] px-8 text-center transition hover:border-r-border-focus hover:bg-r-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-r-border-focus"
           >
             <span className="flex size-[58px] items-center justify-center rounded-full bg-r-text text-[42px] font-light leading-none text-[#F2EAE2]">
               +
@@ -110,7 +110,7 @@ export default function AccountBoardPage() {
                 <Link
                   key={memorial.id}
                   href={`/memorial/${memorial.id}/manage`}
-                  className="rounded-[28px] transition hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-400"
+                  className="group rounded-[28px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-400"
                 >
                   <AccountProfileCard memorial={memorial} />
                 </Link>

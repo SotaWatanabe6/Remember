@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { generateMemorialOutput, getGenerationJobStatus, getMemorialOutput } from '@/services/memorialService';
@@ -148,12 +148,12 @@ function MemorialHeader({ memorial, generated, inviteToken, onShare, contributor
       {/* Actions */}
       <div className="flex flex-col gap-6 md:col-start-2 md:w-[208px] md:justify-self-end xl:col-start-auto xl:min-h-[314px] xl:justify-between xl:py-[30px]">
         <div className="flex flex-col gap-5">
-          <Link
+          {!generated && <Link
             href={inviteToken ? `/contribute/${inviteToken}` : '#'}
             className="rounded-full bg-r-btn px-4 py-[18px] text-center text-[20px] leading-[26px] text-r-btn-text transition hover:opacity-85"
           >
             Upload Memories
-          </Link>
+          </Link>}
           {generated ? (
           <ViewMemorialButton
             memorialId={memorial?.id}
@@ -172,7 +172,7 @@ function MemorialHeader({ memorial, generated, inviteToken, onShare, contributor
         )}
         </div>
         <div className="flex items-center justify-end gap-[30px] text-r-text">
-          <button type="button" onClick={onShare} className="flex size-[50px] items-center justify-center transition hover:opacity-70" aria-label="Share memorial">
+          <button type="button" onClick={onShare} className="flex size-[50px] items-center justify-center rounded-full transition-colors hover:bg-r-card focus-visible:outline-2 focus-visible:outline-offset-4" aria-label="Share memorial">
             <svg width="42" height="42" viewBox="0 0 24 24" fill="currentColor">
               <path d="M18 16.08c-.76 0-1.44.3-1.96.77l-7.13-4.16a3.27 3.27 0 000-1.38l7.12-4.15A2.99 2.99 0 0018 7.91a3 3 0 10-2.83-4 3 3 0 00.12 1.49L8.17 9.56a3 3 0 100 4.88l7.12 4.16c-.08.23-.12.47-.12.72a3 3 0 103-3.24z"/>
             </svg>
@@ -180,7 +180,7 @@ function MemorialHeader({ memorial, generated, inviteToken, onShare, contributor
           {!generated && canEditMemorialProfile(memorial?.status) ? (
             <Link
               href={`/memorial/${memorial?.id}/manage/settings`}
-              className="flex size-[50px] items-center justify-center transition hover:opacity-70"
+              className="flex size-[50px] items-center justify-center rounded-full transition-colors hover:bg-r-card focus-visible:outline-2 focus-visible:outline-offset-4"
               aria-label="Edit memorial details"
             >
               <svg width="46" height="46" viewBox="0 0 24 24" fill="currentColor">
@@ -468,7 +468,22 @@ function ApproveContributionsTab({ memorialId, contributorslist, loading, error,
 
 // ─── Share Modal ──────────────────────────────────────────────────────────────
 
-function ShareModal({ onClose, memorialId }) {
+function ShareModal({ onClose, memorialId, published, subjectName }) {
+  const dialogRef = useRef(null);
+  const [revealedLinks, setRevealedLinks] = useState({});
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const opener = document.activeElement;
+    const overflow = document.body.style.overflow;
+    dialog.showModal();
+    document.body.style.overflow = 'hidden';
+    return () => {
+      dialog.close();
+      document.body.style.overflow = overflow;
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+    };
+  }, []);
   const [contributorUrl, setContributorUrl] = useState('');
   const [viewerUrl, setViewerUrl] = useState('');
   const [linksLoading, setLinksLoading] = useState(true);
@@ -482,13 +497,13 @@ function ShareModal({ onClose, memorialId }) {
     async function loadShareLinks() {
       setLinksLoading(true); setLinksError(null); setContributorUrl(''); setViewerUrl('');
       try {
-        const invite = await createInviteLink(memorialId);
-        if (cancelled) return;
-        setContributorUrl(normalizeShareUrl(invite?.invite_link?.url ?? ''));
-        try {
-          const share = await createShareLink(memorialId);
-          if (!cancelled) setViewerUrl(normalizeShareUrl(share?.share_link?.url ?? ''));
-        } catch (shareErr) { console.warn('Viewer share link unavailable:', shareErr); }
+        if (!published) {
+          const invite = await createInviteLink(memorialId);
+          if (cancelled) return;
+          setContributorUrl(normalizeShareUrl(invite?.invite_link?.url ?? ''));
+        }
+        const share = await createShareLink(memorialId);
+        if (!cancelled) setViewerUrl(normalizeShareUrl(share?.share_link?.url ?? ''));
       } catch (err) {
         if (!cancelled) {
           const message = err instanceof Error ? err.message : 'Could not load share links.';
@@ -504,63 +519,53 @@ function ShareModal({ onClose, memorialId }) {
     }
     loadShareLinks();
     return () => { cancelled = true; };
-  }, [memorialId]);
+  }, [memorialId, published]);
 
   async function copyLink(type) {
     setCopyError(null);
     const url = type === 'contributor' ? contributorUrl : viewerUrl;
     if (!url) { setCopyError('Link is not ready yet.'); return; }
+    setRevealedLinks((current) => ({ ...current, [type]: true }));
     try {
-      await copyTextToClipboard(url);
+      await copyTextToClipboard(url, dialogRef.current);
       if (type === 'contributor') { setCopiedContributor(true); setTimeout(() => setCopiedContributor(false), 2000); }
       else { setCopiedViewer(true); setTimeout(() => setCopiedViewer(false), 2000); }
     } catch { setCopyError('Copy failed. Select the link below and copy manually.'); }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-6" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl p-8 bg-white" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center gap-3 mb-8">
-          <button onClick={onClose} className="text-r-text">
-            <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-          </button>
-          <h2 className="text-h2 text-r-text">Share</h2>
-        </div>
+    <dialog ref={dialogRef} aria-labelledby="share-heading" className="relative m-auto min-h-[min(683px,calc(100svh-48px))] max-h-[calc(100svh-48px)] w-[calc(100%-48px)] max-w-[886px] overflow-y-auto rounded-[10px] border-0 bg-r-modal px-6 pb-16 pt-24 text-r-text backdrop:bg-black/30 sm:px-[82px] sm:pb-[100px] sm:pt-[172px]"
+      onCancel={(event) => { event.preventDefault(); onClose(); }}
+      onClick={(event) => {
+        const bounds = event.currentTarget.getBoundingClientRect();
+        if (event.target === event.currentTarget && (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom)) onClose();
+      }}>
+      <button type="button" autoFocus aria-label="Close share dialog" onClick={onClose} className="absolute right-4 top-4 rounded-full transition-colors hover:bg-r-card focus-visible:outline-2 focus-visible:outline-offset-2 sm:right-[31px] sm:top-[39px]">
+        <img src="/icons/design/close-share.svg" width={50} height={50} alt="" aria-hidden="true" />
+      </button>
+      <h2 id="share-heading" className="mb-10 text-center font-display text-[32px] font-bold leading-[52px] sm:text-[40px]">Share with others</h2>
+      <div className="flex flex-col gap-10">
         {linksError && <p className="text-body-2 text-r-danger mb-4">{linksError}</p>}
         {copyError && <p className="text-body-2 text-r-danger mb-4">{copyError}</p>}
         {[
           { label: 'Invite Contributors', sub: 'For friends and family to share their memories:', type: 'contributor', copied: copiedContributor, url: contributorUrl },
-          { label: 'Invite Viewers', sub: 'For anyone to view this memorial:', type: 'viewer', copied: copiedViewer, url: viewerUrl },
-        ].map(({ label, sub, type, copied, url }) => (
-          <div key={type} className="flex items-start justify-between mb-6">
+          { label: 'Invite Viewers', sub: subjectName ? `For anyone to view ${subjectName}'s memorial:` : 'For anyone to view this memorial:', type: 'viewer', copied: copiedViewer, url: viewerUrl },
+        ].filter(({ type }) => !published || type === 'viewer').map(({ label, sub, type, copied, url }) => (
+          <div key={type} className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
             <div className="min-w-0 pr-4">
-              <p className="text-h3 text-r-text">{label}</p>
+              <p className="font-display text-[24px] font-medium leading-[31px] text-r-text">{label}</p>
               <p className="text-body-2 text-r-secondary mt-0.5">{sub}</p>
-              {url && <p className="text-caption text-r-secondary mt-2 break-all">{url}</p>}
+              {url && revealedLinks[type] && <p className="mt-3 break-all text-sm leading-5 text-r-secondary" aria-live="polite">{url}</p>}
             </div>
             <button type="button" onClick={() => copyLink(type)} disabled={linksLoading || !url}
-              className="shrink-0 rounded-full px-4 py-2 text-h4 transition-all ml-5 border-none disabled:opacity-50"
-              style={{ backgroundColor: copied ? '#7D8C6A' : 'var(--color-r-btn)', color: copied ? '#FBF9F6' : 'var(--color-r-btn-text)' }}>
-              {copied ? 'Copied!' : linksLoading ? 'Loading…' : 'Copy Link'}
+              className={`flex min-h-[62px] w-[200px] shrink-0 items-center justify-center gap-[10px] rounded-full px-5 py-[18px] text-[20px] leading-[26px] transition-colors disabled:opacity-50 disabled:cursor-wait focus-visible:outline-2 focus-visible:outline-offset-4 ${copied ? 'bg-r-shape text-r-modal hover:bg-r-text' : 'bg-r-btn text-r-btn-text'}`}>
+              {copied ? 'Copied!' : linksLoading ? 'Loading…' : 'Copy link'}
+              <span className="relative size-6 shrink-0" aria-hidden="true"><span className="absolute left-0 top-0 size-[50px] origin-top-left scale-[0.48]"><img src="/icons/design/copy.svg" width={50} height={50} alt="" /></span></span>
             </button>
           </div>
         ))}
-        <div className="flex justify-center gap-6 mt-8">
-          {[
-            { label: 'Message', icon: <svg width="22" height="22" fill="none" stroke="white" strokeWidth="1.8" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg> },
-            { label: 'Email', icon: <svg width="22" height="22" fill="none" stroke="white" strokeWidth="1.8" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg> },
-            { label: 'Instagram', icon: <svg width="22" height="22" fill="none" stroke="white" strokeWidth="1.8" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" ry="5" strokeLinecap="round" strokeLinejoin="round"/><circle cx="12" cy="12" r="4" strokeLinecap="round" strokeLinejoin="round"/><circle cx="17.5" cy="6.5" r="0.5" fill="white"/></svg> },
-          ].map(({ label, icon }) => (
-            <div key={label} className="flex flex-col items-center gap-2">
-              <div className="w-14 h-12 rounded-xl flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity bg-r-shape">
-                {icon}
-              </div>
-              <span className="text-caption text-r-secondary">{label}</span>
-            </div>
-          ))}
-        </div>
       </div>
-    </div>
+    </dialog>
   );
 }
 
@@ -611,8 +616,7 @@ function GenerateConfirmModal({ onConfirm, onCancel, subjectName }) {
             type="button"
             onClick={onConfirm}
             disabled={!readyToGenerate}
-            className="w-full rounded-full py-4 text-base font-medium text-r-btn-text transition hover:opacity-85 border-none disabled:opacity-45 disabled:cursor-not-allowed"
-            style={{ backgroundColor: 'var(--color-r-btn)' }}
+            className="w-full rounded-full bg-r-btn py-4 text-base font-medium text-r-btn-text border-none disabled:opacity-45 disabled:cursor-not-allowed"
           >
             Generate Memorial
           </button>
@@ -659,12 +663,7 @@ export default function MemorialManagePage() {
       })
       .catch(() => { setMemorial(null); });
 
-    createInviteLink(id)
-      .then((res) => {
-        const token = res?.invite_link?.token ?? res?.token ?? null;
-        setInviteToken(token);
-      })
-      .catch(() => { /* non-critical */ });
+
   }, [id]);
 
   const loadContributors = useCallback(async () => {
@@ -798,7 +797,19 @@ export default function MemorialManagePage() {
 
   // The header flips to View Memorial as soon as an output exists, without
   // waiting for a page refresh to pick up the memorial's `complete` status.
+  const hasMemorialProfile = Boolean(memorial);
   const memorialGenerated = memorial?.status === 'complete' || Boolean(output);
+
+  useEffect(() => {
+    if (!id || !hasMemorialProfile || memorialGenerated) return;
+    let cancelled = false;
+    createInviteLink(id)
+      .then((res) => {
+        if (!cancelled) setInviteToken(res?.invite_link?.token ?? res?.token ?? null);
+      })
+      .catch(() => { /* sharing can retry loading an invite */ });
+    return () => { cancelled = true; };
+  }, [id, hasMemorialProfile, memorialGenerated]);
 
   const canGenerate =
     !contributorsLoading &&
@@ -825,16 +836,14 @@ export default function MemorialManagePage() {
     <main className="min-h-screen bg-r-bg p-6 text-r-text flex flex-col sm:p-[50px]">
 
       {/* Full-width nav */}
-      <nav className="min-h-10 w-full flex items-center justify-between">
+      <nav className="min-h-10 w-full flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-5">
           <img src="/Logo.svg" alt="" width={36} height={36} aria-hidden="true" />
           <span className="text-r-text text-2xl leading-8 [font-family:var(--font-family-display)]">Remember</span>
         </div>
-        <Link href="/dashboard" className="flex items-center gap-2 text-r-text transition-opacity hover:opacity-70">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <path d="M7.82484 13L12.7248 17.9C12.9248 18.1 13.0208 18.3334 13.0128 18.6C13.0048 18.8667 12.9005 19.1 12.6998 19.3C12.4998 19.4834 12.2665 19.5794 11.9998 19.588C11.7332 19.5967 11.4998 19.5007 11.2998 19.3L4.69984 12.7C4.59984 12.6 4.52884 12.4917 4.48684 12.375C4.44484 12.2584 4.42451 12.1334 4.42584 12C4.42718 11.8667 4.44818 11.7417 4.48884 11.625C4.52951 11.5084 4.60018 11.4 4.70084 11.3L11.3008 4.70005C11.4842 4.51672 11.7135 4.42505 11.9888 4.42505C12.2642 4.42505 12.5015 4.51672 12.7008 4.70005C12.9008 4.90005 13.0008 5.13772 13.0008 5.41305C13.0008 5.68838 12.9008 5.92572 12.7008 6.12505L7.82484 11H18.9998C19.2832 11 19.5208 11.096 19.7128 11.288C19.9048 11.48 20.0005 11.7174 19.9998 12C19.9992 12.2827 19.9032 12.5204 19.7118 12.713C19.5205 12.9057 19.2832 13.0014 18.9998 13H7.82484Z" fill="currentColor"/>
-          </svg>
-          <span className="text-base font-normal">Back</span>
+        <Link href="/dashboard" className="ml-auto flex items-center gap-2 rounded-full px-4 py-2 text-r-text transition-colors hover:bg-r-card focus-visible:outline-2 focus-visible:outline-offset-4">
+          <img src="/icons/design/back.svg" width={24} height={24} alt="" aria-hidden="true" />
+          <span className="text-base font-normal">Return to dashboard</span>
         </Link>
       </nav>
 
@@ -885,7 +894,7 @@ export default function MemorialManagePage() {
         </div>
       </div>
 
-      {showShare && <ShareModal onClose={() => setShowShare(false)} memorialId={id} />}
+      {showShare && <ShareModal onClose={() => setShowShare(false)} memorialId={id} published={memorialGenerated} subjectName={memorial?.subject_name} />}
 
       {showGenerateConfirm && (
         <GenerateConfirmModal

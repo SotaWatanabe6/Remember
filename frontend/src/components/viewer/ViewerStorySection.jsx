@@ -7,6 +7,7 @@ import { ArrowLeft, ChevronDown, ImageOff, Menu, Pause, Play } from 'lucide-reac
 import { formatStoryDate } from '@/lib/storySlides.mjs';
 import { buildViewerStory, getStoryChapterTitle, getStoryPath, getStorySlideDuration, getStorySlideText, parseStoryPath } from '@/lib/viewer/story.mjs';
 import { navigateViewerScreen } from '@/lib/viewer/viewerNavigation.mjs';
+import { STORY_MOTION } from '@/lib/viewer/viewerMotion.mjs';
 import ViewerTransition, { useViewerActive, useViewerPath } from './ViewerTransition';
 import styles from './ViewerStorySection.module.css';
 
@@ -73,6 +74,8 @@ function StoryPlayer({ slides, index, memorial, onChange, onChapters }) {
   const active = useViewerActive();
   const [playing, setPlaying] = useState(() => typeof window !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const headingRef = useRef(null);
+  const progressRef = useRef(null);
+  const reduced = useReducedMotion();
   const slide = slides[index];
   const isLast = index === slides.length - 1;
   const photoUrl = slide.photoUrl || (slide.slideType === 'opening' ? memorial.cover_photo_url : null);
@@ -83,18 +86,27 @@ function StoryPlayer({ slides, index, memorial, onChange, onChapters }) {
   useEffect(() => {
     if (!playing || !active) return;
     let timer;
+    let progress;
     function schedule() {
       window.clearTimeout(timer);
+      progress?.cancel();
       if (document.visibilityState !== 'visible') return;
+      const duration = getStorySlideDuration(slide);
+      if (!reduced) {
+        progress = progressRef.current?.animate(
+          [{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }],
+          { duration, easing: 'linear', fill: 'forwards' },
+        );
+      }
       timer = window.setTimeout(() => {
         if (isLast) setPlaying(false);
         else onChange(index + 1);
-      }, getStorySlideDuration(slide));
+      }, duration);
     }
     schedule();
     document.addEventListener('visibilitychange', schedule);
-    return () => { window.clearTimeout(timer); document.removeEventListener('visibilitychange', schedule); };
-  }, [active, playing, index, slide, isLast, onChange]);
+    return () => { window.clearTimeout(timer); progress?.cancel(); document.removeEventListener('visibilitychange', schedule); };
+  }, [active, playing, index, slide, isLast, onChange, reduced]);
 
   function move(direction) {
     setPlaying(false);
@@ -139,12 +151,18 @@ function StoryPlayer({ slides, index, memorial, onChange, onChapters }) {
     <section className={styles.player} aria-label="Story slideshow" aria-roledescription="carousel" data-story-slide={index} data-story-playing={playing} onClick={handleScreenClick}>
       <header className={styles.playerHeader}>
         <button type="button" className={styles.iconButton} onClick={onChapters} title="Story chapters" aria-label="Story chapters"><Menu size={32} strokeWidth={1.5} aria-hidden="true" /></button>
-        <button type="button" className={styles.playback} onClick={togglePlaying} title={playing ? 'Pause story' : isLast ? 'Replay story' : 'Play story'} aria-label={playing ? 'Pause story' : isLast ? 'Replay story' : 'Play story'}>
-          <span className={styles.playbackIcon}>{playing ? <Pause size={24} fill="currentColor" aria-hidden="true" /> : <Play size={24} fill="currentColor" aria-hidden="true" />}</span>
+        <button type="button" className={styles.playback} onClick={togglePlaying} aria-pressed={playing} title={playing ? 'Pause story' : isLast ? 'Replay story' : 'Play story'} aria-label={playing ? 'Pause story' : isLast ? 'Replay story' : 'Play story'}>
+          <span className={styles.playbackIcon}>
+            {playing && active && !reduced ? <svg className={styles.playbackProgress} viewBox="0 0 64 64" aria-hidden="true">
+              <circle className={styles.progressTrack} cx="32" cy="32" r="29" />
+              <circle ref={progressRef} className={styles.progressFill} cx="32" cy="32" r="29" pathLength="1" />
+            </svg> : null}
+            {playing ? <Pause size={24} fill="currentColor" aria-hidden="true" /> : <Play size={24} fill="currentColor" aria-hidden="true" />}
+          </span>
           <span>{playing ? 'Auto' : 'Play'}</span>
         </button>
       </header>
-      <ViewerTransition motionKey={index} path={`story/slide/${index}`} className={`${styles.slide} ${!photoUrl ? styles.textOnly : ''}`} focusOnEnter={!playing} name="slide">
+      <ViewerTransition motionKey={index} path={`story/slide/${index}`} className={`${styles.slide} ${!photoUrl ? styles.textOnly : ''}`} focusOnEnter={!playing} name="slide" timing={STORY_MOTION}>
         {photoUrl ? <StoryPhoto url={photoUrl} title={title} /> : null}
         <article className={styles.narrative} tabIndex={0} aria-label={`${title}, ${index + 1} of ${slides.length}`} aria-live={playing ? 'off' : 'polite'} onWheel={() => setPlaying(false)} onTouchMove={() => setPlaying(false)} onFocus={(event) => { if (event.target !== headingRef.current && event.target.matches(':focus-visible')) setPlaying(false); }}>
           <h1 ref={headingRef} tabIndex={-1}>{title}</h1>
@@ -179,10 +197,10 @@ export default function ViewerStorySection({ output, memorial, onBack }) {
   const circleRef = useRef(null);
 
   return (
-    <ViewerTransition motionKey={index === null ? 'chapters' : 'player'} path={path} name="story">
+    <ViewerTransition motionKey={index === null ? 'chapters' : 'player'} path={path} name="story" timing={STORY_MOTION}>
     {index !== null ? <StoryPlayer slides={slides} index={index} memorial={memorial} onChange={changeSlide} onChapters={openChapters} /> : (
     <section className={styles.stage} aria-label="Story">
-      <motion.div ref={circleRef} className={styles.circle} aria-hidden="true" initial={{ x: reduced ? 0 : 32 }} animate={{ x: 0 }} transition={{ duration: reduced ? 0 : 0.4 }} />
+      <motion.div ref={circleRef} className={styles.circle} aria-hidden="true" initial={{ x: reduced ? 0 : 32 }} animate={{ x: 0 }} transition={{ duration: reduced ? 0 : STORY_MOTION.duration, ease: STORY_MOTION.ease }} />
       <button type="button" className={styles.back} onClick={onBack}><ArrowLeft size={25} aria-hidden="true" />Back</button>
       <div className={styles.summary}>
         <h1 tabIndex={-1}>Story</h1>

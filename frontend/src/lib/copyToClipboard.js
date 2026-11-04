@@ -2,7 +2,7 @@
  * Copy text to the clipboard. Uses the async Clipboard API when available,
  * with a textarea + execCommand fallback (needed on localhost and after awaits).
  */
-export async function copyTextToClipboard(text) {
+export async function copyTextToClipboard(text, container) {
   if (!text) {
     throw new Error("Nothing to copy");
   }
@@ -26,12 +26,13 @@ export async function copyTextToClipboard(text) {
   textarea.style.position = "fixed";
   textarea.style.left = "-9999px";
   textarea.style.top = "0";
-  document.body.appendChild(textarea);
+  const parent = container || document.body;
+  parent.appendChild(textarea);
   textarea.select();
   textarea.setSelectionRange(0, text.length);
 
   const copied = document.execCommand("copy");
-  document.body.removeChild(textarea);
+  parent.removeChild(textarea);
 
   if (!copied) {
     throw new Error("Could not copy to clipboard");

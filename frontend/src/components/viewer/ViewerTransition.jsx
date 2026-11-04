@@ -14,7 +14,7 @@ export function useViewerActive() {
   return useContext(ViewerContext).active;
 }
 
-function TransitionFrame({ path, vector, className, children, focusOnEnter, name, motionKey }) {
+function TransitionFrame({ path, vector, className, children, focusOnEnter, name, motionKey, timing }) {
   const parent = useContext(ViewerContext);
   const present = useIsPresent();
   const reduced = useReducedMotion();
@@ -37,8 +37,8 @@ function TransitionFrame({ path, vector, className, children, focusOnEnter, name
       exit="leave"
       variants={{
         enter: { opacity: reduced ? 1 : 0, x: reduced ? 0 : vector.x, y: reduced ? 0 : vector.y },
-        visible: { opacity: 1, x: 0, y: 0, transition: { duration: reduced ? 0 : VIEWER_MOTION.duration, ease: VIEWER_MOTION.ease } },
-        leave: { opacity: reduced ? 1 : 0, transition: { duration: reduced ? 0 : VIEWER_MOTION.exitDuration } },
+        visible: { opacity: 1, x: 0, y: 0, transition: { duration: reduced ? 0 : timing.duration, ease: timing.ease } },
+        leave: { opacity: reduced ? 1 : 0, transition: { duration: reduced ? 0 : timing.exitDuration } },
       }}
       onAnimationComplete={(phase) => {
         if (phase !== 'visible' || !active) return;
@@ -54,7 +54,7 @@ function TransitionFrame({ path, vector, className, children, focusOnEnter, name
   );
 }
 
-export default function ViewerTransition({ motionKey, path, className, children, focusOnEnter = true, name = 'screen' }) {
+export default function ViewerTransition({ motionKey, path, className, children, focusOnEnter = true, name = 'screen', timing = VIEWER_MOTION }) {
   const [route, setRoute] = useState({ key: motionKey, path, previous: path });
   let previous = route.previous;
   if (route.key !== motionKey) {
@@ -65,7 +65,7 @@ export default function ViewerTransition({ motionKey, path, className, children,
 
   return (
     <AnimatePresence mode="wait" initial={false}>
-      <TransitionFrame key={motionKey} motionKey={motionKey} path={path} vector={vector} className={className} focusOnEnter={focusOnEnter} name={name}>
+      <TransitionFrame key={motionKey} motionKey={motionKey} path={path} vector={vector} className={className} focusOnEnter={focusOnEnter} name={name} timing={timing}>
         {children}
       </TransitionFrame>
     </AnimatePresence>

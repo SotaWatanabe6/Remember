@@ -28,7 +28,7 @@ function MemorialPreview({ src, name }) {
           name={name}
           fill
           rounded="rounded-none"
-          className="h-full w-full"
+          className="h-full w-full opacity-60 transition-opacity duration-500 ease-in-out group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none"
         />
       )}
     </div>

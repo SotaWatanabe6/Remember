@@ -93,8 +93,10 @@
   cursor: pointer;
 }
 
-.start:hover {
-  filter: brightness(0.97);
+.start { transition: background-color 220ms ease, color 220ms ease; }
+.start:is(:hover, :focus-visible) {
+  background: var(--color-r-btn-hover);
+  color: var(--color-r-text);
 }
 
 .navigation {
@@ -156,17 +158,26 @@
   white-space: nowrap;
 }
 
-.selectionLine {
+/* The supplied line asset is decorative; the underline follows the label width. */
+.selectionLine { display: none; }
+
+.sectionLabel::after {
+  content: '';
   position: absolute;
   left: 0;
+  right: 0;
   bottom: 0;
-  transform: scaleX(0.15625) scaleY(0.03125);
-  transform-origin: bottom left;
+  height: 1px;
+  background: currentColor;
+  opacity: 0;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 600ms cubic-bezier(0.45, 0, 0.2, 1), opacity 600ms ease;
 }
 
-.sectionLink:hover .sectionLabel {
-  text-decoration: underline;
-  text-underline-offset: 8px;
+.sectionLink:is(:hover, :focus-visible) .sectionLabel::after {
+  opacity: 1;
+  transform: scaleX(1);
 }
 
 .marker {

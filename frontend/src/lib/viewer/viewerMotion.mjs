@@ -4,6 +4,8 @@ export const VIEWER_MOTION = {
   ease: [0.22, 1, 0.36, 1],
 };
 
+export const STORY_MOTION = { duration: 0.65, exitDuration: 0.35, ease: [0.45, 0, 0.2, 1] };
+
 const SECTION_VECTORS = {
   relationships: { x: 24, y: 0 },
   story: { x: -24, y: 0 },
