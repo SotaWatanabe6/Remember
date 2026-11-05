@@ -256,13 +256,15 @@
   margin: auto;
   padding: 64px 72px 96px;
   border: 0;
-  background: var(--color-r-bg);
-  color: var(--color-r-text);
+  background: transparent;
+  color: var(--color-r-modal);
 }
 
 .photoDialog::backdrop {
   background: rgb(0 0 0 / 65%);
 }
+
+.photoDialog .unavailable { background: transparent; }
 
 .fullPhoto {
   display: block;
@@ -290,7 +292,7 @@
   overflow-y: auto;
 }
 
-.photoCaption span { color: var(--color-r-secondary); }
+.photoCaption span { color: var(--color-r-modal); opacity: 0.8; }
 .previousPhoto { position: absolute; top: calc(50% - 22px); left: 12px; }
 .nextPhoto { position: absolute; top: calc(50% - 22px); right: 12px; }
 

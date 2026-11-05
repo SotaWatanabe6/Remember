@@ -33,7 +33,7 @@ export default function ViewerDialog({ label, background = 'bg', variant = 'scre
     <motion.dialog
       ref={dialogRef}
       className={`${styles.dialog} ${variant === 'popup' ? styles.popup : ''} ${className}`}
-      style={{ background: `var(--color-r-${background})` }}
+      style={{ background: background === 'transparent' ? 'transparent' : `var(--color-r-${background})` }}
       aria-label={label}
       aria-modal="true"
       inert={!present || !active}

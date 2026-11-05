@@ -24,7 +24,6 @@
   padding: 80px 56px 40px;
   border-radius: 20px;
   color: var(--color-r-modal);
-  box-shadow: 0 24px 80px rgb(0 0 0 / 20%);
 }
 
 .popup::backdrop { background: rgb(66 63 57 / 50%); backdrop-filter: blur(6px); }

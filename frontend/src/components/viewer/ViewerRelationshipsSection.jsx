@@ -90,7 +90,7 @@ function RelationshipPhotoDialog({ photos, initialIndex, name, onClose }) {
   }
 
   return (
-    <ViewerDialog className={styles.photoDialog} label={`Photos shared by ${name}`} onClose={onClose} onKeyDown={(event) => {
+    <ViewerDialog className={styles.photoDialog} background="transparent" label={`Photos shared by ${name}`} onClose={onClose} onKeyDown={(event) => {
       if (event.key === 'ArrowLeft') { event.preventDefault(); move(-1); }
       if (event.key === 'ArrowRight') { event.preventDefault(); move(1); }
     }}>

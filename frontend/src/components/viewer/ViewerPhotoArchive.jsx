@@ -161,7 +161,7 @@ function Lightbox({ photos, index, onClose, onChange }) {
   if (!photo) return null;
 
   return (
-    <ViewerDialog label="Photo" background="text" variant="popup" className="flex flex-col items-center justify-center" onClose={onClose} onKeyDown={(event) => {
+    <ViewerDialog label="Photo" background="transparent" variant="popup" className="flex flex-col items-center justify-center" onClose={onClose} onKeyDown={(event) => {
       if (event.key === 'ArrowLeft' && hasMany) { event.preventDefault(); onChange((index - 1 + photos.length) % photos.length); }
       if (event.key === 'ArrowRight' && hasMany) { event.preventDefault(); onChange((index + 1) % photos.length); }
     }}>
@@ -213,7 +213,7 @@ function EnlargedPhoto({ photo }) {
   return photo.url && !failed ? (
     <img src={photo.url} alt={photo.caption || ''} onError={() => setFailed(true)} className="mx-auto max-h-[min(62svh,max(100px,calc(100svh-260px)))] w-auto max-w-full object-contain" />
   ) : (
-    <div className="flex min-h-48 flex-col items-center justify-center gap-4 bg-r-card p-6 text-center">
+    <div className="flex min-h-48 flex-col items-center justify-center gap-4 p-6 text-center">
       <ImageOff size={32} aria-hidden="true" /><p>This photo is unavailable</p>
     </div>
   );
