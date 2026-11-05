@@ -116,7 +116,7 @@ function AudioRow({ recording, onDelete, onEditTitle, onDurationLoaded }) {
           <span className="shrink-0 text-caption text-r-muted">{formatDuration(recording.duration_seconds)}</span>
         </div>
         <p className="mt-1 text-caption text-r-muted">{recording.file_name}</p>
-        <p className="text-caption" style={{ color: 'var(--color-r-colleague)' }}>{statusCopy(recording)}</p>
+        <p className="text-caption" style={{ color: 'var(--color-r-success)' }}>{statusCopy(recording)}</p>
         {recording.audio_url && (
           <audio ref={audioRef} src={recording.audio_url} preload="metadata"
             onLoadedMetadata={handleLoadedMetadata} onTimeUpdate={onTimeUpdate}
@@ -311,7 +311,7 @@ export default function VoicePage() {
                 </div>
               )}
               {uploadSuccess && !uploadError && (
-                <p className="text-caption" style={{ color: 'var(--color-r-colleague)' }}>{uploadSuccess}</p>
+                <p className="text-caption" style={{ color: 'var(--color-r-success)' }}>{uploadSuccess}</p>
               )}
             </div>
           </div>

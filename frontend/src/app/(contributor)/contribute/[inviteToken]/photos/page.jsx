@@ -442,7 +442,7 @@ export default function PhotosPage() {
           ) : null}
 
           {message ? (
-            <p className="rounded-2xl px-4 py-3 text-center text-caption" style={{ backgroundColor: '#E4E8D8', color: 'var(--color-r-colleague)' }} role="status">{message}</p>
+            <p className="rounded-2xl px-4 py-3 text-center text-caption" style={{ backgroundColor: '#E4E8D8', color: 'var(--color-r-success)' }} role="status">{message}</p>
           ) : null}
 
           {errorMessage ? (

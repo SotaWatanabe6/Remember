@@ -34,6 +34,7 @@ import {
 } from "@/lib/organizer/contributionReview";
 import ContributorNavigation from "@/components/organizer/ContributorNavigation";
 import { matchesContributorName } from "@/lib/organizer/contributorSearch";
+import { getRelationshipColor } from "@/lib/viewer/relationships.mjs";
 
 import ModerationReview, { getModerationReviewItems } from "@/components/organizer/ModerationReview";
 
@@ -477,7 +478,8 @@ function ApprovalDetail({
             Submitted {submittedDate}
           </p>
         </div>
-        <span className="inline-flex h-[50px] min-w-[207px] items-center justify-center rounded-[14px] bg-[#D9D9D9] px-6 text-[12px] leading-none text-r-text">
+        <span className="inline-flex h-[50px] min-w-[207px] items-center justify-center rounded-[14px] px-6 text-[12px] leading-none text-r-modal"
+          style={{ backgroundColor: getRelationshipColor(currentContributor.relationship_type || currentContributor.relationship_label) }}>
           {getRelationship(currentContributor)}
         </span>
       </div>

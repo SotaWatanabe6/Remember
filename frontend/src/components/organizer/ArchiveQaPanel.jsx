@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { getRelationshipColor } from "@/lib/viewer/relationships.mjs";
 import ContributorNavigation from "@/components/organizer/ContributorNavigation";
 import { getArchiveQaGroups, matchesContributorName } from "@/lib/organizer/contributorSearch";
 
@@ -36,7 +37,8 @@ export default function ArchiveQaPanel({ contributors, responses }) {
               <h3 className="break-words text-[36px] italic leading-[44px] text-r-secondary">{current.contributor.name?.trim() || "Unnamed contributor"}</h3>
               {submittedDate && <p className="mt-[10px] text-[24px] leading-8 text-r-text">Submitted {submittedDate}</p>}
             </div>
-            <span className="flex min-h-[50px] shrink-0 items-center justify-center rounded-[14px] bg-[#D9D9D9] px-6 py-3 text-[12px] text-r-text sm:min-w-[207px]">
+            <span className="flex min-h-[50px] shrink-0 items-center justify-center rounded-[14px] px-6 py-3 text-[12px] text-r-modal sm:min-w-[207px]"
+              style={{ backgroundColor: getRelationshipColor(current.contributor.relationship_type || current.contributor.relationship_label) }}>
               {current.contributor.relationship_label || current.contributor.relationship_type || "No relationship"}
             </span>
           </div>

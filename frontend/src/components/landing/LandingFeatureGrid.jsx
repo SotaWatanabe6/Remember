@@ -11,7 +11,7 @@ const features = [
     title: "Curate Together",
     body: "Review and organize contributions from everyone who knew them. Build a complete picture of their life.",
     icon: "users",
-    iconTone: "bg-[#EDCDC2] text-r-family",
+    iconTone: "bg-[#EDCDC2] text-[#AF5F42]",
   },
   {
     title: "Private & Safe",

@@ -4,8 +4,8 @@ const GROUPS = [
   { id: 'family', label: 'Family', color: 'var(--color-r-family)' },
   { id: 'friends', label: 'Friends', color: 'var(--color-r-friend)' },
   { id: 'colleagues', label: 'Colleagues', color: 'var(--color-r-colleague)' },
-  { id: 'partners', label: 'Partners', color: 'var(--color-r-shape)' },
-  { id: 'other', label: 'Other connections', color: 'var(--color-r-secondary)' },
+  { id: 'partners', label: 'Partners', color: 'var(--color-r-family)' },
+  { id: 'other', label: 'Other connections', color: 'var(--color-r-other)' },
 ];
 
 function text(value) {
@@ -32,6 +32,10 @@ export function getRelationshipGroup(type) {
   if (['colleague', 'colleagues', 'coworker', 'co worker'].includes(normalized)) return 'colleagues';
   if (['partner', 'partner / spouse'].includes(normalized)) return 'partners';
   return 'other';
+}
+
+export function getRelationshipColor(type) {
+  return GROUPS.find((group) => group.id === getRelationshipGroup(type)).color;
 }
 
 export function buildRelationshipGroups(contributors = []) {

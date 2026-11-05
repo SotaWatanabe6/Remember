@@ -8,6 +8,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { ArrowLeft, ChevronLeft, ChevronRight, ImageOff } from 'lucide-react';
 import ViewerDialog from './ViewerDialog';
+import { getRelationshipColor } from '@/lib/viewer/relationships.mjs';
 import ViewerTransition, { useViewerActive } from './ViewerTransition';
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
@@ -293,7 +294,8 @@ function ContributorsView({ contributors, photosByName, onOpenPhoto }) {
                   <>
                     <span className="text-body-2 text-r-modal">{photoCount(photos.length)}</span>
                     {contributor.relationship_type ? (
-                      <span className="mt-1 flex h-[50px] w-[207px] max-w-full items-center justify-center rounded-[10px] bg-[#D9D9D9] text-caption text-r-text">
+                      <span className="mt-1 flex h-[50px] w-[207px] max-w-full items-center justify-center rounded-[10px] text-caption text-r-modal"
+                        style={{ backgroundColor: getRelationshipColor(contributor.relationship_type) }}>
                         {contributor.relationship_type}
                       </span>
                     ) : null}

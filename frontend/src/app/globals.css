@@ -93,11 +93,13 @@
   --color-r-accent:  #4A7FA5;
   --color-r-shape:   #5F6848;
   --color-r-danger:  #C0503A;
+  --color-r-success: #59763C;
 
   /* Relationship colors (constellation, contributor tags) */
-  --color-r-family:    #AF5F42;
-  --color-r-friend:    #45556C;
-  --color-r-colleague: #59763C;
+  --color-r-family:    #3E4972;
+  --color-r-friend:    #3E7248;
+  --color-r-colleague: #723E3E;
+  --color-r-other:     #3E7172;
 
   /* =========================
      LEGACY TOKENS — kept for backward compatibility
@@ -397,6 +399,7 @@
   .text-r-family    { color: var(--color-r-family); }
   .text-r-friend    { color: var(--color-r-friend); }
   .text-r-colleague { color: var(--color-r-colleague); }
+  .text-r-other    { color: var(--color-r-other); }
 
   /* Background helpers */
   .bg-r-bg     { background-color: var(--color-r-bg); }
