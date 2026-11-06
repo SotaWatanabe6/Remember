@@ -10,6 +10,7 @@ const multer = require('multer')
 const { detectImageType } = require('../lib/fileType')
 const { sendInternalError } = require('../lib/httpErrors')
 const { isOwnCoverPhoto, isSameCoverPhoto } = require('../services/coverPhoto')
+const { registerMemorialDeletion } = require('../services/memorialDeletion')
 
 const MAX_COVER_PHOTO_BYTES = 15 * 1024 * 1024
 const INVALID_COVER_PHOTO = {
@@ -100,6 +101,7 @@ async function createSignedAssetUrls(items = [], urlKey) {
 }
 
 registerModerationReview(router, supabase, authMiddleware, getOwnedMemorial)
+registerMemorialDeletion(router, supabase, authMiddleware)
 
 // POST /memorials/cover-photo — upload cover photo, returns storage URL
 router.post('/cover-photo', authMiddleware, async (req, res) => {
