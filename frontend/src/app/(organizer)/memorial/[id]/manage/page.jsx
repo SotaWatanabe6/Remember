@@ -196,7 +196,7 @@ function MemorialHeader({ memorial, generated, inviteToken, onShare, contributor
 
 // ─── Tab bar (Figma "menu tab": equal-width, bold + 2px underline when active) ─
 
-function TabBar({ tabs, active, onChange }) {
+function TabBar({ tabs, active, onChange, hasPendingReview }) {
   return (
     <div className="flex gap-5">
       {tabs.map((tab) => {
@@ -210,7 +210,12 @@ function TabBar({ tabs, active, onChange }) {
             }`}
             style={{ fontFamily: 'var(--font-family-display)' }}
           >
-            {tab}
+            <span className="inline-flex items-center gap-2">
+              {tab}
+              {tab === APPROVE_TAB && hasPendingReview ? (
+                <><span className="size-2 shrink-0 rounded-full bg-r-danger" aria-hidden="true" /><span className="sr-only">Submissions need review</span></>
+              ) : null}
+            </span>
           </button>
         );
       })}
@@ -871,7 +876,7 @@ export default function MemorialManagePage() {
           )}
           {generationError && <p className="text-sm text-r-danger" role="alert">{generationError}</p>}
           <div className={`flex min-w-0 flex-col ${currentTab === ARCHIVE_TAB ? 'gap-[30px] lg:gap-[50px]' : 'gap-[30px]'}`}>
-            <TabBar tabs={manageTabs} active={currentTab} onChange={setActiveTab} />
+            <TabBar tabs={manageTabs} active={currentTab} onChange={setActiveTab} hasPendingReview={awaitingApprovalCount > 0} />
             <div>
               {currentTab === ARCHIVE_TAB && <ArchiveTab memorialId={memorialId} contributors={contributors} contributorsLoading={contributorsLoading} />}
               {currentTab === APPROVE_TAB && (
