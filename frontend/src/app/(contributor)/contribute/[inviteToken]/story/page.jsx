@@ -6,6 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { getContributorStories, saveContributorStory } from '@/lib/api.js';
 import ContributorUploadNav from '@/components/contributor/ContributorUploadNav';
+import ContributionTextField from '@/components/contributor/ContributionTextField';
 import { useContributorSubjectName } from '@/lib/contribute/useContributorSubjectName';
 
 const STORY_TITLE_SUGGESTIONS = [
@@ -190,17 +191,9 @@ export default function StoryPage() {
             <input id="story-title" type="text" value={title} disabled={disabled}
               onChange={(event) => { setTitle(event.target.value); setError(''); }} placeholder="Our first time meeting"
               className="h-[63px] w-full rounded-[13px] border border-r-muted bg-transparent px-5 text-[20px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-r-text disabled:opacity-50" />
-            <div className="flex min-h-[250px] items-start gap-3 rounded-[13px] border border-r-muted p-5 focus-within:ring-1 focus-within:ring-r-text sm:gap-5">
-              <button type="button" onClick={toggleMic} disabled={disabled} aria-pressed={listening}
-                aria-label={listening ? 'Stop voice typing' : 'Start voice typing'}
-                className="flex size-10 shrink-0 items-center justify-center rounded-full hover:opacity-70 focus-visible:outline-2 disabled:opacity-50">
-                {listening ? <span className="size-5 rounded-sm bg-r-danger" /> : <Image src="/icons/story-record.svg" width={40} height={40} alt="" />}
-              </button>
-              <label htmlFor="story-body" className="sr-only">Your story</label>
-              <textarea id="story-body" value={displayedBody} disabled={disabled} readOnly={listening}
-                onChange={(event) => { setBody(event.target.value); setError(''); }} placeholder="Write your memory here…"
-                className="min-h-[208px] min-w-0 flex-1 resize-y bg-transparent text-[20px] leading-[26px] outline-none disabled:opacity-50" />
-            </div>
+            <ContributionTextField id="story-body" label="Your story" value={displayedBody}
+              disabled={disabled} readOnly={listening} recording={listening} onToggleRecording={toggleMic}
+              onChange={(event) => { setBody(event.target.value); setError(''); }} placeholder="Write your memory here…" />
             {listening && <p role="status" className="text-r-secondary">Listening… Stop voice typing before adding your story.</p>}
             {speechError && <p role="status" className="text-r-secondary">{speechError}</p>}
             {error && <p role="alert" className="text-r-danger">{error}</p>}
