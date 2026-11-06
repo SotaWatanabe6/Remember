@@ -172,38 +172,6 @@ function PrimaryContributorButton({ children, className = "", ...props }) {
   );
 }
 
-function formatMemorialDate(value) {
-  if (!value) return '';
-  const parts = String(value).split('T')[0].split('-');
-  if (parts.length < 3) return '';
-  const [year, month, day] = parts.map(Number);
-  if (!year || !month || !day) return '';
-  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
-    month: 'long', day: 'numeric', year: 'numeric',
-  });
-}
-
-function getMemorialYears(memorial) {
-  const birthDate = formatMemorialDate(memorial?.date_of_birth ?? memorial?.dateOfBirth ?? memorial?.birth_date);
-  const passingDate = formatMemorialDate(memorial?.date_of_passing ?? memorial?.dateOfPassing ?? memorial?.death_date);
-  if (birthDate && passingDate) return `${birthDate} - ${passingDate}`;
-  if (birthDate) return `Born ${birthDate}`;
-  if (passingDate) return `Passed ${passingDate}`;
-  return "";
-}
-
-function getMemorialBiography(memorial) {
-  return (
-    memorial?.biography ??
-    memorial?.bio ??
-    memorial?.description ??
-    memorial?.profile ??
-    memorial?.brief_biography ??
-    memorial?.short_description ??
-    ""
-  ).trim();
-}
-
 function getFirstName(name) {
   return name.trim().split(/\s+/)[0] || name;
 }
@@ -273,15 +241,14 @@ export function ContributorOnboardingBrief({ inviteToken }) {
 
   const subjectName = invite.deceased.name;
   const firstName = getFirstName(subjectName);
-  const years = getMemorialYears(invite.memorial);
-  const biography = getMemorialBiography(invite.memorial);
 
   return (
-    <ContributorPageShell backHref={`/contribute/${inviteToken}`}>
-      <section className="mx-auto flex w-full max-w-[886px] flex-col items-center pt-[101px] max-sm:pt-16">
-        <div className="flex max-w-[886px] flex-col items-center gap-5 text-center">
+    <ContributorPageShell>
+      <section className="mx-auto flex w-full max-w-[886px] flex-col items-center pt-[136px] max-sm:pt-16">
+        <DeceasedAvatar name={subjectName} photoUrl={invite.deceased.photoUrl} />
+        <div className="mt-[41px] flex max-w-[886px] flex-col items-center gap-5 text-center">
           <h1 className="[font-family:var(--font-family-display)] text-[40px] font-bold leading-[52px] text-r-text">
-            Remembering {subjectName}
+            Remembering {subjectName}.
           </h1>
           <p className="max-w-[886px] text-xl leading-7 text-r-secondary">
             <span className="block">
@@ -294,24 +261,9 @@ export function ContributorOnboardingBrief({ inviteToken }) {
           </p>
         </div>
 
-        <div className="mt-[100px] grid w-full grid-cols-1 items-start gap-10 sm:grid-cols-[314px_1fr] sm:gap-[139px]">
-          <DeceasedAvatar name={subjectName} photoUrl={invite.deceased.photoUrl} />
-          <div className="flex max-w-[433px] flex-col text-left max-sm:items-center max-sm:text-center sm:pt-[70px]">
-            <h2 className="[font-family:var(--font-family-display)] text-4xl font-medium italic leading-[47px] text-r-text">
-              {subjectName}
-            </h2>
-            {years ? (
-              <p className="mt-3 text-base leading-[21px] text-r-secondary">{years}</p>
-            ) : null}
-            {biography ? (
-              <p className="mt-4 text-xl leading-[26px] text-r-secondary">{biography}</p>
-            ) : null}
-          </div>
-        </div>
-
         <PrimaryContributorButton
           type="button"
-          className="mt-[100px] max-sm:mt-16"
+          className="mt-[136px] max-sm:mt-16"
           onClick={() => router.push(`/contribute/${inviteToken}/public-contributor`)}
         >
           Continue
