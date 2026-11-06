@@ -821,7 +821,7 @@ export default function MemorialManagePage() {
           ? "Generation is available after you approve at least one contribution."
           : "";
 
-  const manageTabs = getManageTabs();
+  const manageTabs = getManageTabs(contributors);
   const currentTab = resolveManageTab(activeTab, manageTabs);
 
   useEffect(() => { queueMicrotask(loadContributors); }, [loadContributors]);

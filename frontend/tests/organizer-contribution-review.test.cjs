@@ -4,7 +4,7 @@ const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-// Manage tabs stay visible; content sub-tabs depend on pending review.
+// Approval tabs and content sub-tabs depend on pending review.
 // Run the helper module with Node alone.
 function loadHelpers() {
   const source = readFileSync(path.resolve(__dirname, '../src/lib/organizer/contributionReview.js'), 'utf8')
@@ -25,10 +25,10 @@ test('excluded source content stays out of bulk approval selections', () => {
   assert.deepEqual(sections.photos.map(p => p.id), ['eligible']);
 });
 
-test('archive and approve submissions stay visible when nothing is pending review', () => {
-  assert.deepEqual(helpers.getManageTabs([approved, inProgress]), ['Archive', 'Approve submissions']);
-  assert.deepEqual(helpers.getManageTabs([]), ['Archive', 'Approve submissions']);
-  assert.deepEqual(helpers.getManageTabs(undefined), ['Archive', 'Approve submissions']);
+test('only the archive stays visible when nothing is pending review', () => {
+  assert.deepEqual(helpers.getManageTabs([approved, inProgress]), ['Archive']);
+  assert.deepEqual(helpers.getManageTabs([]), ['Archive']);
+  assert.deepEqual(helpers.getManageTabs(undefined), ['Archive']);
   assert.equal(helpers.hasPendingContributions(undefined), false);
 });
 
@@ -37,11 +37,11 @@ test('approve submissions tab is shown while any contributor is submitted', () =
   assert.deepEqual(helpers.getManageTabs([{ status: 'SUBMITTED' }]), ['Archive', 'Approve submissions']);
 });
 
-test('approving the last pending submission keeps the approval tab selected', () => {
+test('approving the last pending submission returns to the archive', () => {
   const before = helpers.getManageTabs([submitted]);
   assert.equal(helpers.resolveManageTab('Approve submissions', before), 'Approve submissions');
   const after = helpers.getManageTabs([{ ...submitted, status: 'approved' }]);
-  assert.equal(helpers.resolveManageTab('Approve submissions', after), 'Approve submissions');
+  assert.equal(helpers.resolveManageTab('Approve submissions', after), 'Archive');
   assert.equal(helpers.resolveManageTab('Outputs', after), 'Archive');
 });
 

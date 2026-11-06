@@ -1,10 +1,7 @@
-// Organizer management always shows Archive and Approve submissions.
-// Submission sub-tabs still depend on the content awaiting review.
+// The approval tab is available only while submissions need review.
 
 export const ARCHIVE_TAB = "Archive";
 export const APPROVE_TAB = "Approve submissions";
-
-const ALL_MANAGE_TABS = [ARCHIVE_TAB, APPROVE_TAB];
 
 // Sub-tabs of a submission, in the order Figma shows them. Q&A is not in the
 // approval wireframes but the organizer still needs to review answers before
@@ -31,8 +28,8 @@ export function hasPendingContributions(contributors) {
   return Array.isArray(contributors) && contributors.some(isAwaitingReview);
 }
 
-export function getManageTabs() {
-  return [...ALL_MANAGE_TABS];
+export function getManageTabs(contributors) {
+  return hasPendingContributions(contributors) ? [ARCHIVE_TAB, APPROVE_TAB] : [ARCHIVE_TAB];
 }
 
 export function resolveManageTab(requestedTab, tabs) {
