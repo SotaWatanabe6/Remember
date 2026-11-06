@@ -219,7 +219,10 @@
 }
 
 .sectionMain {
-  padding: 48px 50px 64px;
+  --viewer-section-top: 48px;
+  --viewer-back-height: 50px;
+  --viewer-content-gap: 40px;
+  padding: var(--viewer-section-top) 50px 64px;
 }
 
 .back {
@@ -228,7 +231,7 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  min-height: 50px;
+  min-height: var(--viewer-back-height, 50px);
   font-family: var(--font-family-display);
   font-size: 24px;
   color: var(--color-r-text);
@@ -236,7 +239,7 @@
 }
 
 .sectionContent {
-  margin-top: 40px;
+  margin-top: var(--viewer-content-gap, 40px);
   min-width: 0;
 }
 
@@ -278,7 +281,7 @@
   .circleAsset { transform: scale(0.764331); transform-origin: top left; }
   .sectionLink { gap: 12px; }
   .sectionLabel { font-size: 28px; }
-  .sectionMain { padding: 32px 24px 48px; }
+  .sectionMain { --viewer-section-top: 32px; padding: var(--viewer-section-top) 24px 48px; }
 }
 
 @media (max-width: 600px) {

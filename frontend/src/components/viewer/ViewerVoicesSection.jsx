@@ -196,7 +196,7 @@ export default function ViewerVoicesSection({ output }) {
         onError={() => setAudioError(true)}
       />
 
-      <blockquote className="mx-auto max-w-[800px] px-6 text-center font-display text-[32px] font-bold leading-[44px] text-r-text sm:text-[40px] sm:leading-[52px]" aria-live="polite">
+      <blockquote className={`${styles.transcript} mx-auto max-w-[800px] px-6 text-center font-display text-[32px] font-bold leading-[44px] text-r-text sm:text-[40px] sm:leading-[52px]`} aria-live="polite">
         {transcriptLine ? `“${transcriptLine}”` : null}
       </blockquote>
 
