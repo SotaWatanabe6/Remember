@@ -1,6 +1,7 @@
 export const VIEWER_MOTION = {
-  duration: 0.28,
-  exitDuration: 0.16,
+  // Page navigation waits for the 400 ms exit, then enters for 800 ms.
+  duration: 0.8,
+  exitDuration: 0.4,
   ease: [0.22, 1, 0.36, 1],
 };
 
