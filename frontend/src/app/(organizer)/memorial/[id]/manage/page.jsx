@@ -390,12 +390,6 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
                         {photo.caption}
                       </p>
                     ) : null}
-                      <p className={`${photo.caption ? 'mt-4 ' : ''}text-[16px] leading-[16px] text-white`}>
-                        {photo.contributor_name ? `Submitted by ${photo.contributor_name}` : 'Submitted by contributor'}
-                      </p>
-                      <p className="mt-4 text-[16px] leading-[16px] text-white">
-                        {formatArchiveDate(photo.taken_at || photo.created_at)}
-                      </p>
                     </div>
                   </div>
                 ) : (
