@@ -272,11 +272,6 @@ function VoiceSection({ voices, submittedDate, selected, onToggle, onDeleteVoice
               <span className="text-[15px] text-[#5F5A52]">Audio preview unavailable</span>
             </div>
           )}
-          {(voice.key_quote || voice.transcript_text) && (
-            <p className="mt-4 max-w-[760px] text-[18px] italic leading-[28px] text-[#5F5A52]">
-              &quot;{voice.key_quote || voice.transcript_text}&quot;
-            </p>
-          )}
         </SubmissionCard>
       ))}
     </div>

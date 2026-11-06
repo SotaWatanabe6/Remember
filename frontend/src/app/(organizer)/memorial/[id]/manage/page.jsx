@@ -412,11 +412,6 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
                 ) : (
                   <p className="text-sm text-r-secondary">Audio preview unavailable</p>
                 )}
-                {(voice.key_quote || voice.transcript_text) && (
-                  <p className="text-[16px] italic leading-6 text-r-secondary">
-                    &quot;{voice.key_quote || voice.transcript_text}&quot;
-                  </p>
-                )}
                 {voice.contributor_name && (
                   <p className="text-xs text-r-secondary">Submitted by {voice.contributor_name}</p>
                 )}
