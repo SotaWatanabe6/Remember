@@ -11,6 +11,7 @@ import {
 } from "@/services/contributorService.js";
 import { formatPersonName } from "@/lib/formatName.js";
 import ContributorEntryNav from "@/components/contributor/ContributorEntryNav.jsx";
+import { RememberLogoMark } from "@/components/brand/RememberLogo.jsx";
 
 const inviteErrorCopy = {
   invalid: {
@@ -235,29 +236,20 @@ export default function ContributorInviteLanding({ inviteToken }) {
 
   return (
     <ContributorPageShell>
-      <section className="mx-auto flex w-full max-w-[886px] flex-col items-center pt-[101px] text-center max-sm:pt-16">
-        <div className="flex flex-col items-center gap-5">
+      <section className="mx-auto flex w-full max-w-[886px] flex-col items-center pt-[125px] text-center max-sm:pt-16">
+        <RememberLogoMark className="h-[232px] w-[220px] sm:h-[316px] sm:w-[300px]" priority />
+        <div className="mt-[52px] flex flex-col items-center gap-5">
           <h1 className="[font-family:var(--font-family-display)] text-[40px] font-bold leading-[52px] text-r-text">
-            Welcome to Remember
+            You&apos;ve been invited to share memories of {subjectName}.
           </h1>
           <p className="max-w-[886px] text-xl leading-[26px] text-r-secondary sm:leading-[26px]">
-            A digital platform where you can create a private, dignified space where family and friends can share memories of your loved one.
-          </p>
-        </div>
-
-        <div className="mt-[100px] flex min-h-[360px] w-full max-w-[476px] flex-col items-center rounded-[20px] border border-[#97877B] px-5 pb-9 pt-10 max-sm:mt-16">
-          <DeceasedAvatar name={subjectName} photoUrl={invite.deceased.photoUrl} size="small" />
-          <h2 className="mt-6 max-w-[434px] [font-family:var(--font-family-display)] text-2xl font-medium leading-[31px] text-r-text">
-            You&apos;ve been invited to contribute memories of {subjectName}.
-          </h2>
-          <p className="mt-5 max-w-[434px] text-xl leading-[26px] text-r-secondary">
-            Share photos, videos, voice recordings, and written memories that celebrate the life and legacy of someone special.
+            Welcome to Remember, a digital platform where you can create a private, dignified space where family and friends can share memories of your loved one.
           </p>
         </div>
 
         <PrimaryContributorButton
           type="button"
-          className="mt-[100px] max-sm:mt-16"
+          className="mt-[167px] max-sm:mt-16"
           onClick={() => router.push(`/contribute/${inviteToken}/onboarding`)}
         >
           Start
