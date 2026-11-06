@@ -5,6 +5,8 @@
 import { useCallback, useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { AnimatePresence } from 'framer-motion';
+import PhotoDialog from '@/components/ui-components/photo-dialog';
 import { generateMemorialOutput, getGenerationJobStatus, getMemorialOutput } from '@/services/memorialService';
 import { getMemorialApprovedArchive, getMemorialContributors } from '@/services/contributorService';
 import { getMemorial, createInviteLink, createShareLink } from '@/lib/api';
@@ -291,6 +293,7 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeSubTab, setActiveSubTab] = useState('photos');
+  const [photoIndex, setPhotoIndex] = useState(null);
 
   // Per-type approvals can enter the archive while the contributor is still
   // submitted. Let the archive API decide which items have been approved.
@@ -370,8 +373,10 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
       {activeSubTab === 'photos' && photos.length > 0 && (
         <ArchiveSection title="Photos" count={`${photos.length} photo${photos.length === 1 ? '' : 's'}`}>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {photos.map((photo) => (
-              <div key={photo.id} className="group rounded-xl overflow-hidden border border-r-border bg-r-card">
+            {photos.map((photo, index) => (
+              <button key={photo.id} type="button" onClick={() => setPhotoIndex(index)}
+                aria-label={`Enlarge ${photo.caption || 'photo'}`}
+                className="group rounded-xl overflow-hidden border border-r-border bg-r-card focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-r-text">
                 {photo.url || photo.photo_url ? (
                   <div className="relative aspect-[4/3] w-full overflow-hidden">
                     <img
@@ -379,7 +384,7 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
                       alt={photo.caption || ''}
                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
                     />
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/0 px-8 text-center opacity-0 transition-all duration-300 group-hover:bg-black/38 group-hover:opacity-100">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/0 px-8 text-center opacity-0 transition-all duration-300 group-hover:bg-black/38 group-hover:opacity-100 group-focus-visible:bg-black/38 group-focus-visible:opacity-100">
                       {photo.caption ? (
                       <p className="text-[30px] leading-[34px] text-white" style={{ fontFamily: 'var(--font-family-display)' }}>
                         {photo.caption}
@@ -398,7 +403,7 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
                     <span className="text-xs text-r-muted">{photo.contributor_name || 'Photo'}</span>
                   </div>
                 )}
-              </div>
+              </button>
             ))}
           </div>
         </ArchiveSection>
@@ -447,6 +452,22 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
       )}
 
       {activeSubTab === 'responses' && <ArchiveQaPanel contributors={archive.contributors || []} responses={responses} />}
+      <AnimatePresence>
+        {photoIndex !== null && photos[photoIndex] ? (
+          <PhotoDialog
+            photos={photos.map((photo) => ({
+              id: photo.id,
+              url: photo.url || photo.photo_url || null,
+              caption: photo.caption,
+              contributorName: photo.contributor_name || 'contributor',
+              dateLabel: formatArchiveDate(photo.taken_at || photo.created_at),
+            }))}
+            index={photoIndex}
+            onChange={setPhotoIndex}
+            onClose={() => setPhotoIndex(null)}
+          />
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }
