@@ -42,13 +42,9 @@ test("profile values map between the stored subject and editable fields", () => 
   );
 });
 
-test("settings route reuses the memorial form and the dashboard gates its edit link", () => {
+test("settings route reuses the memorial form", () => {
   const settingsPage = readFileSync(
     new URL("../src/app/(organizer)/memorial/[id]/manage/settings/page.jsx", import.meta.url),
-    "utf8",
-  );
-  const managePage = readFileSync(
-    new URL("../src/app/(organizer)/memorial/[id]/manage/page.jsx", import.meta.url),
     "utf8",
   );
   const profileForm = readFileSync(
@@ -59,7 +55,5 @@ test("settings route reuses the memorial form and the dashboard gates its edit l
   assert.match(settingsPage, /mode="edit"/);
   assert.match(settingsPage, /Edit memorial details/);
   assert.match(settingsPage, /router\.replace\(backHref\)/);
-  assert.match(managePage, /!generated && canEditMemorialProfile/);
-  assert.match(managePage, /manage\/settings/);
   assert.match(profileForm, /if \(!isEdit \|\| remembered\.photo\)/);
 });

@@ -20,20 +20,25 @@ export default function MemorialSettingsPage() {
   const [deleteError, setDeleteError] = useState("");
   const deletionInFlight = useRef(false);
   const backHref = `/memorial/${id}/manage`;
+  const hasCurrentMemorial = memorial?.id === id;
 
   function closeDeletion() {
-    if (deletionInFlight.current) return;
+    if (deletionInFlight.current || !hasCurrentMemorial) return;
+    if (memorial && !canEditMemorialProfile(memorial.status)) {
+      router.replace(backHref);
+      return;
+    }
     setDeleteOpen(false);
     setDeleteError("");
   }
 
   async function handleDelete() {
-    if (deletionInFlight.current) return;
+    if (deletionInFlight.current || !hasCurrentMemorial) return;
     deletionInFlight.current = true;
     setDeleting(true);
     setDeleteError("");
     try {
-      await deleteMemorial(id);
+      await deleteMemorial(memorial.id);
       router.replace("/dashboard");
     } catch (deleteFailure) {
       setDeleteError(deleteFailure?.message || "Unable to delete this memorial. Please try again.");
@@ -49,10 +54,7 @@ export default function MemorialSettingsPage() {
     getMemorial(id)
       .then((profile) => {
         if (cancelled) return;
-        if (!canEditMemorialProfile(profile?.status)) {
-          router.replace(backHref);
-          return;
-        }
+        setError("");
         setMemorial(profile);
       })
       .catch((loadError) => {
@@ -67,7 +69,16 @@ export default function MemorialSettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [backHref, id, router]);
+  }, [id]);
+
+  if (hasCurrentMemorial && !canEditMemorialProfile(memorial.status)) {
+    return (
+      <main className="min-h-screen bg-r-bg text-r-text">
+        <DeleteMemorialDialog name={memorial.subject_name} deleting={deleting} error={deleteError}
+          onClose={closeDeletion} onDelete={handleDelete} />
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-r-bg px-6 py-8 text-r-text sm:px-[50px] sm:py-[50px]">
@@ -83,7 +94,7 @@ export default function MemorialSettingsPage() {
           </p>
         </div>
 
-        {loading ? (
+        {loading || (!error && !hasCurrentMemorial) ? (
           <div className="flex min-h-[320px] items-center justify-center" role="status">
             <div className="size-8 animate-spin rounded-full border-2 border-r-border border-t-r-text" />
             <span className="sr-only">Loading memorial profile</span>
@@ -102,7 +113,7 @@ export default function MemorialSettingsPage() {
           />
         ) : null}
       </section>
-      {deleteOpen ? (
+      {deleteOpen && hasCurrentMemorial ? (
         <DeleteMemorialDialog name={memorial?.subject_name} deleting={deleting} error={deleteError}
           onClose={closeDeletion} onDelete={handleDelete} />
       ) : null}
