@@ -123,7 +123,7 @@ export default function StoryPage() {
   const disabled = loading || Boolean(loadError) || saving || locked;
   const hasDraft = Boolean(title.trim() || body.trim());
 
-  async function saveStory(continueToReview) {
+  async function saveStory(returnToUpload) {
     if (mutationRef.current || disabled || listening) return;
     mutationRef.current = true;
     setSaving(true);
@@ -145,7 +145,7 @@ export default function StoryPage() {
         setShowSuggestions(false);
         setNotice('Story added. You can add another story or continue.');
       }
-      if (continueToReview) router.push(`/contribute/${inviteToken}/review?tab=stories`);
+      if (returnToUpload) router.push(`/contribute/${inviteToken}/upload`);
     } catch (err) {
       if (err?.status === 403) setLocked(true);
       setError(err instanceof Error ? err.message : 'Could not save your story. Please try again.');
@@ -159,7 +159,7 @@ export default function StoryPage() {
 
   return (
     <main className="flex min-h-screen flex-col bg-r-bg text-r-text">
-      <ContributorUploadNav backHref={`/contribute/${inviteToken}/voice`} disabled={saving || listening} />
+      <ContributorUploadNav backHref={`/contribute/${inviteToken}/upload`} disabled={saving || listening} />
       <div className="flex flex-1 flex-col items-center gap-12 px-6 pb-[50px] pt-10 sm:gap-[100px] sm:px-[50px] sm:pt-[50px]">
         <header className="text-center">
           <h1 className="text-h1">Upload your memories</h1>

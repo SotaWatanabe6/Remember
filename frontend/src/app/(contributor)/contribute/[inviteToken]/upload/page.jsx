@@ -35,6 +35,10 @@ export default function UploadSelectorPage() {
             </Link>
           ))}
         </div>
+        <Link href={`/contribute/${inviteToken}/review`}
+          className="flex h-[62px] w-full max-w-[434px] items-center justify-center rounded-full bg-r-btn px-8 text-xl leading-[26px] text-r-text transition-colors hover:bg-r-btn-hover focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-r-text">
+          Continue
+        </Link>
       </div>
     </main>
   );

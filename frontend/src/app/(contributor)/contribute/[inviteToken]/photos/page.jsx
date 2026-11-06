@@ -347,7 +347,7 @@ export default function PhotosPage() {
     setUploadedAssets((current) => current.map((asset) => asset.id === assetId ? { ...asset, previewFailed: true } : asset));
   }
 
-  function handleContinue() { router.push(`/contribute/${inviteToken}/voice`); }
+  function handleContinue() { router.push(`/contribute/${inviteToken}/upload`); }
 
   useEffect(() => {
     let isMounted = true;

@@ -262,7 +262,7 @@ export default function VoicePage() {
 
   return (
     <main className="min-h-screen bg-r-bg text-r-text flex flex-col">
-      <ContributorNav backHref={`/contribute/${inviteToken}/photos`} />
+      <ContributorNav backHref={`/contribute/${inviteToken}/upload`} />
 
       <div className="flex-1 px-6 sm:px-[50px] pt-6 pb-16">
         <div className="page-shell">
@@ -329,12 +329,12 @@ export default function VoicePage() {
           )}
 
           <div className="flex flex-col gap-3">
-            <button onClick={() => router.push(`/contribute/${inviteToken}/story`)} disabled={uploading}
+            <button onClick={() => router.push(`/contribute/${inviteToken}/upload`)} disabled={uploading}
               className="w-full rounded-full py-4 text-body-2 font-medium tracking-wide transition-opacity hover:opacity-80 active:opacity-70 disabled:opacity-55 bg-r-btn text-r-btn-text border-none">
               Continue
             </button>
             {recordings.length === 0 && (
-              <button onClick={() => router.push(`/contribute/${inviteToken}/story`)}
+              <button onClick={() => router.push(`/contribute/${inviteToken}/upload`)}
                 className="w-full py-3 text-caption transition-colors text-r-muted"
                 onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-r-text)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-r-muted)'; }}>
