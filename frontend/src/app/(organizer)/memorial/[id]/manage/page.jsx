@@ -330,7 +330,7 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
         </p>
         <p className="text-r-secondary text-sm mt-1 max-w-sm">
           {approvedContributorCount === 0
-            ? 'Approve a submission in the Approve Contributions tab and it will appear here.'
+            ? 'Approve a submission in the Approve submissions tab and it will appear here.'
             : 'The approved contributors have not shared any photos, recordings, or written memories yet.'}
         </p>
       </div>
@@ -451,7 +451,7 @@ function ArchiveTab({ memorialId, contributors, contributorsLoading }) {
   );
 }
 
-// ─── Approve Contributions Tab (only mounted while something is pending) ─────
+// ─── Approve submissions Tab (only mounted while something is pending) ─────
 
 function ApproveContributionsTab({ memorialId, contributorslist, loading, error, onRetry, onContributorsChange }) {
   return (
@@ -724,8 +724,8 @@ export default function MemorialManagePage() {
           const status = String(latestJob?.status || "").toLowerCase();
           if (GENERATION_SUCCESS_STATUSES.has(status)) break;
           if (status === "awaiting_review") {
-            setGenerationError("Generation is paused. Resolve flagged content in Approve Contributions, then create the memorial again to resume.");
-            setActiveTab("Approve Contributions");
+            setGenerationError("Generation is paused. Resolve flagged content in Approve submissions, then create the memorial again to resume.");
+            setActiveTab("Approve submissions");
             await loadContributors();
             await refreshMemorial();
             return;
@@ -821,7 +821,7 @@ export default function MemorialManagePage() {
     : contributorsError
       ? "Contributor data could not be loaded, so generation is unavailable right now."
       : awaitingApprovalCount > 0
-        ? `Review the ${awaitingApprovalCount} contribution${awaitingApprovalCount === 1 ? "" : "s"} awaiting approval in the Approve Contributions tab before generating.`
+        ? `Review the ${awaitingApprovalCount} contribution${awaitingApprovalCount === 1 ? "" : "s"} awaiting approval in the Approve submissions tab before generating.`
         : approvedContributionCount === 0
           ? "Generation is available after you approve at least one contribution."
           : "";

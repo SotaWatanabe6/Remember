@@ -1,8 +1,8 @@
-// Organizer management always shows Archive and Approve Contributions.
+// Organizer management always shows Archive and Approve submissions.
 // Submission sub-tabs still depend on the content awaiting review.
 
 export const ARCHIVE_TAB = "Archive";
-export const APPROVE_TAB = "Approve Contributions";
+export const APPROVE_TAB = "Approve submissions";
 
 const ALL_MANAGE_TABS = [ARCHIVE_TAB, APPROVE_TAB];
 

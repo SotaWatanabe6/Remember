@@ -26,7 +26,7 @@ export default function ContributionRoutePage() {
         <div className="mb-8">
           <p className="text-[15px] leading-5 text-r-secondary">Organizer layer</p>
           <h1 className="mt-2 text-[42px] leading-[46px] text-r-text [font-family:var(--font-family-display)]">
-            Approve Contributions
+            Approve submissions
           </h1>
         </div>
 

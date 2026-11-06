@@ -25,23 +25,23 @@ test('excluded source content stays out of bulk approval selections', () => {
   assert.deepEqual(sections.photos.map(p => p.id), ['eligible']);
 });
 
-test('archive and approve contributions stay visible when nothing is pending review', () => {
-  assert.deepEqual(helpers.getManageTabs([approved, inProgress]), ['Archive', 'Approve Contributions']);
-  assert.deepEqual(helpers.getManageTabs([]), ['Archive', 'Approve Contributions']);
-  assert.deepEqual(helpers.getManageTabs(undefined), ['Archive', 'Approve Contributions']);
+test('archive and approve submissions stay visible when nothing is pending review', () => {
+  assert.deepEqual(helpers.getManageTabs([approved, inProgress]), ['Archive', 'Approve submissions']);
+  assert.deepEqual(helpers.getManageTabs([]), ['Archive', 'Approve submissions']);
+  assert.deepEqual(helpers.getManageTabs(undefined), ['Archive', 'Approve submissions']);
   assert.equal(helpers.hasPendingContributions(undefined), false);
 });
 
-test('approve contributions tab is shown while any contributor is submitted', () => {
-  assert.deepEqual(helpers.getManageTabs([approved, submitted]), ['Archive', 'Approve Contributions']);
-  assert.deepEqual(helpers.getManageTabs([{ status: 'SUBMITTED' }]), ['Archive', 'Approve Contributions']);
+test('approve submissions tab is shown while any contributor is submitted', () => {
+  assert.deepEqual(helpers.getManageTabs([approved, submitted]), ['Archive', 'Approve submissions']);
+  assert.deepEqual(helpers.getManageTabs([{ status: 'SUBMITTED' }]), ['Archive', 'Approve submissions']);
 });
 
 test('approving the last pending submission keeps the approval tab selected', () => {
   const before = helpers.getManageTabs([submitted]);
-  assert.equal(helpers.resolveManageTab('Approve Contributions', before), 'Approve Contributions');
+  assert.equal(helpers.resolveManageTab('Approve submissions', before), 'Approve submissions');
   const after = helpers.getManageTabs([{ ...submitted, status: 'approved' }]);
-  assert.equal(helpers.resolveManageTab('Approve Contributions', after), 'Approve Contributions');
+  assert.equal(helpers.resolveManageTab('Approve submissions', after), 'Approve submissions');
   assert.equal(helpers.resolveManageTab('Outputs', after), 'Archive');
 });
 
