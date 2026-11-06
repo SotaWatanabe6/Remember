@@ -36,6 +36,7 @@ function MemorialPreview({ src, name }) {
 }
 
 function StatusBadge({ status }) {
+  if (String(status || "").toLowerCase() === "complete") return null;
   const display = getDashboardStatus(status);
   return (
     <span
