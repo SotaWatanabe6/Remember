@@ -631,6 +631,26 @@ export async function updateMemorial(memorialId, fields) {
   });
 }
 
+export async function deleteMemorial(memorialId) {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new ApiRequestError("You must be logged in to delete this memorial.", {
+      status: 401,
+      code: "unauthorized",
+    });
+  }
+
+  const result = await requestJson(`/memorials/${encodeURIComponent(memorialId)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+    timeoutMs: 60_000,
+  });
+  if (result?.deleted !== true) {
+    throw new ApiRequestError("We could not confirm the memorial was deleted. Please try again.");
+  }
+  return result;
+}
+
 /**
  * GET /memorials
  * Returns all memorials for the logged in organizer. Protected.

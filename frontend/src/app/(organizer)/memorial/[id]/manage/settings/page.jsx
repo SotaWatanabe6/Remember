@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Header2 from "@/components/ui-components/navs/header2.jsx";
 import MemorialCreateForm from "@/components/memorial/MemorialCreateForm.jsx";
 import { getMemorial } from "@/services/memorialService.js";
 import { canEditMemorialProfile } from "@/lib/memorialProfile.mjs";
+import { deleteMemorial } from "@/lib/api.js";
+import DeleteMemorialDialog from "@/components/memorial/DeleteMemorialDialog.jsx";
 
 export default function MemorialSettingsPage() {
   const { id } = useParams();
@@ -13,7 +15,32 @@ export default function MemorialSettingsPage() {
   const [memorial, setMemorial] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const deletionInFlight = useRef(false);
   const backHref = `/memorial/${id}/manage`;
+
+  function closeDeletion() {
+    if (deletionInFlight.current) return;
+    setDeleteOpen(false);
+    setDeleteError("");
+  }
+
+  async function handleDelete() {
+    if (deletionInFlight.current) return;
+    deletionInFlight.current = true;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await deleteMemorial(id);
+      router.replace("/dashboard");
+    } catch (deleteFailure) {
+      setDeleteError(deleteFailure?.message || "Unable to delete this memorial. Please try again.");
+      setDeleting(false);
+      deletionInFlight.current = false;
+    }
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -71,9 +98,14 @@ export default function MemorialSettingsPage() {
             memorialId={id}
             initialMemorial={memorial}
             backHref={backHref}
+            onRequestDelete={() => setDeleteOpen(true)}
           />
         ) : null}
       </section>
+      {deleteOpen ? (
+        <DeleteMemorialDialog name={memorial?.subject_name} deleting={deleting} error={deleteError}
+          onClose={closeDeletion} onDelete={handleDelete} />
+      ) : null}
     </main>
   );
 }

@@ -96,6 +96,7 @@ export default function MemorialCreateForm({
   initialMemorial = null,
   backHref,
   onSaved,
+  onRequestDelete,
 }) {
   const router = useRouter();
   const fileInputRef = useRef(null);
@@ -421,6 +422,12 @@ export default function MemorialCreateForm({
             >
               {isSubmitting ? "Saving..." : "Save"}
             </button>
+            {onRequestDelete ? (
+              <button type="button" onClick={onRequestDelete} disabled={isSubmitting}
+                className="rounded px-3 py-2 text-sm text-r-danger underline decoration-transparent underline-offset-4 transition-colors hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-r-danger disabled:opacity-50">
+                Delete the memorial
+              </button>
+            ) : null}
           </div>
         </form>
       </>
