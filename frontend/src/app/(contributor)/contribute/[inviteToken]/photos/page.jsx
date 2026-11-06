@@ -46,14 +46,14 @@ function createSelectedPhoto(file, index) {
   };
 }
 
-function ContributorNav({ backHref }) {
+function ContributorNav({ backHref, disabled }) {
   return (
     <nav className="w-full flex items-center justify-between px-6 sm:px-[50px] py-6">
       <div className="flex items-center gap-2">
         <img src="/Logo.svg" alt="" width={36} height={36} aria-hidden="true" />
         <span className="text-r-text text-2xl leading-8 font-display">Remember</span>
       </div>
-      <Link href={backHref} className="flex items-center gap-2 text-r-text transition-opacity hover:opacity-70">
+      <Link href={backHref} aria-disabled={disabled} onClick={(event) => { if (disabled) event.preventDefault(); }} className="flex items-center gap-2 text-r-text transition-opacity hover:opacity-70">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
           <path d="M7.82484 13L12.7248 17.9C12.9248 18.1 13.0208 18.3334 13.0128 18.6C13.0048 18.8667 12.9005 19.1 12.6998 19.3C12.4998 19.4834 12.2665 19.5794 11.9998 19.588C11.7332 19.5967 11.4998 19.5007 11.2998 19.3L4.69984 12.7C4.59984 12.6 4.52884 12.4917 4.48684 12.375C4.44484 12.2584 4.42451 12.1334 4.42584 12C4.42718 11.8667 4.44818 11.7417 4.48884 11.625C4.52951 11.5084 4.60018 11.4 4.70084 11.3L11.3008 4.70005C11.4842 4.51672 11.7135 4.42505 11.9888 4.42505C12.2642 4.42505 12.5015 4.51672 12.7008 4.70005C12.9008 4.90005 13.0008 5.13772 13.0008 5.41305C13.0008 5.68838 12.9008 5.92572 12.7008 6.12505L7.82484 11H18.9998C19.2832 11 19.5208 11.096 19.7128 11.288C19.9048 11.48 20.0005 11.7174 19.9998 12C19.9992 12.2827 19.9032 12.5204 19.7118 12.713C19.5205 12.9057 19.2832 13.0014 18.9998 13H7.82484Z"
             fill="currentColor"/>
@@ -201,10 +201,13 @@ export default function PhotosPage() {
   const [message, setMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [uploadProgress, setUploadProgress] = useState(null);
+  const [loadingPhotos, setLoadingPhotos] = useState(true);
+  const uploadInFlight = useRef(false);
   const selectedPhotosRef = useRef([]);
   const uploadedAssetsRef = useRef([]);
 
-  const handleFiles = useCallback((files) => {
+  function handleFiles(files) {
+    if (uploadInFlight.current || loadingPhotos) return;
     setErrorMessage('');
     setMessage('');
     setUploadProgress(null);
@@ -229,37 +232,39 @@ export default function PhotosPage() {
       validPhotos.push(file);
     });
 
+    let validationMessage = '';
     if (files.length > remainingSlots) {
       const skippedCount = files.length - remainingSlots;
-      setErrorMessage(
-        `Only ${formatCount(remainingSlots, 'photo')} can be added. ${formatCount(skippedCount, 'photo')} skipped because this contribution is limited to ${MAX_CONTRIBUTOR_PHOTOS} photos.`,
-      );
+      validationMessage = `Only ${formatCount(remainingSlots, 'photo')} can be added. ${formatCount(skippedCount, 'photo')} skipped because this contribution is limited to ${MAX_CONTRIBUTOR_PHOTOS} photos.`;
     }
 
     if (rejectedPhotos.length && files.length <= remainingSlots) {
-      setErrorMessage(`${formatCount(rejectedPhotos.length, 'file')} could not be added. Please choose image files under ${MAX_PHOTO_FILE_SIZE_MB} MB.`);
+      validationMessage = `${formatCount(rejectedPhotos.length, 'file')} could not be added. Please choose image files under ${MAX_PHOTO_FILE_SIZE_MB} MB.`;
     }
 
-    if (!validPhotos.length) return;
-    setSelectedPhotos((current) => [...current, ...validPhotos.map(createSelectedPhoto)]);
-    setStatus('selected');
-  }, [selectedPhotos.length, uploadedAssets.length]);
+    if (validPhotos.length) {
+      const selection = [...selectedPhotos, ...validPhotos.map(createSelectedPhoto)];
+      setSelectedPhotos(selection);
+      void handleUpload(selection);
+    }
+    if (validationMessage) setErrorMessage(validationMessage);
+  }
 
   const revokePreviewUrls = useCallback((photos) => {
     if (typeof URL === 'undefined') return;
     photos.forEach((photo) => { if (photo.previewUrl?.startsWith?.('blob:')) URL.revokeObjectURL(photo.previewUrl); });
   }, []);
 
-  async function handleUpload() {
-    if (status === 'uploading') return;
-    if (!selectedPhotos.length) { setErrorMessage('Please select at least one photo before uploading.'); return; }
+  async function handleUpload(selection = selectedPhotos) {
+    if (uploadInFlight.current || !selection.length) return;
+    uploadInFlight.current = true;
     setStatus('uploading');
     setErrorMessage('');
     setMessage('');
-    setUploadProgress({ uploaded: 0, total: selectedPhotos.length, batch: 0, batches: Math.ceil(selectedPhotos.length / PHOTO_UPLOAD_BATCH_SIZE) });
+    setUploadProgress({ uploaded: 0, total: selection.length, batch: 0, batches: Math.ceil(selection.length / PHOTO_UPLOAD_BATCH_SIZE) });
 
     try {
-      const selectedAtUpload = selectedPhotos;
+      const selectedAtUpload = selection;
       const result = await uploadPhotos(inviteToken, selectedAtUpload.map((photo) => photo.file), {
         onProgress: setUploadProgress,
       });
@@ -270,16 +275,20 @@ export default function PhotosPage() {
         previewQueues.set(photo.file_name, queue);
       });
       const uploadedPreviewIds = new Set();
-      const uploadedWithPreviews = result.assets.map((asset, index) => ({
-        ...asset,
-        previewUrl: asset.previewUrl || asset.url || (previewQueues.get(asset.file_name)?.shift() ?? selectedAtUpload[index])?.previewUrl || null,
-        previewFailed: false,
-      })).map((asset) => {
-        const matchingPhoto = selectedAtUpload.find((photo) => photo.previewUrl === asset.previewUrl && !uploadedPreviewIds.has(photo.id));
+      const uploadedWithPreviews = result.assets.map((asset) => {
+        const matchingPhoto = previewQueues.get(asset.file_name)?.shift();
         if (matchingPhoto) uploadedPreviewIds.add(matchingPhoto.id);
-        return asset;
+        // Match confirmations by file name even when the API returns a remote URL.
+        // Successful photos must not be retried after a partial upload failure.
+        return {
+          ...asset,
+          previewUrl: asset.previewUrl || asset.url || matchingPhoto?.previewUrl || null,
+          previewFailed: false,
+        };
       });
       const failedSelections = result.partialFailure ? selectedAtUpload.filter((photo) => !uploadedPreviewIds.has(photo.id)) : [];
+      const keptPreviewUrls = new Set([...uploadedWithPreviews, ...failedSelections].map((photo) => photo.previewUrl));
+      revokePreviewUrls(selectedAtUpload.filter((photo) => !keptPreviewUrls.has(photo.previewUrl)));
       setUploadedAssets((current) => [...current, ...uploadedWithPreviews]);
       setSelectedPhotos(failedSelections);
       setStatus(failedSelections.length ? 'selected' : 'success');
@@ -291,6 +300,7 @@ export default function PhotosPage() {
         error instanceof Error ? error.message : 'We could not upload those photos. Please try again.',
       );
     } finally {
+      uploadInFlight.current = false;
       setUploadProgress(null);
     }
   }
@@ -361,6 +371,8 @@ export default function PhotosPage() {
         }
       } catch {
         if (isMounted) setErrorMessage('We could not check for previously uploaded photos in this browser.');
+      } finally {
+        if (isMounted) setLoadingPhotos(false);
       }
     }
     loadExistingPhotos();
@@ -378,14 +390,14 @@ export default function PhotosPage() {
   const remainingCount = Math.max(MAX_CONTRIBUTOR_PHOTOS - uploadedCount - selectedCount, 0);
   const hasUnuploadedSelection = selectedCount > 0;
   const isUploading = status === 'uploading';
-  const canContinue = !isUploading && !hasUnuploadedSelection;
+  const canContinue = !loadingPhotos && !isUploading && !hasUnuploadedSelection;
   const continueLabel = uploadedCount > 0 ? 'Continue' : 'Skip photos for now';
 
   // Replace the entire return:
   return (
     <main className="min-h-screen bg-r-bg text-r-text flex flex-col">
 
-      <ContributorNav backHref={`/contribute/${inviteToken}/upload`} />
+      <ContributorNav backHref={`/contribute/${inviteToken}/upload`} disabled={isUploading} />
 
       <div className="flex-1 px-6 sm:px-[50px] pt-6 pb-16">
         <div className="page-shell">
@@ -397,21 +409,21 @@ export default function PhotosPage() {
             </p>
           </div>
 
-          <DropZone onFiles={handleFiles} disabled={isUploading} />
+          <DropZone onFiles={handleFiles} disabled={loadingPhotos || isUploading} />
 
           {selectedCount > 0 ? (
             <section className="rounded-2xl p-5 sm:p-6 border border-r-border">
               <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-h3 text-r-text">Ready to upload</p>
+                  <p className="text-h3 text-r-text">{isUploading ? 'Uploading photos' : 'Photos to retry'}</p>
                   <p className="text-caption text-r-muted">
                     {formatCount(selectedCount, 'photo')} selected, {formatCount(remainingCount, 'spot')} remaining
                   </p>
                 </div>
-                <button type="button" onClick={handleUpload} disabled={isUploading}
+                <button type="button" onClick={() => handleUpload()} hidden={isUploading}
                   className="rounded-full px-5 py-2.5 text-body-2 font-medium transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60 border-none"
                   style={{ backgroundColor: 'var(--color-r-text)', color: '#FBF9F6' }}>
-                  {isUploading ? 'Uploading...' : `Upload ${selectedCount === 1 ? 'photo' : 'photos'}`}
+                  Retry failed photos
                 </button>
               </div>
               {uploadProgress ? (
@@ -451,7 +463,7 @@ export default function PhotosPage() {
 
           <button type="button" onClick={handleContinue} disabled={!canContinue}
             className="w-full rounded-full py-4 text-body-2 font-medium tracking-wide transition-opacity hover:opacity-80 active:opacity-70 disabled:cursor-not-allowed disabled:opacity-55 bg-r-btn text-r-btn-text border-none">
-            {isUploading ? 'Uploading photos...' : hasUnuploadedSelection ? 'Upload selected photos to continue' : continueLabel}
+            {loadingPhotos ? 'Loading photos...' : isUploading ? 'Uploading photos...' : hasUnuploadedSelection ? 'Retry or remove failed photos to continue' : continueLabel}
           </button>
 
         </div>
