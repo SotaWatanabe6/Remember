@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import QuestionCard from "@/components/contributor/QuestionCard.jsx";
-import MemoryOrb from "@/components/contributor/MemoryOrb.jsx";
+import MemorialCoverImage from "@/components/memorial/MemorialCoverImage.jsx";
 import {
   formatQuestionPrompt,
   getQuestionSetForContributorRelationship,
@@ -696,7 +696,8 @@ export default function QuestionnaireFlow({ inviteToken }) {
                 </p>
               </div>
 
-              <MemoryOrb className="h-44 w-44 sm:h-56 sm:w-56" />
+              <MemorialCoverImage src={draft.invite?.deceased?.photoUrl} name={subjectName}
+                width={224} height={224} className="h-44 w-44 sm:h-56 sm:w-56" />
 
               <button
                 type="button"
@@ -710,6 +711,8 @@ export default function QuestionnaireFlow({ inviteToken }) {
             <div className="flex w-full flex-col items-center gap-8">
               <QuestionCard
                 question={personalizedQuestion}
+                subjectName={subjectName}
+                profilePhotoUrl={draft.invite?.deceased?.photoUrl}
                 answerText={currentAnswer.answer_text}
                 inputMode={currentAnswer.input_mode}
                 autosaveStatus={autosaveStatus}

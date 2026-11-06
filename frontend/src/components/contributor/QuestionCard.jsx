@@ -2,10 +2,12 @@
 
 import AnswerModeToggle from "@/components/contributor/AnswerModeToggle.jsx";
 import AutosaveStatus from "@/components/contributor/AutosaveStatus.jsx";
-import MemoryOrb from "@/components/contributor/MemoryOrb.jsx";
+import MemorialCoverImage from "@/components/memorial/MemorialCoverImage.jsx";
 
 export default function QuestionCard({
   question,
+  subjectName,
+  profilePhotoUrl,
   answerText,
   inputMode,
   autosaveStatus,
@@ -27,7 +29,8 @@ export default function QuestionCard({
       </div>
 
       <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start sm:justify-center sm:gap-10">
-        <MemoryOrb className="hidden h-44 w-44 shrink-0 sm:block sm:h-56 sm:w-56" />
+        <MemorialCoverImage src={profilePhotoUrl} name={subjectName} width={224} height={224}
+          className="hidden h-44 w-44 shrink-0 sm:block sm:h-56 sm:w-56" />
 
         <div className="flex w-full max-w-[480px] flex-col gap-3">
           <AnswerModeToggle
