@@ -1312,6 +1312,60 @@ const CHAPTER_TITLES = {
   how_they_are_remembered: 'How People Remember Them Now',
 }
 
+const CHAPTER_TITLE_MAX_WORDS = 7
+const CHAPTER_TITLE_MAX_CHARS = 60
+
+/** Returns a clean personalized title, or null if it is missing or unusable. */
+function sanitizeChapterTitle(value) {
+  if (typeof value !== 'string') return null
+  const title = value
+    .replace(/^[\s"'“”‘’]+|[\s"'“”‘’.!?,;:]+$/g, '')
+    .replace(/\s+/g, ' ')
+  if (!title) return null
+  if (title.length > CHAPTER_TITLE_MAX_CHARS) return null
+  if (title.split(' ').length > CHAPTER_TITLE_MAX_WORDS) return null
+  return title
+}
+
+/**
+ * Resolves one title per chapter. A personalized title (written by the model from the
+ * contributors' responses) is used only if it passes validation; otherwise the chapter keeps
+ * its default title, so a chapter title is never empty or malformed.
+ */
+function resolveChapterTitles(rawTitles = {}) {
+  const resolved = {}
+  for (const chapter of CHAPTER_ORDER) {
+    const defaultTitle = CHAPTER_TITLES[chapter]
+    const candidate = sanitizeChapterTitle(rawTitles?.[chapter])
+    const isPersonalized = candidate && candidate.toLowerCase() !== defaultTitle.toLowerCase()
+    resolved[chapter] = isPersonalized
+      ? { title: candidate, source: 'responses' }
+      : { title: defaultTitle, source: 'default' }
+  }
+  return resolved
+}
+
+/**
+ * Stamps chapter_title onto every slide. A slide the model left without a chapter (for example
+ * a photo added back by finalizeStorySlides) inherits the chapter of the slide before it.
+ */
+function applyChapterTitles(slides = [], chapterTitles = null) {
+  if (!chapterTitles) return slides
+  let lastChapter = null
+  return slides.map((slide) => {
+    const chapter = CHAPTER_ORDER.includes(slide.chapter) ? slide.chapter : lastChapter
+    if (!chapter) return slide
+    lastChapter = chapter
+    const resolved = chapterTitles[chapter]
+    return {
+      ...slide,
+      chapter,
+      chapter_title: resolved.title,
+      chapter_title_source: resolved.source,
+    }
+  })
+}
+
 async function composeStorySlideshow({
   subjectName,
   memorial,
@@ -1335,9 +1389,13 @@ async function composeStorySlideshow({
       buildPhotoCatalogEntry(p, contributors, themes, memorial),
     ),
   )
-  const finishStory = (slides) => addStoryBookends(slides, {
-    memorial, subjectName, responses, contributors, voiceRecordings, client: openai,
-  })
+  // Intro ("In Loving Memory"), perspective ("Shared by Loved Ones") and closing credit slides
+  // are off by default. Set STORY_BOOKENDS_ENABLED=true to bring them back.
+  const finishStory = process.env.STORY_BOOKENDS_ENABLED === 'true'
+    ? (slides) => addStoryBookends(slides, {
+      memorial, subjectName, responses, contributors, voiceRecordings, client: openai,
+    })
+    : (slides) => slides
 
   const buildFallbackSlideshow = () =>
     finishStory(finalizePhotoStorySlides(
@@ -1370,6 +1428,29 @@ Every slide must be assigned to exactly one of these five chapters. Chapters are
 - "what_they_loved": Passions, hobbies, and the things that visibly lit them up. What they chose to spend their free time and energy on.
 - "how_they_treated_people": Relationships in action. Not an abstract quality like "she was kind" — the concrete things they did for specific people.
 - "how_they_are_remembered": Legacy and reflection. What people carry forward, what they'd want the person to know, how their absence is felt.
+
+CHAPTER TITLES (critical):
+The five chapters are fixed themes. Never add, remove, merge, reorder, or rename a chapter into a different theme. Return a title for every chapter in "chapter_titles", even for a chapter that ends up with no slides.
+
+Default titles (return these exactly, character for character, unless a personalized title is clearly earned):
+- who_they_were: "Who They Were"
+- where_they_came_from: "Where They Came From"
+- what_they_loved: "What They Loved"
+- how_they_treated_people: "How They Treated People"
+- how_they_are_remembered: "How People Remember Them Now"
+
+Personalize a chapter's title ONLY when all three of these are true:
+1. The contributors' answers or the discovery themes below contain a clear, specific theme for this chapter — something concrete they actually said, not a vague trait.
+2. That theme is a good fit: it falls squarely under this chapter's meaning as defined above, and it is similar to the other material you placed in that chapter.
+3. The same theme or detail is not already used in another chapter's title.
+If any of the three fails, return the default title exactly. A chapter with thin, generic, or mixed material keeps its default title.
+
+A personalized title must:
+- be 2 to 6 words, in Title Case, with no quotation marks and no ending punctuation
+- keep the chapter's theme recognizable at a glance, so a reader can still tell which of the five chapters it is
+- be built from the contributors' own words and details, never from vision_description, tags, or anything you inferred
+- contain no contributor names, no dates or ages, no sympathy-card filler, and no claim the responses do not support
+Format examples only (never reuse these words unless contributors actually said them): "Who They Were" could become "A Quiet Kind of Funny", "What They Loved" could become "Gardens and Sunday Baking", "How They Treated People" could become "Always Showing Up".
 
 ATTRIBUTION RULE (critical):
 For each slide, decide: is this describing one concrete, situated happening (a specific action, place, or exchange that could be pictured as a scene), or is it a summary judgment about the person with no single traceable incident behind it?
@@ -1414,11 +1495,18 @@ ${untrusted(photoCatalog.map((p) => ({
 Questionnaire memories (primary source — do not invent facts):
 ${untrusted(memories)}
 
-Discovery themes (use as broad story context, not as proof that a memory belongs to a specific photo):
+Discovery themes (use as broad story context and as a source for chapter titles when a theme clearly fits a chapter per the CHAPTER TITLES rules; not proof that a memory belongs to a specific photo):
 ${untrusted((themes || []).map((t) => ({ label: t.label, summary: t.summary })))}
 
 Return JSON only:
 {
+  "chapter_titles": {
+    "who_they_were": "default title or personalized title",
+    "where_they_came_from": "default title or personalized title",
+    "what_they_loved": "default title or personalized title",
+    "how_they_treated_people": "default title or personalized title",
+    "how_they_are_remembered": "default title or personalized title"
+  },
   "slides": [
     {
       "order_index": 1,
@@ -1450,8 +1538,13 @@ Return JSON only:
         slide_type: 'photo',
       }))
 
-    return finishStory(finalizePhotoStorySlides(
-      sortSlidesByChapterOrder(finalizeStorySlides(aiSlides, photoCatalog, memorial), photoCatalog),
+    const chapterTitles = resolveChapterTitles(parsed.chapter_titles)
+
+    return finishStory(applyChapterTitles(
+      finalizePhotoStorySlides(
+        sortSlidesByChapterOrder(finalizeStorySlides(aiSlides, photoCatalog, memorial), photoCatalog),
+      ),
+      chapterTitles,
     ))
   } catch (err) {
     console.error('[StoryCompose] error:', err.message)
