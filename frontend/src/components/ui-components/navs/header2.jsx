@@ -1,10 +1,26 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import HeaderBrand from "./header-brand";
+import { logout } from "@/services/authService.js";
 
-export default function Header2({ backHref }) {
+export default function Header2({ backHref, signOut = false }) {
   const router = useRouter();
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
+
+  async function handleSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    setSignOutError("");
+    try {
+      await logout();
+    } catch {
+      setSignOutError("Unable to sign out. Please try again.");
+      setSigningOut(false);
+    }
+  }
 
   const handleBack = () => {
     if (backHref) {
@@ -21,10 +37,11 @@ export default function Header2({ backHref }) {
       <div>
         <button
           type="button"
-          onClick={handleBack}
+          onClick={signOut ? handleSignOut : handleBack}
+          disabled={signingOut}
           className="flex items-center gap-2 text-[16px] font-medium leading-[24px] text-(--text-color-2) transition hover:text-[#0A0A0A] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-slate-400"
         >
-          <span>
+          {!signOut && <span>
             <svg
               width="24"
               height="24"
@@ -40,9 +57,10 @@ export default function Header2({ backHref }) {
                 d="M5 12h14M5 12l4-4m-4 4l4 4"
               />
             </svg>
-          </span>
-          Back
+          </span>}
+          {signOut ? (signingOut ? "Signing out…" : "Sign out") : "Back"}
         </button>
+        {signOutError && <p role="alert" className="mt-2 text-sm text-r-danger">{signOutError}</p>}
       </div>
     </header>
   );

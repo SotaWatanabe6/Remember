@@ -167,34 +167,6 @@ function isLocalApiUrl(baseUrl = API_URL) {
 // ─── Helper to get real Supabase JWT token ────────────────────────────────────
 // Used by Blessing's memorial endpoints — gets real session from Supabase Auth
 // Falls back to mock session token if Supabase session not available
-const SUPABASE_AUTH_STORAGE_KEY = 'sb-tbpdhybqbjucoxdizlgw-auth-token';
-
-function parseSupabaseAuthPayload(raw) {
-  if (!raw) return null;
-  try {
-    const decoded = raw.startsWith('base64-')
-      ? JSON.parse(atob(raw.replace('base64-', '')))
-      : JSON.parse(raw);
-    return decoded?.access_token || decoded?.currentSession?.access_token || null;
-  } catch {
-    return null;
-  }
-}
-
-function getAuthTokenFromCookie() {
-  if (!isBrowser()) return null;
-  const cookie = document.cookie
-    .split('; ')
-    .find((row) => row.startsWith(`${SUPABASE_AUTH_STORAGE_KEY}=`));
-  if (!cookie) return null;
-  return parseSupabaseAuthPayload(decodeURIComponent(cookie.split('=').slice(1).join('=')));
-}
-
-function getAuthTokenFromLocalStorage() {
-  if (!isBrowser()) return null;
-  return parseSupabaseAuthPayload(window.localStorage.getItem(SUPABASE_AUTH_STORAGE_KEY));
-}
-
 const GET_SESSION_TIMEOUT_MS = 3_000;
 
 async function getAuthTokenFromSession() {
@@ -217,17 +189,9 @@ async function getAuthTokenFromSession() {
 }
 
 export async function getAuthToken() {
-  const cookieToken = getAuthTokenFromCookie();
-  if (cookieToken) return cookieToken;
-
-  const storageToken = getAuthTokenFromLocalStorage();
-  if (storageToken) return storageToken;
-
-  const mockToken = getStoredSession()?.token;
-  if (mockToken) return mockToken;
-
+  if (!isBrowser()) return "";
   const sessionToken = await getAuthTokenFromSession();
-  return sessionToken || "";
+  return sessionToken || getStoredSession()?.token || "";
 }
 
 const now = () => new Date().toISOString();

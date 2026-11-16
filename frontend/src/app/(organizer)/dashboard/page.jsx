@@ -46,7 +46,7 @@ export default function AccountBoardPage() {
 
   return (
     <div className="p-(--page-pad-x)">
-      <Header2 />
+      <Header2 signOut />
 
       <main className="mx-auto flex w-full max-w-[1340px] flex-col px-6 pb-16 pt-[70px] sm:px-[50px] sm:pb-24 sm:pt-[86px]">
         <section className="relative flex min-h-[320px] flex-col items-center justify-center px-4 text-center sm:min-h-[360px]">
